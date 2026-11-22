@@ -1,0 +1,117 @@
+{
+ "steps": {
+  "project": {
+   "ok": true,
+   "reply": "None"
+  },
+  "comp": {
+   "ok": true,
+   "reply": "{'comp': 1}"
+  },
+  "variable text": {
+   "ok": true,
+   "reply": "{'layer': 2}"
+  },
+  "list axes": {
+   "ok": true,
+   "reply": "{'axes': [{'default': 400.0, 'max': 700.0, 'min': 300.0, 'name': 'Weight', 'tag': 'wght'}, {'default': 100.0, 'max': 100.0, 'min': 75.0, 'name': 'Width', 'tag':"
+  },
+  "static variations": {
+   "ok": true,
+   "reply": "None"
+  },
+  "animator": {
+   "ok": true,
+   "reply": "{'animator': 41}"
+  },
+  "axis on animator": {
+   "ok": true,
+   "reply": "{'animator': 41, 'axis': 'wght'}"
+  },
+  "animator opacity 0": {
+   "ok": true,
+   "reply": "0.0"
+  },
+  "animator offset y": {
+   "ok": true,
+   "reply": "[0.0, 80.0, 0.0]"
+  },
+  "animator wght delta": {
+   "ok": true,
+   "reply": "-250.0"
+  },
+  "selector start": {
+   "ok": true,
+   "reply": "0.0"
+  },
+  "selector end": {
+   "ok": true,
+   "reply": "25.0"
+  },
+  "offset key 0s": {
+   "ok": true,
+   "reply": "1"
+  },
+  "offset key 3s": {
+   "ok": true,
+   "reply": "2"
+  },
+  "arabic": {
+   "ok": true,
+   "reply": "{'layer': 62}"
+  },
+  "hebrew": {
+   "ok": true,
+   "reply": "{'layer': 101}"
+  },
+  "frame 0.5": {
+   "ok": true,
+   "reply": "{'comp': 1, 'height': 720, 'path': 'C:\\\\Users\\\\eduni\\\\code\\\\MotionCraft_p0\\\\spike\\\\results\\\\c6_t0.5."
+  },
+  "frame 1.5": {
+   "ok": true,
+   "reply": "{'comp': 1, 'height': 720, 'path': 'C:\\\\Users\\\\eduni\\\\code\\\\MotionCraft_p0\\\\spike\\\\results\\\\c6_t1.5."
+  },
+  "frame 2.5": {
+   "ok": true,
+   "reply": "{'comp': 1, 'height': 720, 'path': 'C:\\\\Users\\\\eduni\\\\code\\\\MotionCraft_p0\\\\spike\\\\results\\\\c6_t2.5."
+  },
+  "frame 5.0": {
+   "ok": true,
+   "reply": "{'comp': 1, 'height': 720, 'path': 'C:\\\\Users\\\\eduni\\\\code\\\\MotionCraft_p0\\\\spike\\\\results\\\\c6_t5.0."
+  }
+ },
+ "axes": {
+  "axes": [
+   {
+    "default": 400.0,
+    "max": 700.0,
+    "min": 300.0,
+    "name": "Weight",
+    "tag": "wght"
+   },
+   {
+    "default": 100.0,
+    "max": 100.0,
+    "min": 75.0,
+    "name": "Width",
+    "tag": "wdth"
+   }
+  ],
+  "font": "Bahnschrift"
+ },
+ "frameHashes": {
+  "0.5": "33cc7cd3bb33",
+  "1.5": "22329936085c",
+  "2.5": "bd7c959cb2df",
+  "5.0": "b37a869a2596"
+ },
+ "layers": {
+  "variable": 2,
+  "arabic": 62,
+  "hebrew": 101
+ },
+ "allCommandsAccepted": true,
+ "framesDifferOverTime": true,
+ "visualCheck": "NEEDS A PERSON: open spike/results/c6_t*.png and confirm Arabic/Hebrew shaping and RTL order, and the weight sweep"
+}
