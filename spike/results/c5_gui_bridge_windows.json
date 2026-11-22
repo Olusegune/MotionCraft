@@ -1,0 +1,70 @@
+{
+ "port": 56182,
+ "boundTo": "127.0.0.1 (engine-enforced; checked by connecting)",
+ "bridgeTools": [
+  "add_effect",
+  "add_keyframe",
+  "batch",
+  "command_batch",
+  "command_list",
+  "command_run",
+  "control",
+  "describe_command",
+  "doc_inspect",
+  "execute_command",
+  "get_comp",
+  "get_layer",
+  "get_project",
+  "get_property",
+  "get_state",
+  "history",
+  "list_commands",
+  "list_effects",
+  "list_fonts",
+  "open_project",
+  "redo",
+  "render_frame",
+  "render_preview",
+  "run_script",
+  "save_project",
+  "screenshot",
+  "script_ui",
+  "set_property",
+  "ui_click",
+  "ui_drag",
+  "ui_elements",
+  "ui_inspect",
+  "ui_key",
+  "ui_set",
+  "ui_type",
+  "undo"
+ ],
+ "agentSetText": {
+  "error": false,
+  "reply": "None"
+ },
+ "agentMoveLayer": {
+  "error": false,
+  "reply": "[1500.0, 300.0, 0.0]"
+ },
+ "uiClickWhileConfined": {
+  "refused": true,
+  "reply": "`ui_click` is not available while file access is confined (--automation-read-root/--automation-write-root)"
+ },
+ "writeOutsideRootRefused": {
+  "refused": true,
+  "reply": "cannot write `C:\\Users\\eduni\\AppData\\Local\\Temp\\mc_outside.ecproj`: it is outside the automation roots (automation write roots: \\\\?\\C:\\Users\\eduni\\code\\_spike_w"
+ },
+ "guiFrameChangedLive": true,
+ "guiTextNow": "Edited by agent",
+ "reopenedText": "Edited by agent",
+ "reopenClean": true,
+ "fileWriteWhileGuiOpen": {
+  "error": false,
+  "reply": "{'bytes': 102698, 'path': 'C:\\\\Users\\\\eduni\\\\code\\\\_spike_work\\\\c5\\\\c5.ecproj'}"
+ },
+ "guiSeesFileWrite": "Edited by agent",
+ "afterGuiSavesOverFileWrite": "Edited by agent",
+ "lostFileWrite": true,
+ "pass_scripted": true
+}
