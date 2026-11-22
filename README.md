@@ -18,6 +18,7 @@ videos, music-driven sequences, social motion, simple 2D explainers).
 | [docs/PRD.md](docs/PRD.md) | What v1 is, in full |
 | [docs/REPOS.md](docs/REPOS.md) | Every repository, pinned commit, and exactly which files to reuse |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Processes, modules, data flow |
+| [docs/UI_UX.md](docs/UI_UX.md) | UI/UX brief: shell, gates, control modes, tokens, fonts, icons, states |
 | [docs/ENGINE_ADAPTER.md](docs/ENGINE_ADAPTER.md) | The adapter contract, mapped to EffectCraft's MCP tools and commands |
 | [docs/PROJECT_SCHEMA.md](docs/PROJECT_SCHEMA.md) | `project.json`, the `.motioncraft` package, primitives |
 | [docs/PHASE0_SPIKE.md](docs/PHASE0_SPIKE.md) | The two-week go/no-go plan, with commands |
