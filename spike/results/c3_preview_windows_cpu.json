@@ -1,0 +1,86 @@
+{
+ "gpuRequested": false,
+ "renderer": {
+  "active": "cpu",
+  "adapter": null,
+  "gpuAcceleration": true,
+  "renderer": "GPU Acceleration",
+  "why": "headless: renders on the CPU unless started with --gpu"
+ },
+ "singlePreviews": [
+  {
+   "time": 0.0,
+   "seconds": 0.003,
+   "error": false,
+   "meta": {
+    "comp": 1,
+    "height": 540,
+    "time": 0.0,
+    "width": 960
+   }
+  },
+  {
+   "time": 1.0,
+   "seconds": 0.006,
+   "error": false,
+   "meta": {
+    "comp": 1,
+    "height": 540,
+    "time": 1.0,
+    "width": 960
+   }
+  },
+  {
+   "time": 2.5,
+   "seconds": 0.004,
+   "error": false,
+   "meta": {
+    "comp": 1,
+    "height": 540,
+    "time": 2.5,
+    "width": 960
+   }
+  },
+  {
+   "time": 5.0,
+   "seconds": 0.004,
+   "error": false,
+   "meta": {
+    "comp": 1,
+    "height": 540,
+    "time": 5.0,
+    "width": 960
+   }
+  },
+  {
+   "time": 9.0,
+   "seconds": 0.003,
+   "error": false,
+   "meta": {
+    "comp": 1,
+    "height": 540,
+    "time": 9.0,
+    "width": 960
+   }
+  }
+ ],
+ "firstPreviewSeconds": 0.003,
+ "contactSheet": {
+  "seconds": 0.01,
+  "error": false
+ },
+ "editPreviewSeconds": 0.004,
+ "movie10s": {
+  "seconds": 0.877,
+  "error": false,
+  "exists": true,
+  "bytes": 341666,
+  "reply": "{'failed': 0, 'items': [{'comp': 1, 'compName': 'C1', 'extraOutputs': [], 'frames': 300, 'height': 540, 'id': 1, 'index': 1, 'last_output': 'C:\\\\Users\\\\eduni\\\\code\\\\_spike_work\\\\c3\\\\preview10s.mp4', 'logLabel': 'Errors Only', 'logPath': 'C:\\\\Users\\\\eduni\\\\code\\\\_spike_work\\\\c3\\\\preview10s_RenderLog."
+ },
+ "targets": {
+  "firstPreviewSeconds": 60,
+  "editPreviewSeconds": 10
+ },
+ "meetsFirst": true,
+ "meetsEdit": true
+}
