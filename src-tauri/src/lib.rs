@@ -9,9 +9,12 @@ use serde_json::Value;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{channel, Receiver};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::Manager;
+use tauri::{Manager, State};
 
 const PACKAGE_EXT: &str = "motioncraft";
 const PINNED_VERSION: &str = "0.24.1";
@@ -285,28 +288,208 @@ fn engine_status(override_path: String) -> EngineStatus {
     }
 }
 
-/// Starts the EffectCraft GUI. Whether it can open a named composition is unverified (ticket P0-14): this opens the
-/// project file only.
+struct Sidecar {
+    child: Child,
+    stdin: ChildStdin,
+    rx: Receiver<String>,
+    next_id: u64,
+}
+
+#[derive(Default)]
+pub struct EngineState {
+    sidecar: Mutex<Option<Sidecar>>,
+    gui: Mutex<Option<Child>>,
+}
+
+const METHODS: [&str; 9] = ["open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close"];
+const WRITE_METHODS: [&str; 5] = ["add_text", "set_text", "add_camera", "lock", "unlock"];
+
+fn sidecar_program() -> Result<(PathBuf, Vec<String>, Option<PathBuf>), String> {
+    let exe_name = if cfg!(windows) { "motioncraft-engine.exe" } else { "motioncraft-engine" };
+    if let Ok(me) = std::env::current_exe() {
+        if let Some(dir) = me.parent() {
+            let p = dir.join(exe_name);
+            if p.is_file() {
+                return Ok((p, vec![], None));
+            }
+        }
+    }
+    // Development only: run the Python package from a checkout (MOTIONCRAFT_ENGINE_DIR=<repo>/engine).
+    if let Ok(dir) = std::env::var("MOTIONCRAFT_ENGINE_DIR") {
+        let d = PathBuf::from(dir);
+        if d.join("motioncraft_engine").is_dir() {
+            let py = if cfg!(windows) { "python" } else { "python3" };
+            return Ok((PathBuf::from(py), vec!["-m".into(), "motioncraft_engine.sidecar".into()], Some(d)));
+        }
+    }
+    Err("The MotionCraft engine helper was not found next to the app. Reinstall MotionCraft.".into())
+}
+
+fn start_sidecar(cli: &Path) -> Result<Sidecar, String> {
+    let (prog, mut args, cwd) = sidecar_program()?;
+    args.push("--effectcraft-cli".into());
+    args.push(cli.to_string_lossy().into_owned());
+    let mut cmd = Command::new(prog);
+    cmd.args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("Could not start the engine helper: {e}"))?;
+    let stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let (tx, rx) = channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    Ok(Sidecar { child, stdin, rx, next_id: 1 })
+}
+
+fn gui_running(st: &EngineState) -> bool {
+    let mut g = st.gui.lock().unwrap();
+    match g.as_mut() {
+        Some(c) => match c.try_wait() {
+            Ok(None) => true,
+            _ => {
+                *g = None;
+                false
+            }
+        },
+        None => false,
+    }
+}
+
+/// One request to the Python engine helper. The method list is closed, the package path is re-validated here, and writes are
+/// refused while an EffectCraft window has the project open (P0-07: a write behind an open GUI is silently lost).
 #[tauri::command]
-fn open_in_effectcraft(app: tauri::AppHandle, path: String, override_path: String) -> Result<(), String> {
+fn engine_call(
+    app: tauri::AppHandle,
+    st: State<EngineState>,
+    method: String,
+    mut params: Value,
+    override_path: String,
+    package: Option<String>,
+) -> Result<Value, String> {
+    if !METHODS.contains(&method.as_str()) {
+        return Err(format!("Unknown engine method {method}."));
+    }
+    if WRITE_METHODS.contains(&method.as_str()) && gui_running(&st) {
+        return Err("EffectCraft has this project open. Make changes there, then close it and press Refresh. MotionCraft will not write the file while it is open.".into());
+    }
+    if !params.is_object() {
+        params = serde_json::json!({});
+    }
+    if method == "open" {
+        let root = projects_root(&app)?;
+        let pkg = check_package(&root, package.as_deref().ok_or("No project path.")?)?;
+        params.as_object_mut().unwrap().insert("package".into(), Value::String(pkg.to_string_lossy().into_owned()));
+    } else {
+        params.as_object_mut().unwrap().remove("package");
+    }
+    let cli = find_cli(&override_path).ok_or("EffectCraft was not found. Set its path in Settings.")?;
+    sidecar_request(&st, &cli, &method, params)
+}
+
+/// Sends one request to the engine helper (starting it if needed) and waits for the reply with the matching id.
+fn sidecar_request(st: &EngineState, cli: &Path, method: &str, params: Value) -> Result<Value, String> {
+    let mut guard = st.sidecar.lock().unwrap();
+    if guard.is_none() {
+        *guard = Some(start_sidecar(cli)?);
+    }
+    let sc = guard.as_mut().unwrap();
+    let id = sc.next_id;
+    sc.next_id += 1;
+    let line = serde_json::json!({"id": id, "method": method, "params": params}).to_string();
+    let io_ok = writeln!(sc.stdin, "{line}").and_then(|_| sc.stdin.flush()).is_ok();
+    let timeout = Duration::from_secs(if method == "open" || method == "preview" { 180 } else { 60 });
+    let reply: Result<Value, String> = if io_ok {
+        loop {
+            match sc.rx.recv_timeout(timeout) {
+                Ok(l) => {
+                    if let Ok(v) = serde_json::from_str::<Value>(&l) {
+                        if v.get("id").and_then(Value::as_u64) == Some(id) {
+                            break Ok(v);
+                        }
+                    }
+                }
+                Err(_) => break Err("The engine helper did not answer in time and was stopped.".to_string()),
+            }
+        }
+    } else {
+        Err("The engine helper stopped. Try again.".to_string())
+    };
+    match reply {
+        Ok(v) => {
+            if v.get("ok").and_then(Value::as_bool) == Some(true) {
+                Ok(v.get("result").cloned().unwrap_or(Value::Null))
+            } else {
+                Err(v.pointer("/error/message").and_then(Value::as_str).unwrap_or("Engine error").to_string())
+            }
+        }
+        Err(e) => {
+            if let Some(mut dead) = guard.take() {
+                let _ = dead.child.kill();
+            }
+            Err(e)
+        }
+    }
+}
+
+/// Starts the EffectCraft GUI on this project. The project opens on its last active composition (P0-14). Returns at once;
+/// while the window is running, `engine_call` refuses writes.
+#[tauri::command]
+fn open_in_effectcraft(app: tauri::AppHandle, st: State<EngineState>, path: String, override_path: String) -> Result<(), String> {
     let dir = check_package(&projects_root(&app)?, &path)?;
     let cli = find_cli(&override_path).ok_or("EffectCraft was not found. Set its path in Settings.")?;
     let ecproj = dir.join("comp.ecproj");
     if !ecproj.is_file() {
-        return Err("This project has no composition yet. Build one first.".into());
+        return Err("This project has no composition yet. Open Build once to create it.".into());
+    }
+    if gui_running(&st) {
+        return Err("EffectCraft is already open.".into());
     }
     let gui = cli.with_file_name(gui_name());
     if !gui.is_file() {
         return Err(format!("{} was not found next to effectcraft-cli.", gui_name()));
     }
-    Command::new(gui).arg(&ecproj).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| format!("Could not start EffectCraft: {e}"))?;
+    let child = Command::new(gui)
+        .arg(&ecproj)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Could not start EffectCraft: {e}"))?;
+    *st.gui.lock().unwrap() = Some(child);
     Ok(())
+}
+
+#[tauri::command]
+fn effectcraft_window_open(st: State<EngineState>) -> bool {
+    gui_running(&st)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![list_projects, create_project, load_project, save_project, engine_status, open_in_effectcraft])
+        .manage(EngineState::default())
+        .invoke_handler(tauri::generate_handler![
+            list_projects,
+            create_project,
+            load_project,
+            save_project,
+            engine_status,
+            open_in_effectcraft,
+            effectcraft_window_open,
+            engine_call
+        ])
         .run(tauri::generate_context!())
         .expect("error while running MotionCraft");
 }
@@ -359,6 +542,28 @@ mod tests {
     fn rejects_foreign_json() {
         assert!(serialise(&serde_json::json!({"hello": 1})).is_err());
         assert!(serialise(&serde_json::json!({"schemaVersion": "1.0", "name": "x"})).is_ok());
+    }
+
+    /// Needs a real engine: EFFECTCRAFT_CLI=<path> MOTIONCRAFT_ENGINE_DIR=<repo>/engine cargo test -- --ignored
+    #[test]
+    #[ignore]
+    fn sidecar_round_trip_with_the_real_engine() {
+        let cli = PathBuf::from(std::env::var("EFFECTCRAFT_CLI").expect("EFFECTCRAFT_CLI"));
+        let base = std::env::temp_dir().join(format!("mc-sidecar-{}", std::process::id()));
+        let pkg = base.join("T.motioncraft");
+        fs::create_dir_all(&pkg).unwrap();
+        let st = EngineState::default();
+        let open = sidecar_request(&st, &cli, "open", serde_json::json!({"package": pkg.to_string_lossy()})).unwrap();
+        assert_eq!(open["layers"].as_array().unwrap().len(), 0);
+        let added = sidecar_request(&st, &cli, "add_text", serde_json::json!({"text": "From Rust"})).unwrap();
+        assert_eq!(added["layers"][0]["name"], "From Rust");
+        let prev = sidecar_request(&st, &cli, "preview", serde_json::json!({"times": [0.0], "max_side": 320})).unwrap();
+        assert!(prev["png"].as_str().unwrap().len() > 100);
+        let bad = sidecar_request(&st, &cli, "nope", serde_json::json!({}));
+        assert!(bad.is_err());
+        let again = sidecar_request(&st, &cli, "inspect", serde_json::json!({}));
+        assert!(again.is_ok(), "helper must keep serving after an error reply");
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]

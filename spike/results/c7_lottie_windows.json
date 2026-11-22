@@ -1,0 +1,50 @@
+{
+ "live text": {
+  "error": false,
+  "reply": {
+   "bytes": 2573,
+   "path": "C:\\Users\\eduni\\code\\_spike_work\\c7\\c1_live_text.json",
+   "warnings": [
+    "Camera: cameras and lights are not exported (3D; exported as a hidden null to keep parenting)"
+   ]
+  },
+  "file": {
+   "bytes": 2573,
+   "version": "5.12.0",
+   "fps": 30,
+   "w": 1920,
+   "h": 1080,
+   "layers": 3,
+   "layerTypes": [
+    3,
+    4,
+    5
+   ],
+   "hasTextDocs": true
+  }
+ },
+ "text as shapes": {
+  "error": false,
+  "reply": {
+   "bytes": 17086,
+   "path": "C:\\Users\\eduni\\code\\_spike_work\\c7\\c1_text_as_shapes.json",
+   "warnings": [
+    "Camera: cameras and lights are not exported (3D; exported as a hidden null to keep parenting)"
+   ]
+  },
+  "file": {
+   "bytes": 17086,
+   "version": "5.12.0",
+   "fps": 30,
+   "w": 1920,
+   "h": 1080,
+   "layers": 3,
+   "layerTypes": [
+    3,
+    4
+   ],
+   "hasTextDocs": false
+  }
+ },
+ "pass": true
+}

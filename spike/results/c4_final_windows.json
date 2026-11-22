@@ -1,0 +1,57 @@
+{
+ "queue": {
+  "addProres": "ok",
+  "addH264": "ok",
+  "renderError": false,
+  "failed": 0
+ },
+ "prores4444": {
+  "exists": true,
+  "bytes": 37880778,
+  "codec_name": "prores",
+  "profile": "4444",
+  "width": 1920,
+  "height": 1080,
+  "pix_fmt": "yuva444p12le",
+  "r_frame_rate": "30/1",
+  "duration": "10.000000",
+  "nb_read_frames": "300",
+  "frameCountExact": true
+ },
+ "h264": {
+  "exists": true,
+  "bytes": 548573,
+  "codec_name": "h264",
+  "profile": "High",
+  "width": 1920,
+  "height": 1080,
+  "pix_fmt": "yuv420p",
+  "r_frame_rate": "30/1",
+  "duration": "10.000000",
+  "nb_read_frames": "300",
+  "frameCountExact": true
+ },
+ "alpha": {
+  "corner_t5": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "title_t5_center": [
+   255,
+   255,
+   255,
+   32
+  ],
+  "bar_t2": [
+   71,
+   219,
+   230,
+   255
+  ],
+  "emptyCornerTransparent": true,
+  "shapeOpaque": true
+ },
+ "pass": true
+}

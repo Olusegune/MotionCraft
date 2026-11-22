@@ -1,0 +1,28 @@
+{
+ "compIds": {
+  "A": 1,
+  "B": 41
+ },
+ "projectOpenedFromCommandLineArg": {
+  "activeComp": 41,
+  "path": "C:\\Users\\eduni\\code\\_spike_work\\c10\\two.ecproj",
+  "dirty": false,
+  "renderer": {
+   "active": "cpu",
+   "adapter": null,
+   "gpuAcceleration": true,
+   "renderer": "GPU Acceleration",
+   "why": "GPU compositor unavailable: NVIDIA GeForce RTX 4070 SUPER/PCIe/SSE2 (Gl): the GPU compositor needs DirectX 12, Vulkan, Metal or WebGPU"
+  }
+ },
+ "activeCompAfterLaunch": 41,
+ "compOpenA": {
+  "comp": 1
+ },
+ "activeCompAfterCompOpen": 1,
+ "focusCommands": [
+  "camera.linkFocusToPoi",
+  "camera.linkFocusToLayer",
+  "camera.setFocusToLayer"
+ ]
+}

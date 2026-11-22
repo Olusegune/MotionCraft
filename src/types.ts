@@ -31,6 +31,14 @@ export interface RevisionRecord {
 }
 export interface ReviewComment { id: string; atSec: number; text: string; at: string }
 
+export interface LayerBinding {
+  engineLayerId: number; compId: string;
+  role: "title" | "body-text" | "logo" | "background" | "texture" | "camera" | "audio-driver" | "other";
+  primitiveId?: string; primitiveVersion?: string;
+  provenance: { actor: "agent:director" | "agent:builder" | "agent:qa" | "user"; at: string; costReported: boolean };
+  lock: "none" | "approved"; approvedHash?: string; lastKnownHash: string;
+}
+
 export interface MotionProject {
   id: string; schemaVersion: "1.0"; name: string;
   brief: { text: string; script?: string; audio: string[]; references: string[]; brandDocs: string[]; storyboards: string[];
@@ -42,6 +50,7 @@ export interface MotionProject {
   review: { comments: ReviewComment[] };
   controlModes: Record<ModeKey, ControlMode>;
   engine: { kind: "effectcraft"; version: string; commit: string; projectPath: string };
+  layerMap?: LayerBinding[];   // optional so projects made before P1-11 still open
   approvals: ApprovalRecord[];
   revisions: RevisionRecord[];
   budget: { capUsd: number; approvalThresholdUsd: number };

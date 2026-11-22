@@ -1,0 +1,175 @@
+{
+  "$defs": {
+    "CompInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "title": "Duration",
+          "type": "number"
+        },
+        "frame_rate": {
+          "title": "Frame Rate",
+          "type": "number"
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/LayerInfo"
+          },
+          "title": "Layers",
+          "type": "array"
+        },
+        "markers": {
+          "items": {
+            "$ref": "#/$defs/MarkerInfo"
+          },
+          "title": "Markers",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "width": {
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "width",
+        "height",
+        "frame_rate",
+        "duration"
+      ],
+      "title": "CompInfo",
+      "type": "object"
+    },
+    "LayerInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "native_locked": {
+          "default": false,
+          "title": "Native Locked",
+          "type": "boolean"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "index"
+      ],
+      "title": "LayerInfo",
+      "type": "object"
+    },
+    "MarkerInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "comment": {
+          "default": "",
+          "title": "Comment",
+          "type": "string"
+        },
+        "layer": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layer"
+        },
+        "time": {
+          "title": "Time",
+          "type": "number"
+        }
+      },
+      "required": [
+        "time"
+      ],
+      "title": "MarkerInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "active_comp": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Comp"
+    },
+    "comps": {
+      "items": {
+        "$ref": "#/$defs/CompInfo"
+      },
+      "title": "Comps",
+      "type": "array"
+    },
+    "dirty": {
+      "default": false,
+      "title": "Dirty",
+      "type": "boolean"
+    },
+    "path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Path"
+    }
+  },
+  "title": "DocSnapshot",
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+{
+ "small_3_layers_10s": {
+  "saveCopySecondsMedian": 0.0014,
+  "saveCopySecondsMax": 0.0015,
+  "bytes": 101536,
+  "zippedBytes": 6776
+ },
+ "large_30_layers_60s": {
+  "saveCopySecondsMedian": 0.0045,
+  "saveCopySecondsMax": 0.0054,
+  "bytes": 1301737,
+  "zippedBytes": 74691
+ }
+}

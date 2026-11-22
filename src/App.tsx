@@ -106,7 +106,7 @@ export default function App() {
   const home = async () => { await flush(); setProject(null); latest.current = null; setViewerOnly(false); void refreshProjects(); };
 
   const ctx: AppCtx | null = useMemo(() => !project ? null : ({
-    project, stage, engine, update, go: setStage, refreshEngine,
+    project, projectPath: pathRef.current, stage, engine, update, go: setStage, refreshEngine,
     approveGate: (g) => update((p) => approve(p, g)),
     unlockGate: (gate, revKind) => setOverlay({ kind: "impact", gate, revKind }),
     openEffectCraft: async () => { await (await getApi()).openEffectCraft(pathRef.current, settings.enginePath); },

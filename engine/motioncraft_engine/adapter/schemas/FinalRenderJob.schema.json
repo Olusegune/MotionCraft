@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "comp": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Comp"
+    },
+    "estimated_cost_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estimated Cost Usd"
+    },
+    "output": {
+      "format": "path",
+      "title": "Output",
+      "type": "string"
+    },
+    "preset": {
+      "enum": [
+        "h264",
+        "prores4444"
+      ],
+      "title": "Preset",
+      "type": "string"
+    }
+  },
+  "required": [
+    "comp",
+    "preset",
+    "output"
+  ],
+  "title": "FinalRenderJob",
+  "type": "object"
+}

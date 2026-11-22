@@ -1,0 +1,28 @@
+{
+ "cycles": 20,
+ "modes": {
+  "fresh": {
+   "ids": [
+    92,
+    41,
+    2
+   ],
+   "idsStable": true,
+   "layerHashesStable": true,
+   "fileBytesStableAfterFirstSave": true,
+   "distinctFileHashes": 1
+  },
+  "inproc": {
+   "ids": [
+    92,
+    41,
+    2
+   ],
+   "idsStable": true,
+   "layerHashesStable": true,
+   "fileBytesStableAfterFirstSave": true,
+   "distinctFileHashes": 1
+  }
+ },
+ "pass": true
+}

@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "index": {
+      "title": "Index",
+      "type": "integer"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "result": {
+      "default": null,
+      "title": "Result"
+    }
+  },
+  "required": [
+    "index",
+    "id",
+    "ok"
+  ],
+  "title": "StepResult",
+  "type": "object"
+}

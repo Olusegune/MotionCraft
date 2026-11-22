@@ -1,0 +1,27 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "bytes": {
+      "title": "Bytes",
+      "type": "integer"
+    },
+    "path": {
+      "format": "path",
+      "title": "Path",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "path",
+    "bytes"
+  ],
+  "title": "ExportResult",
+  "type": "object"
+}

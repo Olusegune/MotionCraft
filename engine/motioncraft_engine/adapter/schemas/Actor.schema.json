@@ -1,0 +1,15 @@
+{
+  "additionalProperties": false,
+  "description": "`user` or `agent:<director|builder|qa>`. Only agents are subject to the lock check.",
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "Actor",
+  "type": "object"
+}
