@@ -208,10 +208,14 @@ fn candidates(override_path: &str) -> Vec<PathBuf> {
     v
 }
 
-/// Only a file literally named like the engine CLI is ever run, and only with `--version`.
+/// Only a regular file with exactly the engine CLI's name is ever run, and only with `--version`. Network (UNC) paths are
+/// refused so a setting can never point at a binary on another machine.
 fn looks_like_cli(p: &Path) -> bool {
-    p.is_file()
-        && p.file_name().and_then(|n| n.to_str()).map(|n| n.to_ascii_lowercase().starts_with("effectcraft-cli")).unwrap_or(false)
+    let s = p.to_string_lossy();
+    if s.starts_with("\\\\") || s.starts_with("//") {
+        return false;
+    }
+    p.is_file() && p.file_name().and_then(|n| n.to_str()).map(|n| n.eq_ignore_ascii_case(cli_name())).unwrap_or(false)
 }
 
 fn run_version(cli: &Path) -> Result<String, String> {
@@ -367,5 +371,15 @@ mod tests {
     #[test]
     fn only_cli_named_files_are_run() {
         assert!(!looks_like_cli(Path::new("C:/Windows/System32/cmd.exe")));
+        assert!(!looks_like_cli(Path::new(r"\\server\share\effectcraft-cli.exe")));
+        let dir = std::env::temp_dir().join(format!("mc-cli-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let evil = dir.join("effectcraft-cli-evil.exe");
+        fs::write(&evil, b"x").unwrap();
+        assert!(!looks_like_cli(&evil), "a prefix match must not be enough");
+        let good = dir.join(cli_name());
+        fs::write(&good, b"x").unwrap();
+        assert!(looks_like_cli(&good));
+        let _ = fs::remove_dir_all(&dir);
     }
 }
