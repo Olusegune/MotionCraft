@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "duration": {
+      "default": 10.0,
+      "exclusiveMinimum": 0,
+      "maximum": 36000,
+      "title": "Duration",
+      "type": "number"
+    },
+    "frame_rate": {
+      "default": 30.0,
+      "exclusiveMinimum": 0,
+      "maximum": 240,
+      "title": "Frame Rate",
+      "type": "number"
+    },
+    "height": {
+      "default": 1080,
+      "maximum": 16384,
+      "minimum": 16,
+      "title": "Height",
+      "type": "integer"
+    },
+    "name": {
+      "default": "Main",
+      "title": "Name",
+      "type": "string"
+    },
+    "width": {
+      "default": 1920,
+      "maximum": 16384,
+      "minimum": 16,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "title": "CompSettings",
+  "type": "object"
+}

@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "StepResult": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "result": {
+          "default": null,
+          "title": "Result"
+        }
+      },
+      "required": [
+        "index",
+        "id",
+        "ok"
+      ],
+      "title": "StepResult",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "completed": {
+      "title": "Completed",
+      "type": "integer"
+    },
+    "failed": {
+      "title": "Failed",
+      "type": "integer"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/StepResult"
+      },
+      "title": "Results",
+      "type": "array"
+    }
+  },
+  "required": [
+    "completed",
+    "failed",
+    "results"
+  ],
+  "title": "BatchResult",
+  "type": "object"
+}
