@@ -33,6 +33,7 @@ def test_layer_params_in_the_policy_match_the_snapshot_schemas():
 
 
 def test_pin_matches_the_snapshot_and_lock_file():
+    assert (ROOT / "effectcraft.lock").read_text(encoding="utf-8").split()[0] == PINNED_COMMIT
     snap = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     assert snap["pin"] == PINNED_COMMIT
     assert snap["engineVersion"].endswith(PINNED_VERSION)

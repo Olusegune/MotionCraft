@@ -4,6 +4,7 @@ import type { EngineStatus } from "./lib/api";
 
 export interface AppCtx {
   project: MotionProject;
+  projectPath: string;
   stage: Stage;
   engine: EngineStatus | null;
   /** Apply a change to material that is not covered by a gate. */

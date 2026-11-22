@@ -17,11 +17,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vitest run
       - run: npm audit --audit-level=high
       - run: npm run build
+      - name: Engine tests (mock adapter)
+        working-directory: engine
+        run: |
+          pip install pydantic pytest
+          python -m pytest -q
 
   desktop:
     needs: test
@@ -29,23 +36,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            args: ""
-            name: windows-x64
-          - os: macos-latest
-            args: "--target universal-apple-darwin"
-            name: macos-universal
+          - { os: windows-latest, args: "", name: windows-x64, targets: "" }
+          - { os: macos-latest, args: "--target aarch64-apple-darwin", name: macos-arm64, targets: "aarch64-apple-darwin" }
+          - { os: macos-15-intel, args: "--target x86_64-apple-darwin", name: macos-x64, targets: "x86_64-apple-darwin" }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.targets }}
       - uses: swatinem/rust-cache@v2
         with: { workspaces: src-tauri }
       - run: npm ci
+      - name: Build the engine helper (PyInstaller)
+        run: |
+          python -m pip install pyinstaller pydantic
+          python scripts/build_sidecar.py
       - name: Rust tests
         working-directory: src-tauri
         run: cargo test
@@ -57,6 +67,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force portable/MotionCraft | Out-Null
           Copy-Item src-tauri/target/release/motioncraft.exe portable/MotionCraft/MotionCraft.exe
+          Copy-Item src-tauri/binaries/motioncraft-engine-*.exe portable/MotionCraft/motioncraft-engine.exe
           Copy-Item -Recurse THIRD_PARTY_NOTICES portable/MotionCraft/
           Compress-Archive -Path portable/MotionCraft -DestinationPath "MotionCraft_portable_windows-x64.zip"
       - uses: actions/upload-artifact@v4

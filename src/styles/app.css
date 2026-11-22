@@ -158,3 +158,11 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .palette li button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 36px; padding: 0 10px; background: none; border: 0; border-radius: var(--mc-r-ctl); text-align: left; cursor: pointer; }
 .palette li button.on, .palette li button:hover { background: var(--mc-bg-panel); box-shadow: inset 0 0 0 1px var(--mc-control-border); }
 .palette .muted { margin-left: auto; } .palette .empty { padding: 12px; color: var(--mc-text-2); }
+
+/* build panels */
+.layers { display: flex; flex-direction: column; gap: 4px; }
+.layer-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; min-height: 40px; padding: 4px 10px; text-align: left; background: var(--mc-bg-app); border: 1px solid var(--mc-divider); border-radius: var(--mc-r-ctl); cursor: pointer; }
+.layers li.on .layer-row { border-color: var(--mc-accent); }
+.badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--mc-control-border); border-radius: 10px; padding: 0 8px; font-size: 12px; color: var(--mc-text-2); }
+.badge.warn { color: var(--mc-warning); border-color: var(--mc-warning); }
+.preview-img { width: min(100%, 100vh * 0.9); max-height: 60vh; object-fit: contain; background: var(--mc-bg-app); border-radius: 4px; }
