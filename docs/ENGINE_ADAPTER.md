@@ -82,6 +82,16 @@ Before any `execute` from an agent actor:
 The native switch is defence in depth, not the source of truth: a user can unlock in the GUI, which is a hand edit
 and is caught by drift detection.
 
+**Measured at the pin (P0-10, `spike/c8_lock.py`, Windows).** With `layer.setSwitch lock=true` on a layer, these commands
+still **changed it**: `prop.set`, `prop.addKey`, `layer.setText`, `layer.rename`, `layer.setTransform`,
+`layer.setBlendMode`, `edit.duplicate` (made a copy), `layer.style.dropShadow`. These were **refused** with
+"is locked": `layer.setParent`, `layer.arrange`, `edit.clear` (explicit `layers` and selection-based). `layer.setSwitch`
+(including `lock=false`) **skipped** the locked layer without error. `layer.setComment` and `layer.addMarker` replied
+success but the script cannot see comments or markers (unverified). So the native lock is far weaker than the docs
+assumed: the adapter's own check is the only real protection, and it must cover every command above. Also: most layer
+commands take `layers` (a list) and fall back to the **current selection** when it is omitted; `prop.*` and
+`layer.rename` take `layer`. The adapter must therefore refuse any layer command that omits its layer parameter.
+
 ## Hashing and drift
 
 - `hash_layers` = SHA-256 over a canonical JSON of the layer's properties from `prop.get` (sorted keys, floats
