@@ -49,14 +49,14 @@ engine command id and its params.
 
 | Adapter call | EffectCraft | Notes |
 | --- | --- | --- |
-| process start | `effectcraft-cli mcp --automation-read-root <pkg> --automation-read-root <cache> --automation-write-root <pkg>` | stdio JSON-RPC. Refuse to start if `effectcraft-cli --version` ≠ lock file |
-| `create` | `command_run file.newProject`, `comp.new {name,width,height,frameRate,duration}`, `file.save {path}` | Confirmed at the pin (P0-02): `file.newProject` takes no params; `comp.new` accepts `name,width,height,frameRate,duration` (none required); `file.save` takes an optional `path` |
+| process start | `effectcraft-cli mcp --automation-read-root <pkg> --automation-read-root <cache> --automation-write-root <pkg>` | stdio JSON-RPC. `--version` prints only the version number (`effectcraft-cli 0.24.1`), never the commit, so the adapter compares the version to `PINNED_VERSION` and the real-engine contract tests guard the rest |
+| `create` | `command_run file.newProject`, `comp.new {name,width,height,frameRate,duration}`, `file.save {path}` | Default frame rate is 29.97 when `frameRate` is omitted. Layer ids are unique but not sequential (e.g. 2, 41, 92) and were identical over 20 save/reopen cycles. Confirmed at the pin (P0-02): `file.newProject` takes no params; `comp.new` accepts `name,width,height,frameRate,duration` (none required); `file.save` takes an optional `path` |
 | `open` | `command_run file.open {path}` | |
-| `inspect` | `doc_inspect` + `command_run layer.tree` per comp; resource `effectcraft://document` | Never cached |
+| `inspect` | `get_project` (comps) + `get_comp` per comp (layers, switches). `doc_inspect` only returns the active comp | Never cached. Markers are not in `get_comp`; read them separately when needed |
 | `layer_props` | `command_run prop.get` over the layer's property tree (`layer.tree` gives paths) | Input to hashing |
 | `execute` | `command_batch {steps, stop_on_error}` | Each step is its own undo step. Use the `batch` tool when one atomic undo is wanted (one Builder pass = one undo) |
 | `lock_layers` (native) | `layer.setSwitch {layers:[…], switch:"lock", value:true}` | Shows the lock in the GUI; EffectCraft then skips locked layers in several commands |
-| `unlock_layers` | `layer.setSwitch … value:false` | Only from a `UserAction`; creates a revision |
+| `unlock_layers` | `layer.unlockAll`, then re-lock the others | `layer.setSwitch lock=false` skips locked layers (P0-10), so it cannot unlock. Only from a `UserAction`; creates a revision |
 | `preview` | `render_preview {comp, times, max_side, columns?}` | Contact sheet when several times |
 | `render_final` | `renderQueue.add {comp, format:"prores", channels:"rgba", proresProfile:"4444", output}` or `format:"h264"`, then `renderQueue.render {wait:true}` with `_meta.progressToken` | Only with a valid spend token. Check `file.checkOutput` first |
 | `export` lottie | `command_run file.exportLottie {comp, path, includeExpressions}` → `{path, bytes, warnings}` | Surface every warning |
@@ -107,6 +107,11 @@ commands take `layers` (a list) and fall back to the **current selection** when 
   is open, the adapter writes **only through the bridge**, never to the file directly.
 - One writer at a time per project inside MotionCraft: the adapter holds an asyncio lock per project.
 - Never call `file.save` while a GUI session has unsaved changes the agent did not make; ask the user.
+- **Measured (P0-07):** a second process that saves the same `.ecproj` while the GUI has it open succeeds with no error,
+  the GUI never sees the change, and the GUI's next save overwrites it. So the rule above is enforced in code:
+  `BaseAdapter` raises `GuiWriteConflict` for `create`/`open` while a GUI is attached, and all writes go through the bridge.
+- The control port is bound to `127.0.0.1` by the engine itself. Use a random free port above 1023 and open it only for
+  the live session.
 
 ## Errors
 
