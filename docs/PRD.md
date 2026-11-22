@@ -197,8 +197,9 @@ become the suite's sound step.
 
 ## Interface
 
-FilmCrafter3's shell (dark graphite, left nav, top workspace tabs, compact progress, approval states, autosave,
-command palette), with screens for directing and reviewing:
+FilmCrafter3's product language with its own tokens: a compact header, one bottom stage bar (Brief → Intent →
+Direction → Treatment → Build → Review → Deliver) with four approval-gate diamonds, an optional left rail, a
+collapsible right inspector and a shallow story strip. Projects is the home screen. Full spec: [UI_UX.md](UI_UX.md).
 
 | Screen | Purpose |
 | --- | --- |
@@ -211,7 +212,7 @@ command palette), with screens for directing and reviewing:
 | Review | Player with frame-accurate comments, QA findings, version compare |
 | Deliver | Render presets, package export |
 
-Workspace presets: Director, Audio Sync, Review.
+Workspace presets are panel layouts inside this shell: Director, Audio Sync, Review.
 
 ## QA
 
@@ -273,3 +274,7 @@ contract (package format + MCP import/export tools) but ships without them.
    both: adapter refusal (authoritative) and the native switch (so the GUI shows the lock). See ENGINE_ADAPTER.md.
 6. EffectCraft's project file lock is taken only by CLI runs, not by the desktop app or `mcp`, so concurrent GUI and
    agent writes are a real risk for criterion 5 — the spike must test it.
+7. The first UI brief put a gate diamond between every stage; the PRD has four gates (A–D). UI_UX.md places four. The
+   bottom stage bar replaces the PRD's earlier "left navigation and top workspace tabs".
+8. FilmCrafter3 is amber, with custom icons and no bundled fonts; MotionCraft is cyan, with Lucide and bundled Inter,
+   Space Grotesk and IBM Plex Mono (UI_UX.md §10).

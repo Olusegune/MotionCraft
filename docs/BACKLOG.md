@@ -12,7 +12,7 @@ the fallback is chosen, in which case the adapter target changes but these ticke
 | Id | Ticket | Done when |
 | --- | --- | --- |
 | P1-01 | Scaffold from FilmCrafter3 (Tauri 2, React 19, Vite, Vitest, Playwright, Python sidecar), rename to MotionCraft, CI with lint/type/test | `npm run tauri dev` opens an empty shell; CI green; PORT_LEDGER entries |
-| P1-02 | Port shell: design system, `Sheet`, palette, nav rail, workspace tabs; eight empty screens; presets Director / Audio Sync / Review | Screens reachable by nav and palette; a11y test passes |
+| P1-02 | Shell per [UI_UX.md](UI_UX.md): `tokens.css`, bundled fonts, Lucide, header, bottom stage bar with four gate diamonds, optional rail, collapsible inspector with pinned main action, story strip; Projects home and seven empty stage pages; `Sheet`, command palette and UI scale ported | Pages reachable by stage bar and palette; gate diamonds focusable with text status; contrast and a11y checks pass |
 | P1-03 | Schemas + generated types; project store with atomic writes, migrations, `.motioncraft` package create/open | Create → close → reopen round trip test |
 | P1-04 | Port keychain + `confirm_spend` token + spend-gate test list | No paid path without token (test) |
 | P1-05 | Router: port `llm.py`/`localmodels.py`; add Inkling endpoint; capability declarations; offline mode | Manual mode works with no provider (AT-16 partial) |
@@ -22,6 +22,8 @@ the fallback is chosen, in which case the adapter target changes but these ticke
 | P1-09 | Rule table: `rules_default.yaml`, evaluator, "which rules fired", user-editable | AT-6 |
 | P1-10 | Control modes per stage, defaults, switch to Manual keeps work | Mode change test |
 | P1-11 | Adapter wired into app; "Open in EffectCraft" with bridge attach/detach | Edit in GUI visible in Build |
+| P1-12 | Stage mode control per stage (`controlModes`, defaults and no-provider behaviour, UI_UX §4.3) | UI criteria 12, 13 |
+| P1-13 | State library: engine unavailable, operation failed, offline, no provider, crash recovery, revision impact sheet | UI criteria 6, 14 |
 
 ## Phase 2 — Typography and primitives
 
@@ -38,6 +40,7 @@ the fallback is chosen, in which case the adapter target changes but these ticke
 | P2-09 | Lock flow: approve layer → hash + native lock; adapter refusal | AT-8, AT-10 |
 | P2-10 | Preview loop + timing instrumentation | **Gate: ≤ 60 s first preview, ≤ 10 s edit preview** on target hardware |
 | P2-11 | Save approved layer animation as a user primitive | Reused in another project |
+| P2-12 | Build panels per UI_UX §6.1: Layers (lock, provenance, drift), Text, Camera, Primitives, Audio | UI criteria 16, 17 |
 
 ## Phase 3 — Audio sync
 
@@ -57,7 +60,7 @@ the fallback is chosen, in which case the adapter target changes but these ticke
 | P4-02 | Tier 1 checks: assets, fonts + licence, fps, aspect, low-res, safe-title, collisions, contrast, audio drift, beat misalignment, alpha, colour space, unsupported effects, orphans | One test per check; AT-11, AT-12 |
 | P4-03 | Enhance interface: Topaz Video AI CLI (local) + Topaz API; raster-only guard; generative off by default; as low-res fix | AT-19 |
 | P4-04 | One-click safe fixes → revision, never on locked layers | Test |
-| P4-05 | Review screen: player, frame-accurate comments, QA list, version compare | e2e |
+| P4-05 | Review screen: player, frame-accurate comments, QA list, version compare and restore as a new revision (needs P0-15) | e2e |
 | P4-06 | Drift detection on open / GUI save / refocus | AT-9 |
 
 ## Phase 5 — Delivery

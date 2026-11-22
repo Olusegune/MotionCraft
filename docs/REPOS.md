@@ -43,10 +43,10 @@ same practice FilmCrafter3 uses. Do not add a git submodule of FilmCrafter3 or P
 | Need | Source path | Notes |
 | --- | --- | --- |
 | App skeleton | `package.json`, `vite.config.ts`, `tsconfig*.json`, `playwright.config.ts`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `src-tauri/capabilities/` | Rename identifiers to `com.motioncraft.app` |
-| Design system | `src/ui-system.css`, `src/styles.css`, `src/studio-shared.css`, `src/focus.css`, `src/icons.tsx`, `src/glyphs.tsx` | Dark graphite. Apply the "Resolve meets Apple, sleek futuristic" polish on top, not a new system |
+| Design system | `src/ui-system.css`, `src/studio-shared.css`, `src/focus.css` | Port the control patterns, then remap tokens to [UI_UX.md](UI_UX.md) §10: FilmCrafter3 is amber (`--amber`; its focus ring hard-codes `rgba(232,180,92,…)`), MotionCraft is cyan on neutral graphite. Control height 34 → 36. Do not port `icons.tsx` or `glyphs.tsx`: MotionCraft uses Lucide |
 | Dialogs | `src/Sheet.tsx` | Every dialog uses it |
-| Command palette | `src/Palette.tsx`, `src/Command.tsx`, `src/shortcuts.ts` | |
-| Navigation and tabs | `src/Dock.tsx`, `src/FilmRail.tsx`, `src/App.tsx` (layout only) | Replace screens with MotionCraft's eight |
+| Command palette, UI scale | `src/Palette.tsx`, `src/Command.tsx`, `src/shortcuts.ts`, `src/uiScale.ts` | Register the palette shortcut in the registry; UI scale 90–250% for Windows display scaling |
+| Main-action dock, nav rules | `src/Dock.tsx` (`DockBar`, `Cta` with a price), `src/FilmRail.tsx` (rule: a tool that cannot act is greyed with its reason, never hidden), `src/App.tsx` (layout only) | MotionCraft navigates with the bottom stage bar, not FilmCrafter3's left rail ([UI_UX.md](UI_UX.md) §4). Reuse the dock and the grey-with-reason rule |
 | Approvals / agent inbox | `analysis/filmcrafter_engine/agent_studio.py`, `src/AgentStudio.tsx`, `docs/AGENT_STUDIO.md`, `docs/architecture/ADR-AGENT-STUDIO.md` | Model for gates A–D and the approval inbox |
 | Spend gate (S-01) | `src-tauri/src/lib.rs` → `confirm_spend` and the token check; `src/SpendingSheet.tsx`; `analysis/filmcrafter_engine/paidops.py`, `spending.py`; the `spendgate` test | Keep the token rule exactly |
 | Keys | `src-tauri/src/lib.rs` keyring helpers (`KEY_SERVICE`), `provider_env_only` | Service name `motioncraft` |
@@ -65,6 +65,7 @@ same practice FilmCrafter3 uses. Do not add a git submodule of FilmCrafter3 or P
 | Song analysis | `analysis/pulseframe_analysis/analyze.py` | `SongMap` schema v1: `bpm`, `beats`, `downbeats`, `energy_curve`, `accents`, `sections` (label, group, energy 1–10, mood), `lyrics` (word timing via faster-whisper), `peaks`. Emits JSON-line progress on stdout |
 | Tests | `analysis/tests/` (analysis tests), `analysis/make_test_song.py` | Synthetic song for deterministic tests |
 | Requirements | `analysis/requirements.txt` | librosa 0.11, numpy 2.4, scipy, soundfile; faster-whisper/demucs optional |
+| Disclosure component | `src/Fold.tsx` | FilmCrafter3 has no `Fold`; port it from here |
 
 Plan (ticket P3-01): extract `analyze.py` into a shared, pip-installable package (proposed new repo
 `Olusegune/wheelbarrow-audio`, not created yet) that Pulseframe, FilmCrafter3 and MotionCraft all pin. Until it exists,

@@ -11,6 +11,7 @@ Your first work is [docs/PHASE0_SPIKE.md](docs/PHASE0_SPIKE.md), then [docs/BACK
 3. [docs/ENGINE_ADAPTER.md](docs/ENGINE_ADAPTER.md) and [docs/PROJECT_SCHEMA.md](docs/PROJECT_SCHEMA.md) — the
    two contracts everything else depends on.
 4. The ticket you are working on in [docs/BACKLOG.md](docs/BACKLOG.md). Work one ticket per branch and PR.
+5. For any UI work: [docs/UI_UX.md](docs/UI_UX.md).
 
 ## Hard rules (a PR that breaks one is not mergeable)
 
@@ -61,7 +62,8 @@ pin bump.
 - PR description: what changed, which ticket, which acceptance tests it moves, and a **"Not checked"** list.
 - Report test counts honestly. A skipped real-engine test is "not checked", not "passed".
 - If the PRD, this file and the code disagree, stop and say so in the PR instead of choosing.
-- UI changes: follow FilmCrafter3's shell (dark graphite, shared `Sheet` for dialogs, `Fold` for disclosures) and
-  update component and e2e tests.
+- UI changes: follow [docs/UI_UX.md](docs/UI_UX.md) (tokens, fonts, Lucide icons, gates, modes). FilmCrafter3 supplies
+  patterns (shared `Sheet` dialogs, pinned main-action dock), not its amber look; `Fold` comes from Pulseframe
+  (`src/Fold.tsx`). Update component and e2e tests.
 - Windows: write multi-line files via Python, not PowerShell `Set-Content -Encoding Byte`; commit messages without
   double quotes.

@@ -18,3 +18,7 @@ Victor confirms or changes it here.
 | 11 | Shared audio package home | New repo `Olusegune/wheelbarrow-audio` pinned by all three apps; vendor until it exists | PRD: "shared, not copied" | P3-01 |
 | 12 | Motion Studio router | Use FilmCrafter3 `llm.py`/`routing.py` (no Motion Studio repo found) | ADR-0004 | P1-05 |
 | 13 | Release gate test count | 19 (roadmap diagram says 15) | The acceptance list has 19 | P5-06 |
+| 14 | Templates page | Defer to v1.x | Not in PRD scope; v1 ships primitives and style families | — |
+| 15 | Default control modes for treatment, sound, audio-sync, qa-fixes | Assisted | The PRD sets defaults only for intent, style and build | P1-12 |
+| 16 | Revision snapshots for Compare and Restore | One `.ecproj` copy per approved gate and per agent pass, pruned by age | Restoring needs the old composition; size unknown until P0-15 | P4-05 |
+| 17 | Silver M brand artwork | Victor adds it under `brand/` | Not in any repository checked | P1-02 |

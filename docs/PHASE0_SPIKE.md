@@ -36,8 +36,10 @@ Record the machine: OS, CPU, GPU, RAM. Run on Windows 11 first (FilmCrafter3's p
 | P0-11 | — | Write `engine/motioncraft_engine/adapter/base.py` + JSON Schemas from ENGINE_ADAPTER.md | Reviewed interface |
 | P0-12 | — | `MockAdapter` + contract test suite; same suite runs against real engine with `-m real_engine` | Suite green on mock; result recorded on real |
 | P0-13 | — | `PHASE0_REPORT.md` with the go/no-go | Signed off by Victor |
+| P0-14 | — | Find how to start the EffectCraft GUI on a given project **and composition** (CLI argument, or a control-channel command after launch) and how to refocus it later | A documented command that opens composition X; if impossible, record the fallback (open the project and tell the user which composition to select) |
+| P0-15 | — | Revision snapshots: measure `file.saveCopy` time and size on the c1 comp and on a 60 s comp with 30 layers | Numbers in the report; feeds Compare and Restore ([UI_UX.md](UI_UX.md) §9) |
 
-Days: 1–2 setup + P0-01/02 · 3–6 P0-03..P0-07 · 7 P0-08..P0-10 · 8–9 P0-11/12 · 10 report.
+Days: 1–2 setup + P0-01/02 · 3–6 P0-03..P0-07 · 7 P0-08..P0-10, P0-14, P0-15 · 8–9 P0-11/12 · 10 report.
 
 ## Things to watch
 
@@ -55,6 +57,8 @@ Decision: GO | NO-GO (fallback)        Date:        Machine(s):
 |1..8|
 Preview timings: first preview __ s (target 60), edit preview __ s (target 10)
 Lock behaviour table:
+Open-in-GUI at a named composition (P0-14):
+Snapshot time and size, file.saveCopy (P0-15):
 Concurrency rule adopted:
 Risks (from 6–8 and anything else):
 Changes needed to ENGINE_ADAPTER.md / PROJECT_SCHEMA.md:
