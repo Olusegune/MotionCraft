@@ -1,5 +1,1 @@
-repo=https://github.com/storytold/effectcraft
-commit=7e2d0256209974ffb92a29d8bdb6f2a49078f51f
-version=0.24.1
-pinned=2026-11-22
-note=Upgrade only via a PR that bumps this file and passes the adapter contract tests with -m real_engine
+7e2d0256209974ffb92a29d8bdb6f2a49078f51f
