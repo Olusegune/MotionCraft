@@ -1,0 +1,34 @@
+OK   new project                        file.newProject     0.000s  null
+OK   new comp 1920x1080 30fps 10s       comp.new            0.000s  {"comp": 1}
+OK   native text layer                  layer.newText       0.000s  {"layer": 2}
+OK   rect shape layer                   layer.newShape      0.000s  {"layer": 41}
+OK   title position keys @ 0s           prop.addKey         0.000s  1
+OK   title position keys @ 1s           prop.addKey         0.000s  2
+OK   title position keys @ 3s           prop.addKey         0.000s  3
+OK   title opacity keys @ 0s            prop.addKey         0.000s  1
+OK   title opacity keys @ 1s            prop.addKey         0.000s  2
+OK   title opacity keys @ 9s            prop.addKey         0.000s  3
+OK   bar position keys @ 0s             prop.addKey         0.000s  1
+OK   bar position keys @ 2s             prop.addKey         0.000s  2
+OK   bar position keys @ 4s             prop.addKey         0.000s  3
+OK   bar opacity keys @ 0s              prop.addKey         0.000s  1
+OK   bar opacity keys @ 0.5s            prop.addKey         0.000s  2
+OK   bar opacity keys @ 9s              prop.addKey         0.000s  3
+OK   camera layer                       layer.newCamera     0.000s  {"layer": 92}
+OK   save                               file.save           0.003s  {"bytes": 101536, "path": "C:\\Users\\eduni\\code\\_spike_work\\c1\\c1.ecproj"}
+{
+ "layerTypes": [
+  "Camera",
+  "Shape",
+  "Text"
+ ],
+ "keyframeCounts": {
+  "2:transform/position": 3,
+  "2:transform/opacity": 3,
+  "41:transform/position": 3,
+  "41:transform/opacity": 3
+ },
+ "ecprojBytes": 101536,
+ "newGuiProcesses": [],
+ "pass": true
+}

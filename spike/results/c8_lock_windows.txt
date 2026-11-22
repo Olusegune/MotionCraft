@@ -1,0 +1,158 @@
+APPLIED  prop.set                 set property (explicit layer) | '10.0'
+APPLIED  prop.addKey              add keyframe | '4'
+APPLIED  layer.setText            set text | 'None'
+APPLIED  layer.rename             rename | 'None'
+APPLIED  layer.setTransform       set transform | 'None'
+APPLIED  layer.setBlendMode       set blend mode | 'None'
+blocked  layer.setParent          set parent | 'invalid parameters for `layer.setParent`: “Title” is locked (Layer ▸ Switches ▸ Unlock All Layers)'
+unverified layer.setComment         set comment | 'None'
+unverified layer.addMarker          add marker | 'None'
+blocked  layer.arrange            arrange (to back) | 'invalid parameters for `layer.arrange`: “Title” is locked (Layer ▸ Switches ▸ Unlock All Layers)'
+blocked  edit.clear               delete via edit.clear (layers) | 'invalid parameters for `edit.clear`: “Title” is locked (Layer ▸ Switches ▸ Unlock All Layers)'
+skipped  layer.setSwitch          switch video off | 'False'
+skipped  layer.setSwitch          unlock via setSwitch | 'False'
+APPLIED  edit.duplicate           duplicate | '[124]'
+APPLIED  layer.style.dropShadow   add layer style | "{'styles': [{'layer': 2, 'style': 'dropShadow', 'uid': 136}]}"
+blocked  edit.clear               SELECTION: select then edit.clear (no layers param) | 'invalid parameters for `edit.clear`: “Title” is locked (Layer ▸ Switches ▸ Unlock All Layers)'
+{
+ "rows": [
+  {
+   "test": "set property (explicit layer)",
+   "command": "prop.set",
+   "outcome": "APPLIED",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "10.0"
+  },
+  {
+   "test": "add keyframe",
+   "command": "prop.addKey",
+   "outcome": "APPLIED",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "4"
+  },
+  {
+   "test": "set text",
+   "command": "layer.setText",
+   "outcome": "APPLIED",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "None"
+  },
+  {
+   "test": "rename",
+   "command": "layer.rename",
+   "outcome": "APPLIED",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "None"
+  },
+  {
+   "test": "set transform",
+   "command": "layer.setTransform",
+   "outcome": "APPLIED",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "None"
+  },
+  {
+   "test": "set blend mode",
+   "command": "layer.setBlendMode",
+   "outcome": "APPLIED",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "None"
+  },
+  {
+   "test": "set parent",
+   "command": "layer.setParent",
+   "outcome": "blocked",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "invalid parameters for `layer.setParent`: \u201cTitle\u201d is locked (Layer \u25b8 Switches \u25b8 Unlock All Layers)"
+  },
+  {
+   "test": "set comment",
+   "command": "layer.setComment",
+   "outcome": "unverified",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "None"
+  },
+  {
+   "test": "add marker",
+   "command": "layer.addMarker",
+   "outcome": "unverified",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "None"
+  },
+  {
+   "test": "arrange (to back)",
+   "command": "layer.arrange",
+   "outcome": "blocked",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "invalid parameters for `layer.arrange`: \u201cTitle\u201d is locked (Layer \u25b8 Switches \u25b8 Unlock All Layers)"
+  },
+  {
+   "test": "delete via edit.clear (layers)",
+   "command": "edit.clear",
+   "outcome": "blocked",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "invalid parameters for `edit.clear`: \u201cTitle\u201d is locked (Layer \u25b8 Switches \u25b8 Unlock All Layers)"
+  },
+  {
+   "test": "switch video off",
+   "command": "layer.setSwitch",
+   "outcome": "skipped",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "False"
+  },
+  {
+   "test": "unlock via setSwitch",
+   "command": "layer.setSwitch",
+   "outcome": "skipped",
+   "layerCountDelta": 0,
+   "lockedAfter": false,
+   "reply": "False"
+  },
+  {
+   "test": "duplicate",
+   "command": "edit.duplicate",
+   "outcome": "APPLIED",
+   "layerCountDelta": 1,
+   "lockedAfter": true,
+   "reply": "[124]"
+  },
+  {
+   "test": "add layer style",
+   "command": "layer.style.dropShadow",
+   "outcome": "APPLIED",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "{'styles': [{'layer': 2, 'style': 'dropShadow', 'uid': 136}]}"
+  },
+  {
+   "test": "SELECTION: select then edit.clear (no layers param)",
+   "command": "edit.clear",
+   "outcome": "blocked",
+   "layerCountDelta": 0,
+   "lockedAfter": true,
+   "reply": "invalid parameters for `edit.clear`: \u201cTitle\u201d is locked (Layer \u25b8 Switches \u25b8 Unlock All Layers)"
+  }
+ ],
+ "applied": [
+  "prop.set",
+  "prop.addKey",
+  "layer.setText",
+  "layer.rename",
+  "layer.setTransform",
+  "layer.setBlendMode",
+  "edit.duplicate",
+  "layer.style.dropShadow"
+ ]
+}

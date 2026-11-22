@@ -1,0 +1,20 @@
+{
+  "additionalProperties": false,
+  "description": "Exactly an EffectCraft engine command id and its params.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "Command",
+  "type": "object"
+}

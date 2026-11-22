@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "bytes": {
+      "title": "Bytes",
+      "type": "integer"
+    },
+    "frames": {
+      "title": "Frames",
+      "type": "integer"
+    },
+    "output": {
+      "format": "path",
+      "title": "Output",
+      "type": "string"
+    }
+  },
+  "required": [
+    "output",
+    "frames",
+    "bytes"
+  ],
+  "title": "RenderResult",
+  "type": "object"
+}
