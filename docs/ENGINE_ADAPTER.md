@@ -50,7 +50,7 @@ engine command id and its params.
 | Adapter call | EffectCraft | Notes |
 | --- | --- | --- |
 | process start | `effectcraft-cli mcp --automation-read-root <pkg> --automation-read-root <cache> --automation-write-root <pkg>` | stdio JSON-RPC. Refuse to start if `effectcraft-cli --version` ≠ lock file |
-| `create` | `command_run file.newProject`, `comp.new {name,width,height,frameRate,duration}`, `file.save {path}` | Param names here are indicative; confirm every one with `command_list {schemas:true}` in P0-02 |
+| `create` | `command_run file.newProject`, `comp.new {name,width,height,frameRate,duration}`, `file.save {path}` | Confirmed at the pin (P0-02): `file.newProject` takes no params; `comp.new` accepts `name,width,height,frameRate,duration` (none required); `file.save` takes an optional `path` |
 | `open` | `command_run file.open {path}` | |
 | `inspect` | `doc_inspect` + `command_run layer.tree` per comp; resource `effectcraft://document` | Never cached |
 | `layer_props` | `command_run prop.get` over the layer's property tree (`layer.tree` gives paths) | Input to hashing |
@@ -62,9 +62,9 @@ engine command id and its params.
 | `export` lottie | `command_run file.exportLottie {comp, path, includeExpressions}` → `{path, bytes, warnings}` | Surface every warning |
 | markers | `comp.addMarker`, `comp.deleteAllMarkers`, `layer.addMarker` | Audio markers carry `motioncraft:` in the comment |
 | `attach_gui` | restart child as `effectcraft-cli mcp --bridge <port>` | Bridge forwards to the live app. Confinement flags refuse `ui_*` tools — keep them on |
-| text | `layer.newText`, `layer.setText`, `text.sourceText.style`, `text.fonts`, `text.fontFeatures` | Native text only |
+| text | `layer.newText`, `layer.setText` (font, size, fill, `variations`, `direction`, features all live here), `text.fonts`, `text.fontFeatures`, `text.animatorFontAxes`, `text.addSelector` | Native text only. `text.sourceText.style` does not exist at the pin (checked P0-02) |
 
-Discover the rest at runtime with `command_list {schemas:true}` and snapshot it into
+Snapshot of 766 commands is committed. Other confirmed names: `layer.newShape`, `layer.newSolid`, `layer.newCamera`, `file.saveCopy`, `text.presets`. `layer.setSwitch` requires `switch` (one of video, audio, solo, lock, shy, collapse, quality, fx, frameBlend, motionBlur, adjustment, threeD, guide, preserveTransparency); `layers` and `value` are optional. `renderQueue.add` takes `format` (h264, prores, …) and `channels` (rgb, rgba, alpha). Discover the rest at runtime with `command_list {schemas:true}` and snapshot it into
 `engine/tests/fixtures/effectcraft_commands.<sha>.json`; the contract tests fail if a command the primitives use
 disappears or changes schema on a pin bump.
 
