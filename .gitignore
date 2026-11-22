@@ -13,3 +13,5 @@ test-results/
 .DS_Store
 __pycache__/
 spike/out/
+engine/**/__pycache__/
+.pytest_cache/

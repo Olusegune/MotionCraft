@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "data": {
+      "additionalProperties": true,
+      "title": "Data",
+      "type": "object"
+    },
+    "kind": {
+      "enum": [
+        "command",
+        "saved",
+        "lock",
+        "unlock",
+        "refused",
+        "gui_attached",
+        "gui_detached",
+        "opened"
+      ],
+      "title": "Kind",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind"
+  ],
+  "title": "EngineEvent",
+  "type": "object"
+}

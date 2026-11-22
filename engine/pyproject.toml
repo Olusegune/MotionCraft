@@ -1,0 +1,11 @@
+[project]
+name = "motioncraft-engine"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["real_engine: needs EFFECTCRAFT_CLI=path/to/effectcraft-cli (runs the same contract suite on the real engine)"]
+addopts = "-m 'not real_engine'"

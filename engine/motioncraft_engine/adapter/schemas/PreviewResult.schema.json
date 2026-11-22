@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "comp": {
+      "title": "Comp",
+      "type": "integer"
+    },
+    "contact_sheet": {
+      "default": false,
+      "title": "Contact Sheet",
+      "type": "boolean"
+    },
+    "height": {
+      "title": "Height",
+      "type": "integer"
+    },
+    "png": {
+      "format": "binary",
+      "title": "Png",
+      "type": "string"
+    },
+    "times": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Times",
+      "type": "array"
+    },
+    "width": {
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "comp",
+    "times",
+    "width",
+    "height",
+    "png"
+  ],
+  "title": "PreviewResult",
+  "type": "object"
+}
