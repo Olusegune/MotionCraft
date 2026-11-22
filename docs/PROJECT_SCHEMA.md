@@ -74,7 +74,7 @@ type StyleProfile = {
 };
 
 type LayerBinding = {
-  engineLayerId: number;           // EffectCraft LayerId (u64); confirm stability in Phase 0
+  engineLayerId: number;           // EffectCraft LayerId (u64). Unique, not sequential (2, 41, 92...), identical over 20 save/reopen cycles (P0-04)
   compId: string;
   role: 'title' | 'body-text' | 'logo' | 'background' | 'texture' | 'camera' | 'audio-driver' | 'other';
   primitiveId?: string; primitiveVersion?: string;
