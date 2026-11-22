@@ -1,0 +1,46 @@
+﻿{
+    "pin":  "7e2d0256209974ffb92a29d8bdb6f2a49078f51f",
+    "machine":  {
+                    "os":  "Microsoft Windows 11 Home build 26200",
+                    "cpu":  "Intel(R) Core(TM) i5-14400F, 10 cores / 16 threads",
+                    "gpu":  "NVIDIA GeForce RTX 4070 SUPER (32.0.16.1088)",
+                    "ramGb":  31.8,
+                    "rustc":  "rustc 1.96.0 (ac68faa20 2026-05-25)",
+                    "cargo":  "cargo 1.96.0 (30a34c682 2026-05-25)",
+                    "rustHost":  "x86_64-pc-windows-msvc"
+                },
+    "runs":  [
+                 {
+                     "run":  1,
+                     "wallSeconds":  902.4,
+                     "binaries":  {
+                                      "effectcraft":  {
+                                                          "sha256":  "ca141c47a1890eb5bfbf66be101f87c2f713dc730c586dd388ee46f72918bf32",
+                                                          "bytes":  128161792
+                                                      },
+                                      "effectcraft-cli":  {
+                                                              "sha256":  "7dbc9a59801f09b54fe02d82c8dbc99c40334187c49e3ab15fb698225c4e68dd",
+                                                              "bytes":  127053312
+                                                          }
+                                  },
+                     "version":  "effectcraft-cli 0.24.1"
+                 },
+                 {
+                     "run":  2,
+                     "wallSeconds":  847.9,
+                     "binaries":  {
+                                      "effectcraft":  {
+                                                          "sha256":  "8846a7e54f6c9e88f51c458fe1e140410bc0bd8b2ae7e76c27eab9c3cf9f7578",
+                                                          "bytes":  128161792
+                                                      },
+                                      "effectcraft-cli":  {
+                                                              "sha256":  "4df7633a91f453b5fea059196b6b69308c5fb17c79f50f502e0a71a619fef034",
+                                                              "bytes":  127053312
+                                                          }
+                                  },
+                     "version":  "effectcraft-cli 0.24.1"
+                 }
+             ],
+    "identicalHashes":  false,
+    "recordedAt":  "2026-11-22T21:49:31.4041908Z"
+}
