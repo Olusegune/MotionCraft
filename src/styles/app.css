@@ -261,6 +261,15 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .chip-toggle:hover { border-color: var(--mc-accent); }
 .chip-toggle.on { border-color: var(--mc-accent); color: var(--mc-accent); }
 
+/* Review: the notes dock under the picture */
+.notes-dock { flex: none; max-height: 34%; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px 2px 6px; }
+.dock-title { font-size: 15px; font-weight: 600; color: var(--mc-text-2); }
+.notes-dock .row.end { flex-wrap: nowrap; }
+.notes.note-strip { flex-direction: row; overflow-x: auto; margin-top: 0; padding-bottom: 4px; }
+.note-strip li { flex: 0 0 260px; grid-template-columns: auto 1fr auto; border: 1px solid var(--mc-divider); }
+.note-strip li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-empty { margin: 0; color: var(--mc-text-3); }
+
 /* scene head and direction summary in the inspector */
 .scene-head { display: flex; flex-direction: column; gap: 14px; padding: 6px 4px 14px; border-bottom: 1px solid var(--mc-divider); }
 .scene-title { font-family: var(--mc-font-head); font-size: 26px; font-weight: 600; line-height: 1.15; }
