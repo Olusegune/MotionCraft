@@ -409,6 +409,19 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(log.calls.some((c) => c.method === "audio_analyze")).toBe(false);
   });
 
+  it("Build preview and Review changes sit in the header on Build (no second Build preview in the inspector), and Review changes opens Review", async () => {
+    const user = userEvent.setup();
+    fake(project());
+    render(<App />);
+    await toBuild(user);
+    const header = screen.getByRole("banner");
+    expect(await within(header).findByRole("button", { name: "Build preview" })).toBeEnabled();
+    expect(screen.getAllByRole("button", { name: "Build preview" })).toHaveLength(1);
+    await user.click(within(header).getByRole("button", { name: "Review changes" }));
+    expect(await screen.findByRole("heading", { name: "Review the draft" })).toBeInTheDocument();
+    expect(within(screen.getByRole("banner")).queryByRole("button", { name: "Build preview" })).toBeNull();    // the buttons belong to Build
+  });
+
   it("has no raw colours: the styles use only tokens", async () => {
     const css = readFileSync("src/styles/app.css", "utf-8");
     expect(css.length).toBeGreaterThan(1000);

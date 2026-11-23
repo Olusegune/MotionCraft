@@ -41,6 +41,8 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .app { display: grid; grid-template-rows: 56px minmax(0, 1fr) auto; height: 100%; min-width: 0; }
 .app:not(:has(.stagebar)) { grid-template-rows: 56px minmax(0, 1fr); }
 .header { display: flex; align-items: center; gap: 16px; padding: 0 24px; background: var(--mc-bg-app); }
+.header-actions { display: inline-flex; align-items: center; gap: 10px; }
+.header-actions:empty { display: none; }
 .search-btn { display: inline-flex; align-items: center; gap: 10px; min-width: 280px; height: 40px; padding: 0 14px; border-radius: 22px; background: var(--mc-bg-panel); border: 1px solid var(--mc-divider); color: var(--mc-text-2); cursor: pointer; }
 .search-btn:hover { border-color: var(--mc-control-border); color: var(--mc-text); }
 .search-btn .kbd { margin-left: auto; }

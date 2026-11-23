@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { Camera, ExternalLink, LockKeyhole, RotateCcw, TriangleAlert } from "lucide-react";
 import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
@@ -19,7 +20,7 @@ import type { SongSection } from "./build/SectionsBar";
 import type { FrameProps } from "./common";
 
 export function BuildPage(f: FrameProps) {
-  const { engine, project, projectPath, update, openEffectCraft, showSettings, refreshEngine } = useApp();
+  const { engine, project, projectPath, update, openEffectCraft, showSettings, refreshEngine, go } = useApp();
   const { enginePath } = useSettings();
   const connected = engine?.state === "connected";
   const [snap, setSnap] = useState<EngineSnapshot | null>(null);
@@ -202,6 +203,14 @@ export function BuildPage(f: FrameProps) {
 
   const sceneIdx = beatAt(beats, playhead);
   const scene = sceneIdx >= 0 ? beats[sceneIdx] : null;
+  const previewReason = !connected ? "Needs a connected EffectCraft engine." : layers.length === 0 ? "Add a layer first." : movie.status.state === "rendering" ? "Rendering a draft…" : guiOpen ? "Close EffectCraft first so the draft shows your latest changes." : undefined;
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { setHeaderSlot(document.getElementById("header-actions")); }, []);
+  const headerButtons = headerSlot && createPortal(
+    <>
+      <button className="btn" onClick={() => go("review")} title="Look at the changes and saved versions, and leave notes">Review changes</button>
+      <button className="btn primary" disabled={!!previewReason} title={previewReason} onClick={() => void movie.start()}>{movie.status.state === "rendering" ? "Rendering…" : "Build preview"}</button>
+    </>, headerSlot);
   const inspector = (
     <>
       <div className="scene-head">
@@ -265,13 +274,13 @@ export function BuildPage(f: FrameProps) {
   );
 
   return (
-    <PageFrame {...f} compactHead title="Build" intro="Build the composition, play a draft, and refine in EffectCraft." strip={!beats.length} main={main} inspector={inspector}
-      action={{
-        label: movie.status.state === "rendering" ? "Rendering…" : "Build preview", onClick: () => void movie.start(),
-        disabledReason: !connected ? "Needs a connected EffectCraft engine." : layers.length === 0 ? "Add a layer first." : movie.status.state === "rendering" ? "Rendering a draft…" : guiOpen ? "Close EffectCraft first so the draft shows your latest changes." : undefined,
-      }} />
+    <>
+      {headerButtons}
+      <PageFrame {...f} compactHead title="Build" intro="Build the composition, play a draft, and refine in EffectCraft." strip={!beats.length} main={main} inspector={inspector} />
+    </>
   );
 }
+
 
 function TextPanel({ write, disabled, sel, locked, onAdded }: { write: Write; disabled: boolean; sel: EngineLayer | null; locked: boolean; onAdded: (id?: number) => void }) {
   const [newText, setNewText] = useState("");
