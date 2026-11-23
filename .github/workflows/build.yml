@@ -29,6 +29,15 @@ jobs:
         run: |
           pip install pydantic pytest
           python -m pytest -q
+      - name: Python dependency audit
+        working-directory: engine
+        run: |
+          pip install pip-audit
+          pip-audit .
+      - name: Rust dependency audit
+        run: |
+          cargo install cargo-audit --locked --version 0.22.2
+          cd src-tauri && cargo audit
 
   desktop:
     needs: test
