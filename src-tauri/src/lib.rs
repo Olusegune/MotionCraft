@@ -975,15 +975,36 @@ static SPLASH_AT: Mutex<Option<Instant>> = Mutex::new(None);
 const SPLASH_MIN: Duration = Duration::from_millis(1500);
 const DOCS_URL: &str = "https://github.com/Olusegune/MotionCraft/tree/main/docs";
 
+/// Windows 11 animates a window as it appears and disappears. Over a window that is already on screen that shows up as a ghost copy
+/// of it, with its own title-bar buttons, drifting in and fading out at start-up. Turning the transitions off for our windows
+/// removes it. Other platforms have nothing to do.
+#[cfg(windows)]
+fn no_window_animation(w: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED};
+    if let Ok(h) = w.hwnd() {
+        let on: i32 = 1;
+        // SAFETY: a valid window handle from Tauri, and a pointer to a 4-byte BOOL that lives for the call.
+        unsafe {
+            DwmSetWindowAttribute(h.0 as _, DWMWA_TRANSITIONS_FORCEDISABLED as u32, &on as *const i32 as *const _, 4);
+        }
+    }
+}
+#[cfg(not(windows))]
+fn no_window_animation(_: &tauri::WebviewWindow) {}
+
 /// Closes the splash and shows the main window (idempotent). A timer calls it too, so a page that never loads cannot leave the
 /// user looking at the splash forever.
 fn show_main(app: &tauri::AppHandle) {
-    if let Some(sp) = app.get_webview_window("splashscreen") {
-        let _ = sp.close();
-    }
+    // Main first, then the splash is hidden (no animation) and only then closed. Closing it in the same instant the main window
+    // appeared let Windows 11 play the close animation as a ghost panel, with title-bar buttons, over the main window.
     if let Some(m) = app.get_webview_window("main") {
         let _ = m.show();
         let _ = m.set_focus();
+    }
+    if let Some(sp) = app.get_webview_window("splashscreen") {
+        let _ = sp.set_always_on_top(false);
+        let _ = sp.hide();
+        let _ = sp.close();
     }
 }
 
@@ -1174,7 +1195,7 @@ pub fn run() {
                 .center()
                 .always_on_top(true)
                 .skip_taskbar(true)
-                .shadow(true)
+                .shadow(false)   // a shadow gives the borderless window a frame that Windows animates when it closes
                 .visible(false)
                 .background_color(tauri::window::Color(24, 26, 28, 255))
                 .on_navigation(move |url| {
@@ -1187,8 +1208,12 @@ pub fn run() {
                     matches!(url.host_str(), Some("tauri.localhost") | Some("localhost")) || url.scheme() == "tauri"
                 })
                 .build()?;
+            if let Some(sp) = app.get_webview_window("splashscreen") {
+                no_window_animation(&sp);
+            }
             // The menu belongs to the main window only; the splash window must not get a menu bar.
             if let Some(main) = app.get_webview_window("main") {
+                no_window_animation(&main);
                 main.set_menu(build_menu(app.handle())?)?;
             }
             let h = app.handle().clone();
