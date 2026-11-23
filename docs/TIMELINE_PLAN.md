@@ -63,7 +63,7 @@ Prerequisite: **P3-01** (audio sections), which fills the Audio lane. Sizes are 
 | T0 | Decide ADR-0007; amend `UI_UX.md` (principle line, criterion 17) | S | Victor's yes recorded |
 | T1 | Read-only timeline: `timeline_read` in the engine (layers with in, out, key times, lock and role in one call), `timelineMath.ts` ported from `laneMath.ts` with a ledger entry, zoom, seek, lanes 1, 2, 4, 5 | M | Opens on a real project; matches EffectCraft's own in and out for every layer (tested on the real engine); keyboard and screen-reader tests |
 | T2 | Intent lane, QA pins, version ticks | S | Dragging a beat boundary re-runs the rules and revalidates Gate A; pins and ticks open their sheets |
-| T3 | Move and trim **unlocked** layers: `layer_timing` through `layer.timing` as the person; one revision with a saved version before and after, so it is undoable | M | Refused on an approved layer ("Unlock first") and while an EffectCraft window has the project open; a real-engine test of the numbers and of the hash change; drift not logged for our own write |
+| T3 (built 2026-11-23, see section 9) | Move and trim **unlocked** layers: `layer_timing` through `layer.timing` as the person; one revision with a saved version before and after, so it is undoable | M | Refused on an approved layer ("Unlock first") and while an EffectCraft window has the project open; a real-engine test of the numbers and of the hash change; drift not logged for our own write |
 | T4 | Snap to beats, sections and markers; compact mode; per-project layout remembered | S | Snapping matches the beat grid within a frame |
 | T5 | Optional later: add a layer at the playhead | S | Same path as the Add panel |
 
@@ -88,3 +88,16 @@ Not planned: keyframe or graph editing, effects, a property panel, compositing. 
 - **Two ways to edit one thing** (timeline and EffectCraft). Guard: MotionCraft is read-only while an EffectCraft window is open (already true), and drift is logged, never overwritten.
 - **Performance** with many layers. Guard: one read call, measured in T1.
 - **Approvals**: moving a layer changes its hash. Guard: only unlocked layers move, so no approval is invalidated by this path.
+
+## 9. T3 as built, and what the spike measured (2026-11-23, EffectCraft 0.24.1)
+
+Evidence: `spike/t3_layer_timing.py`, output in `spike/results/t3_layer_timing.txt`; real-engine test `engine/tests/test_layer_timing_real.py`.
+
+- Absolute `in` and `out` **trim**: they change only those two points; the source start is untouched.
+- `delta` **slides** `in`, `out` and the source start together, so the layer's content moves with it.
+- **Keyframes never move** on any timing command: they stay at their time in the composition. The timeline says so in its hint.
+- EffectCraft **does not clamp**: `out` 25 on a 20 s composition and `in` -2 were accepted. MotionCraft clamps to 0..duration and keeps one frame.
+- An `in` past the `out` is held one frame short of the out point.
+- Not measured: whether `out` is exclusive (EffectCraft reports the value it was given, so the timeline draws it the same way).
+
+What was built: `layer_timing` in the engine (trim with `t_in` and `t_out`, or slide with `delta`; refused on an approved or locked layer; one saved version before and after), on the allow-list as a write (blocked while an EffectCraft window has the project open), and on the Build timeline: drag a bar to move it, drag an edge to trim, Alt and arrows nudge (Ctrl and Alt trim the end). Each change is one revision in History with its saved versions, so it can be compared and undone. Changes made this way are not logged as drift.

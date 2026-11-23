@@ -196,6 +196,49 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     setQaPins([]);
   });
 
+  it("T3: Alt and the arrow keys move an unlocked layer by a frame, Ctrl and Alt trim its end, and an approved layer refuses", async () => {
+    const user = userEvent.setup();
+    const log = fake(project());
+    render(<App />);
+    const tl = await toBuild(user);
+    const sub = await within(tl).findByRole("button", { name: /Layer Subtitle/ });
+    sub.focus();
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    await waitFor(() => expect(log.calls.find((c) => c.method === "layer_timing")?.params).toEqual({ layer: 4, delta: 1 / 30 }));
+    await user.keyboard("{Control>}{Alt>}{ArrowLeft}{/Alt}{/Control}");
+    await waitFor(() => expect(log.calls.filter((c) => c.method === "layer_timing")[1]?.params).toEqual({ layer: 4, t_out: snapFrame(14 - 1 / 30, 30) }));
+    const before = log.calls.filter((c) => c.method === "layer_timing").length;
+    const title = within(tl).getByRole("button", { name: /Layer Title/ });
+    title.focus();
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(log.calls.filter((c) => c.method === "layer_timing").length).toBe(before);
+    expect(title.getAttribute("aria-description")).toBeNull();
+  });
+
+  it("T3: dragging a bar moves it by whole frames, dragging an edge trims it, and a plain click only selects", async () => {
+    const user = userEvent.setup();
+    const log = fake(project());
+    render(<App />);
+    const tl = await toBuild(user);
+    const sub = await within(tl).findByRole("button", { name: /Layer Subtitle/ });
+    fireEvent.pointerDown(sub, { clientX: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 148 });                  // 48 px at 24 px a second is 2 s
+    fireEvent.pointerUp(window, { clientX: 148 });
+    await waitFor(() => expect(log.calls.find((c) => c.method === "layer_timing")?.params).toEqual({ layer: 4, delta: 2 }));
+    const edge = sub.querySelector(".tl-grip.out") as HTMLElement;
+    fireEvent.pointerDown(edge, { clientX: 400, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 376 });                  // -1 s
+    fireEvent.pointerUp(window, { clientX: 376 });
+    await waitFor(() => expect(log.calls.filter((c) => c.method === "layer_timing")[1]?.params).toEqual({ layer: 4, t_out: 13 }));
+    const n = log.calls.filter((c) => c.method === "layer_timing").length;
+    fireEvent.pointerDown(sub, { clientX: 100, button: 0 });
+    fireEvent.pointerUp(window, { clientX: 101 });
+    expect(log.calls.filter((c) => c.method === "layer_timing").length).toBe(n);
+    await waitFor(() => expect(sub).toHaveAttribute("aria-pressed", "true"));
+    // the move was logged as one revision with its versions
+    expect(within(tl).getByText(/Moving and trimming|Drag a layer/)).toBeInTheDocument();
+  });
+
   it("has no raw colours: the styles use only tokens", async () => {
     const css = (await import("../styles/app.css?raw")).default as string;
     const block = css.slice(css.indexOf("/* Director's timeline"));

@@ -83,6 +83,13 @@ export function relinkAsset(p: MotionProject, assetId: string, to: string): Moti
   return { ...p, assets: (p.assets ?? []).map((a) => (a.id === assetId ? { ...a, path: to } : a)), updatedAt: nowIso() };
 }
 
+/** The user moved or trimmed a layer on the timeline: one revision, with the saved versions around it so it can be compared and undone. */
+export function logTiming(p: MotionProject, layer: number, summary: string, versions?: Versions): MotionProject {
+  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "user", kind: "manual_edit", layers: [layer], summary,
+    ...(versions?.after ? { snapshot: versions.after } : {}), ...(versions?.before ? { before: versions.before } : {}) };
+  return { ...p, revisions: [...p.revisions, rev], updatedAt: nowIso() };
+}
+
 /** The user saved a version of the composition by hand (Review, History). */
 export function logVersion(p: MotionProject, id: string, label: string): MotionProject {
   const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "user", kind: "manual_edit", layers: [], summary: label.trim() || "Saved a version", snapshot: id };

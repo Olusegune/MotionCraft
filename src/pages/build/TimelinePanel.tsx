@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as RPointerEvent } from "react";
 import { Lock, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { Fold } from "../../shell/Fold";
 import { barBox, clampPps, clampTime, fitPps, laneCount, LANE_H, packLanes, readPps, rulerTicks, snapFrame, timeAt, writePps } from "../../lib/timelineMath";
@@ -8,6 +9,7 @@ import type { Beat } from "../../types";
 import type { SongSection } from "./SectionsBar";
 
 export interface TLMark { id: string; t: number; label: string; kind: "qa" | "version"; severity?: "info" | "warn" | "error" }
+export type TimingChange = { tIn?: number; tOut?: number; delta?: number };
 export interface TLLayer { id: number; name: string; kind: string; index: number; in: number; out: number; approved: boolean; changed?: boolean; madeBy?: string }
 
 /**
@@ -15,9 +17,11 @@ export interface TLLayer { id: number; name: string; kind: string; index: number
  * as a bar from its in point to its out point. Click anywhere to move the playhead; the player follows. Nothing here edits the
  * composition: keyframes, effects and properties stay in EffectCraft.
  */
-export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect }: {
+export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect, editable = false, onTiming }: {
   projectKey: string; duration: number; fps: number; playhead: number; onSeek: (t: number) => void; layers: TLLayer[];
   sections?: SongSection[]; downbeats?: number[]; arc?: Beat[]; marks?: TLMark[]; selected?: number | null; onSelect?: (id: number) => void;
+  /** T3: layers can be moved and trimmed when true (never an approved layer). `onTiming` is the only way a change leaves this component. */
+  editable?: boolean; onTiming?: (id: number, change: TimingChange) => void;
 }) {
   const [pps, setPpsState] = useState(() => readPps(projectKey) ?? 24);
   const scroller = useRef<HTMLDivElement>(null);
@@ -28,6 +32,38 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
     const t = s ? (s.scrollLeft + ax) / pps : 0;
     setPpsState(next); writePps(projectKey, next);
     requestAnimationFrame(() => { if (s) s.scrollLeft = Math.max(0, t * next - ax); });
+  };
+
+  // T3: drag a bar to move it, drag an edge to trim it. The change is sent once, on release, in whole frames; nothing is written while dragging.
+  type Drag = { id: number; mode: "move" | "in" | "out"; x0: number; dx: number; moved: boolean };
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const canEdit = (l: TLLayer) => editable && !l.approved && !!onTiming;
+  const startDrag = (e: RPointerEvent, l: TLLayer, mode: Drag["mode"]) => {
+    if (!canEdit(l) || e.button !== 0) return;
+    e.stopPropagation();
+    const d: Drag = { id: l.id, mode, x0: e.clientX, dx: 0, moved: false };
+    setDrag({ ...d });
+    const move = (ev: PointerEvent) => { d.dx = ev.clientX - d.x0; d.moved = d.moved || Math.abs(d.dx) > 3; setDrag({ ...d }); };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+      setDrag(null);
+      if (!d.moved) { onSelect?.(l.id); return; }
+      const dt = snapFrame(d.dx / pps, fps);
+      if (Math.abs(dt) < 1 / fps / 2) return;
+      onTiming?.(l.id, mode === "move" ? { delta: dt } : mode === "in" ? { tIn: snapFrame(clampTime(l.in + dt, duration), fps) } : { tOut: snapFrame(clampTime(l.out + dt, duration), fps) });
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
+  const barKey = (e: React.KeyboardEvent, l: TLLayer) => {
+    if (!e.altKey || !canEdit(l) || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+    e.preventDefault(); e.stopPropagation();
+    const dt = (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 1 : 1 / fps);
+    onTiming?.(l.id, e.ctrlKey ? { tOut: snapFrame(clampTime(l.out + dt, duration), fps) } : { delta: dt });
+  };
+  const shown = (l: TLLayer) => {      // where the bar is drawn while it is being dragged
+    if (!drag || drag.id !== l.id) return { a: l.in, b: l.out };
+    const dt = drag.dx / pps;
+    return drag.mode === "move" ? { a: l.in + dt, b: l.out + dt } : drag.mode === "in" ? { a: Math.min(l.in + dt, l.out - 1 / fps), b: l.out } : { a: l.in, b: Math.max(l.out + dt, l.in + 1 / fps) };
   };
 
   const lanes = useMemo(() => packLanes(layers.map((l) => ({ id: l.id, start: l.in, end: l.out })), [...layers].sort((a, b) => a.index - b.index).map((l) => l.id)), [layers]);
@@ -93,19 +129,26 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
                 {!marks.length && <span className="tl-empty">No QA findings with a time, no saved versions yet</span>}
               </div>
               <div className="tl-lane" style={{ height: Math.max(1, nLanes) * LANE_H + 8 }} aria-label="Layers">
-                {layers.map((l) => (
-                  <button key={l.id} type="button" className={`tl-layer${selected === l.id ? " on" : ""}${l.approved ? " approved" : ""}`} aria-pressed={selected === l.id} aria-label={label(l)} title={label(l)}
-                    style={{ ...barBox(l.in, l.out, pps), top: (lanes[l.id] ?? 0) * LANE_H + 2, height: LANE_H - 4 }} onClick={() => onSelect?.(l.id)}>
+                {layers.map((l) => {
+                  const sh = shown(l); const edit = canEdit(l);
+                  return (
+                  <button key={l.id} type="button" className={`tl-layer${selected === l.id ? " on" : ""}${l.approved ? " approved" : ""}${edit ? " editable" : ""}${drag?.id === l.id ? " dragging" : ""}`} aria-pressed={selected === l.id}
+                    aria-label={label(l)} aria-description={edit ? "Alt and Left or Right moves it, Ctrl and Alt trims its end" : undefined} title={label(l)}
+                    style={{ ...barBox(sh.a, sh.b, pps), top: (lanes[l.id] ?? 0) * LANE_H + 2, height: LANE_H - 4 }} onClick={() => { if (!edit) onSelect?.(l.id); }}
+                    onPointerDown={(e) => startDrag(e, l, "move")} onKeyDown={(e) => barKey(e, l)}>
+                    {edit && <span className="tl-grip in" aria-hidden="true" onPointerDown={(e) => startDrag(e, l, "in")} />}
                     {l.approved && <Lock size={12} aria-hidden="true" />}<span className="sec-name">{l.name}</span>
+                    {edit && <span className="tl-grip out" aria-hidden="true" onPointerDown={(e) => startDrag(e, l, "out")} />}
                   </button>
-                ))}
+                  );
+                })}
                 {!layers.length && <span className="tl-empty">No layers yet</span>}
               </div>
               <div className="tl-playhead" role="slider" aria-label="Playhead" aria-valuemin={0} aria-valuemax={duration} aria-valuenow={Math.round(playhead * 1000) / 1000} aria-valuetext={timecode(playhead, fps)} style={{ left: playhead * pps }} />
             </div>
           </div>
         </div>
-        <p className="hint">Click to move the playhead; Left and Right step one frame (Shift: one second). Ctrl and the wheel zoom. This view is read-only: open EffectCraft for keyframes and properties.</p>
+        <p className="hint">Click to move the playhead; Left and Right step one frame (Shift: one second). Ctrl and the wheel zoom. {editable ? "Drag a layer to move it or its edges to trim it (Alt and arrows nudge). Approved layers stay put: unlock them first. Keyframes stay where they are in time; edit them in EffectCraft." : "Moving and trimming are off right now (EffectCraft has the project open, or the engine is busy). Keyframes and properties are edited in EffectCraft."}</p>
       </div>
     </Fold>
   );

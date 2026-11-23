@@ -286,6 +286,55 @@ class Service:
                            "out": round(max(a_in, a_out), 3), "start": round(sp["start"], 3), "nativeLocked": l.native_locked, "approvedHere": l.id in locked})
         return {"duration": comp.duration, "frameRate": comp.frame_rate, "layers": layers}
 
+    # ------------------------------------------------------------ timeline (T3): move and trim an unlocked layer
+    def layer_timing(self, layer: int, t_in: float | None = None, t_out: float | None = None, delta: float | None = None) -> dict:
+        """Trims (`t_in`, `t_out`: seconds, absolute) or slides (`delta`: seconds) one layer, as the person. Measured on EffectCraft 0.24.1
+        (spike/results/t3_layer_timing.txt): trimming leaves the layer's source start alone, sliding moves in, out and source start together,
+        and keyframes never move on either (they stay at their time in the composition). EffectCraft does not clamp, so this does: the layer stays
+        inside 0..duration and keeps at least one frame. Refused on an approved or locked layer. One saved version before and one after, so it can be undone."""
+        a = self._need()
+        lid = int(layer)
+        comp = a.inspect().comp(None)
+        target = next((l for l in comp.layers if l.id == lid), None)
+        if target is None:
+            raise AdapterError("That layer is not in the composition any more.")
+        if lid in a._locked.get(comp.id, set()) or target.native_locked:
+            raise AdapterError("Unlock this layer first: it is approved or locked.")
+        vals = {"t_in": t_in, "t_out": t_out, "delta": delta}
+        for k, v in vals.items():
+            if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or abs(v) > 1e6):
+                raise AdapterError(f"{k} must be a number of seconds.")
+        if delta is not None and (t_in is not None or t_out is not None):
+            raise AdapterError("Move or trim, not both at once.")
+        if delta is None and t_in is None and t_out is None:
+            raise AdapterError("Nothing to change.")
+        sp = a.layer_spans(comp.id).get(lid) or {"in": 0.0, "out": comp.duration}
+        dur, frame = float(comp.duration), 1.0 / float(comp.frame_rate)
+        if delta is not None:
+            length = sp["out"] - sp["in"]
+            d = max(-sp["in"], min(float(delta), dur - sp["out"] if sp["out"] <= dur else 0.0))
+            if length > dur: d = 0.0
+            params = {"layers": [lid], "delta": round(d, 4)}
+            if abs(d) < 1e-9:
+                raise AdapterError("The layer is already at that edge.")
+        else:
+            new_in = sp["in"] if t_in is None else max(0.0, min(float(t_in), dur))
+            new_out = sp["out"] if t_out is None else max(0.0, min(float(t_out), dur))
+            if t_in is not None and t_out is None: new_in = min(new_in, new_out - frame)
+            if t_out is not None and t_in is None: new_out = max(new_out, new_in + frame)
+            if new_out - new_in < frame - 1e-9: raise AdapterError("A layer must last at least one frame.")
+            params = {"layers": [lid]}
+            if t_in is not None: params["in"] = round(new_in, 4)
+            if t_out is not None: params["out"] = round(new_out, 4)
+        notes: list[str] = []
+        before = self._try_snapshot(notes)
+        a.execute([Command(id="layer.timing", params=params)], actor=USER)
+        a.save()
+        after = self._try_snapshot(notes)
+        span = a.layer_spans(comp.id).get(lid) or {}
+        return {"layer": lid, "in": round(span.get("in", 0.0), 3), "out": round(span.get("out", 0.0), 3), "applied": params, "warnings": notes,
+                "versions": {"before": before, "after": after}, **self._snapshot()}
+
     # ------------------------------------------------------------ QA (P4-01, P4-02)
     def qa_run(self, facts: dict | None = None, contrast: bool = True) -> dict:
         """Runs the tier-1 checks on the open composition. Read-only: nothing in the project or the composition is changed.

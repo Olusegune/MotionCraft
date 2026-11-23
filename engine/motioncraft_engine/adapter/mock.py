@@ -36,6 +36,7 @@ ACCEPT: dict[str, set[str]] = {
     "renderQueue.add": {"comp", "format", "output", "proresProfile", "channels"}, "renderQueue.render": {"wait"},
     "text.fonts": {"query"}, "text.fontFeatures": {"font"},
     "file.import": {"paths", "sequence", "alphabetical", "frameRate"},
+    "layer.timing": {"layers", "in", "out", "delta", "start", "inDelta", "outDelta", "op", "merge"},
     "layer.addItem": {"item", "time", "index", "position", "duration", "in", "out", "anchor"},
 }
 
@@ -269,6 +270,18 @@ class MockAdapter(BaseAdapter):
                 for l in ls: l["comment"] = p["comment"]
             elif cid == "layer.addMarker":
                 for l in ls: c["markers"].append({"time": float(p.get("time", 0)), "comment": p.get("comment", ""), "layer": l["id"]})
+            elif cid == "layer.timing":
+                # As measured on EffectCraft 0.24.1 (spike/results/t3_layer_timing.txt): absolute in/out only trim; `delta` slides in, out and
+                # start together; keyframes never move; nothing is clamped to the composition; an in point past the out is held one frame short of it.
+                frame = 1.0 / c["fps"]
+                for l in ls:
+                    i0, o0, s0 = float(l.get("in", 0.0)), float(l.get("out", c["dur"])), float(l.get("start", 0.0))
+                    if "delta" in p:
+                        d = float(p["delta"]); i0, o0, s0 = i0 + d, o0 + d, s0 + d
+                    if "in" in p: i0 = float(p["in"])
+                    if "out" in p: o0 = float(p["out"])
+                    if i0 > o0: i0 = o0 - frame
+                    l["in"], l["out"], l["start"] = i0, o0, s0
             elif cid == "layer.arrange":
                 for l in ls:
                     c["layers"].remove(l); c["layers"].insert(0 if p["to"] == "front" else len(c["layers"]), l)

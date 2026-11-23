@@ -7,12 +7,12 @@ import { Sheet } from "../shell/Sheet";
 import { Player, type Marker, type PlayerHandle } from "../shell/Player";
 import { getApi } from "../lib/api";
 import { useSettings } from "../lib/settings";
-import { approveLayer, bindingFor, isChangedSinceApproval, markBuilt, reconcile, unlockLayer, type EngineLayer, type EngineSnapshot } from "../lib/layers";
+import { approveLayer, bindingFor, logTiming, isChangedSinceApproval, markBuilt, reconcile, unlockLayer, type EngineLayer, type EngineSnapshot } from "../lib/layers";
 import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write } from "./build/Panels";
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
-import { TimelinePanel, type TLLayer, type TLMark } from "./build/TimelinePanel";
+import { TimelinePanel, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
 import type { SongSection } from "./build/SectionsBar";
 import type { FrameProps } from "./common";
 
@@ -99,6 +99,16 @@ export function BuildPage(f: FrameProps) {
     ...qaPins.map((p) => ({ id: p.id, t: p.t, label: p.label, kind: "qa" as const, severity: p.severity })),
     ...project.revisions.filter((r) => r.snapshot).map((r) => ({ id: r.id, t: Math.min(d.durationSec, Math.min(...(r.layers.length ? r.layers.map((id) => spans?.find((x) => x.id === id)?.in ?? 0) : [0]))), label: r.summary, kind: "version" as const })),
   ], [qaPins, project.revisions, spans, d.durationSec]);
+  /** Timeline move or trim (ADR-0007, T3). The engine refuses approved layers and clamps to the composition; each change is one revision with saved versions. */
+  const retime = async (id: number, c: TimingChange) => {
+    const l = layers.find((x) => x.id === id);
+    const params = { layer: id, ...(c.delta !== undefined ? { delta: c.delta } : {}), ...(c.tIn !== undefined ? { t_in: c.tIn } : {}), ...(c.tOut !== undefined ? { t_out: c.tOut } : {}) };
+    const r = (await write(`Retiming ${l?.name ?? "layer"}`, "layer_timing", params, [id])) as (EngineSnapshot & { versions?: { before?: string | null; after?: string | null } }) | undefined;
+    if (!r) return;
+    const n = (x: number) => Math.round(x * 100) / 100;
+    const what = c.delta !== undefined ? `Moved ${l?.name ?? "layer"} by ${c.delta > 0 ? "+" : ""}${n(c.delta)} s` : `Trimmed ${l?.name ?? "layer"} ${c.tIn !== undefined ? "start" : "end"} to ${n(c.tIn ?? c.tOut ?? 0)} s`;
+    update((p) => logTiming(p, id, what, r.versions));
+  };
   const sel = layers.find((l) => l.id === selected) ?? null;
   const selLocked = !!sel && (bindingFor(project, sel.id)?.lock === "approved" || sel.approvedHere);
   const writesOff = !connected || guiOpen || !!busy;
@@ -126,7 +136,7 @@ export function BuildPage(f: FrameProps) {
       <Player ref={player} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
       <TimelinePanel projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
-        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} />
+        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} />
     </div>
   );
 
