@@ -75,15 +75,15 @@ export const Player = forwardRef<PlayerHandle, {
               onPause={() => { setPlaying(false); if (video.current) setT(video.current.currentTime); }}
               onEnded={() => setPlaying(false)} onSeeked={() => video.current && setT(video.current.currentTime)} />
           ) : <div className="viewer-empty"><p className="strong">No preview movie yet</p><p>{emptyText ?? "Press Build preview to render a draft you can play and scrub."}</p></div>}
-          {fill && <p className="viewer-meta stage-meta" role="status">{meta}</p>}
+          {fill && <p className={`viewer-meta stage-meta${stale ? "" : " visually-hidden"}`} role="status">{meta}</p>}
         </div>
                 {!fill && <p className="viewer-meta" role="status">{meta}</p>}
       </div>
       <div className={`transport${fill ? " glass" : ""}`} aria-label="Transport">
         <button className="icon-btn" aria-label="Go to start" disabled={!src} onClick={() => seek(0)}><SkipBack size={18} strokeWidth={1.75} /></button>
-        <button className="icon-btn" aria-label="Back one frame" disabled={!src} onClick={() => { video.current?.pause(); seek((frame(t) - 1) / fps); }}><ChevronsLeft size={18} strokeWidth={1.75} /></button>
+        {!fill && <button className="icon-btn" aria-label="Back one frame" disabled={!src} onClick={() => { video.current?.pause(); seek((frame(t) - 1) / fps); }}><ChevronsLeft size={18} strokeWidth={1.75} /></button>}
         <button className={fill ? "btn play-round" : "btn"} disabled={!src} onClick={toggle} aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause size={18} strokeWidth={1.75} aria-hidden="true" /> : <Play size={18} strokeWidth={1.75} aria-hidden="true" />}{!fill && (playing ? "Pause" : "Play")}</button>
-        <button className="icon-btn" aria-label="Forward one frame" disabled={!src} onClick={() => { video.current?.pause(); seek((frame(t) + 1) / fps); }}><ChevronsRight size={18} strokeWidth={1.75} /></button>
+        {!fill && <button className="icon-btn" aria-label="Forward one frame" disabled={!src} onClick={() => { video.current?.pause(); seek((frame(t) + 1) / fps); }}><ChevronsRight size={18} strokeWidth={1.75} /></button>}
         <button className="icon-btn" aria-label="Go to end" disabled={!src} onClick={() => seek(total)}><SkipForward size={18} strokeWidth={1.75} /></button>
         <span className="mono timecode" aria-live="off" aria-label="Timecode">{timecode(t, fps)} / {timecode(total, fps)}</span>
         <span className="mono muted" aria-label="Frame">frame {frame(t)}</span>

@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { setApiForTests, type Api } from "../lib/api";
 import { createProject } from "../lib/project";
-import { arcAt, arcPath, arcPoints, beatAt, barBox, clampDock, sceneStatus, waveBars, clampPps, DOCK_MIN, fitPps, readDock, writeDock, laneCount, packLanes, PPS_MAX, PPS_MIN, readPps, rulerStep, rulerTicks, snapFrame, writePps } from "../lib/timelineMath";
+import { arcAt, arcPath, arcPoints, beatAt, barBox, clampDock, readMode, writeMode, sceneStatus, waveBars, clampPps, DOCK_MIN, fitPps, readDock, writeDock, laneCount, packLanes, PPS_MAX, PPS_MIN, readPps, rulerStep, rulerTicks, snapFrame, writePps } from "../lib/timelineMath";
 import type { MotionProject } from "../types";
 
 describe("timeline maths", () => {
@@ -145,12 +145,15 @@ function project(): MotionProject {
   return p;
 }
 
-async function toBuild(user: ReturnType<typeof userEvent.setup>) {
+/** Opens Build. The timeline starts in its calm Film strip view; most tests want the layers, so they switch to Edit unless told not to. */
+async function toBuild(user: ReturnType<typeof userEvent.setup>, edit = true) {
   await user.click(await screen.findByText("Timeline demo"));
   await screen.findByRole("heading", { name: "Brief" });
   const bar = screen.getByRole("navigation", { name: "Stages" });
   await user.click(Array.from(bar.querySelectorAll("button")).find((b) => b.textContent === "Build") as HTMLElement);
-  return screen.findByRole("group", { name: "Timeline" });
+  const tl = await screen.findByRole("group", { name: "Timeline" });
+  if (edit) await user.click(within(tl).getByRole("button", { name: "Edit" }));
+  return tl;
 }
 
 describe("the director's timeline on Build (ADR-0007, T1)", () => {
@@ -286,7 +289,7 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(log.calls.filter((c) => c.method === "layer_timing").length).toBe(n);
     await waitFor(() => expect(sub).toHaveAttribute("aria-pressed", "true"));
     // the move was logged as one revision with its versions
-    expect(within(tl).getByText(/Moving and trimming|Drag a layer/)).toBeInTheDocument();
+    expect(within(tl).getByText(/Moving and trimming|drag a layer/)).toBeInTheDocument();
   });
 
   it("T3: when the engine refuses a move, its reason shows under the timeline", async () => {
@@ -420,6 +423,34 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     await user.click(within(header).getByRole("button", { name: "Review changes" }));
     expect(await screen.findByRole("heading", { name: "Review the draft" })).toBeInTheDocument();
     expect(within(screen.getByRole("banner")).queryByRole("button", { name: "Build preview" })).toBeNull();    // the buttons belong to Build
+  });
+
+  it("starts in the calm Film strip: scenes and soundtrack, no layer bars; Edit adds the layers and remembers the choice", async () => {
+    const user = userEvent.setup();
+    fake(project());
+    render(<App />);
+    const tl = await toBuild(user, false);
+    const modes = within(tl).getByRole("group", { name: "Timeline mode" });
+    expect(within(modes).getByRole("button", { name: "Film strip" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(tl).getByRole("list", { name: "Scenes" })).toBeInTheDocument();
+    expect(within(tl).getByLabelText("Audio structure")).toBeInTheDocument();
+    expect(within(tl).queryByRole("button", { name: /^Layer / })).toBeNull();                // nothing to drag in the calm view
+    expect(within(tl).queryByLabelText("Layers")).toBeNull();
+    await user.click(within(modes).getByRole("button", { name: "Edit" }));
+    expect(within(tl).getByRole("button", { name: /^Layer Title/ })).toBeInTheDocument();
+    expect(within(modes).getByRole("button", { name: "Edit" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(modes).getByRole("button", { name: "Film strip" }));
+    expect(within(tl).queryByRole("button", { name: /^Layer / })).toBeNull();
+  });
+
+  it("the timeline view choice is remembered per project and survives bad storage", () => {
+    const mem = new Map<string, string>();
+    const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+    expect(readMode("p", store)).toBe("strip");
+    writeMode("p", "edit", store); expect(readMode("p", store)).toBe("edit"); expect(readMode("q", store)).toBe("strip");
+    mem.set("mc-tlmode:bad", "nonsense"); expect(readMode("bad", store)).toBe("strip");
+    expect(readMode("p", { getItem: () => { throw new Error("blocked"); } })).toBe("strip");
+    expect(() => writeMode("p", "edit", { setItem: () => { throw new Error("blocked"); } })).not.toThrow();
   });
 
   it("has no raw colours: the styles use only tokens", async () => {

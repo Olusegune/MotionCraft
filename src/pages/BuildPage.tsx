@@ -14,8 +14,7 @@ import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
 import { beatAt, clampDock, readDock, sceneStatus, writeDock } from "../lib/timelineMath";
-import { SceneStrip, type SceneCard } from "./build/SceneStrip";
-import { TimelinePanel, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
+import { TimelinePanel, type SceneCard, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
 import type { SongSection } from "./build/SectionsBar";
 import type { FrameProps } from "./common";
 
@@ -190,13 +189,12 @@ export function BuildPage(f: FrameProps) {
       {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
       <Player ref={player} fill aspectLabel={d.aspect} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
-      <SceneStrip scenes={scenes} current={beatAt(beats, playhead)} onSeek={(t) => player.current?.seek(t)} />
       {tlOpen && <div className="studio-divider" role="separator" aria-orientation="horizontal" aria-label="Resize preview and timeline" tabIndex={0}
         aria-valuenow={Math.round(dockNow())} aria-valuemin={120} title="Drag to resize. Up and Down arrows on it also work; double-click to reset."
         onPointerDown={startDividerDrag} onKeyDown={dividerKey} onDoubleClick={() => setDock(null)}><span aria-hidden="true" /></div>}
       <div className="timeline-dock" ref={dockEl} style={tlOpen && dockH !== null ? { height: dockH, maxHeight: "none" } : undefined}>
       <TimelinePanel open={tlOpen} onOpenChange={setTlOpen} projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
-        sections={structure?.sections} downbeats={structure?.downbeats} peaks={audio?.peaks} audioDuration={audio?.duration} arc={project.intent.arc} marks={marks} showIntent={!beats.length} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
+        sections={structure?.sections} downbeats={structure?.downbeats} peaks={audio?.peaks} audioDuration={audio?.duration} arc={project.intent.arc} marks={marks} scenes={scenes} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
       </div>
     </div>
   );
@@ -252,16 +250,18 @@ export function BuildPage(f: FrameProps) {
         <button className="btn" onClick={open} disabled={!connected || guiOpen}><ExternalLink size={16} aria-hidden="true" />Open in EffectCraft</button>
         <button className="btn quiet" onClick={() => void load()} disabled={!connected || loading || guiOpen}><RotateCcw size={16} aria-hidden="true" />Refresh from file</button>
       </Fold>
-      <Fold title="Text" defaultOpen={false}>
-        <TextPanel write={write} disabled={writesOff} sel={sel} locked={selLocked} onAdded={(id) => id !== undefined && setSelected(id)} />
+      <Fold title="Add to the scene" defaultOpen={false}>
+        <Fold title="Text" defaultOpen={false}>
+          <TextPanel write={write} disabled={writesOff} sel={sel} locked={selLocked} onAdded={(id) => id !== undefined && setSelected(id)} />
+        </Fold>
+        <AddLayerPanel write={write} disabled={writesOff} onAdded={(id) => id !== undefined && setSelected(id)} />
+        <Fold title="Camera">
+          <p className="muted">Adds a camera layer. A camera only affects layers that are 3D; turn that on in EffectCraft.</p>
+          <button className="btn" disabled={writesOff} onClick={() => write("camera", "add_camera", {})}><Camera size={16} aria-hidden="true" />Add camera</button>
+        </Fold>
       </Fold>
-      <AddLayerPanel write={write} disabled={writesOff} onAdded={(id) => id !== undefined && setSelected(id)} />
       <PrimitivesPanel write={write} selected={sel} locked={selLocked} playhead={playhead} disabled={writesOff} onApplied={() => undefined} />
       <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} onStructure={setStructure} />
-      <Fold title="Camera">
-        <p className="muted">Adds a camera layer. A camera only affects layers that are 3D; turn that on in EffectCraft.</p>
-        <button className="btn" disabled={writesOff} onClick={() => write("camera", "add_camera", {})}><Camera size={16} aria-hidden="true" />Add camera</button>
-      </Fold>
       <BuilderPanel write={write} disabled={writesOff} onBuilt={(created, versions) => update((p) => markBuilt(p, created, versions))} />
       {unlocking && (
         <Sheet title="Unlock approved layer" onClose={() => setUnlocking(null)}

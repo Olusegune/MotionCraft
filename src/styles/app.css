@@ -292,21 +292,6 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .dir-summary input { height: 48px; border-radius: 12px; background: var(--mc-bg-app); border-color: var(--mc-divider); font-size: 15px; }
 .aspect-chip { display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--mc-divider); background: var(--mc-bg-panel); color: var(--mc-text-2); font-size: 14px; }
 
-/* scene strip under the picture */
-.scene-strip { flex: none; list-style: none; margin: 0; padding: 0 0 2px; display: flex; gap: 12px; overflow-x: auto; }
-.scene-card { display: flex; flex-direction: column; gap: 4px; width: 176px; padding: 3px; background: transparent; border: 2px solid transparent; border-radius: 10px; color: var(--mc-text); cursor: pointer; text-align: left; }
-.scene-card:hover { background: var(--mc-bg-raised); }
-.scene-card.on { border-color: var(--mc-accent); }
-.scene-card:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
-.scene-thumb { display: block; aspect-ratio: 16 / 9; max-height: 52px; border-radius: 6px; overflow: hidden; background: var(--mc-bg-app); }
-.scene-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.scene-blank { display: block; width: 100%; height: 100%; }
-.scene-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 20px; }
-.scene-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scene-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: var(--mc-bg-raised); border: 1px solid var(--mc-divider); white-space: nowrap; }
-.scene-badge.approved { color: var(--mc-text); }
-.scene-badge.needs-review { color: var(--mc-warning); border-color: var(--mc-warning); }
-
 /* studio layout on Build: the picture takes all the height there is, the timeline docks under it (idea from Pulseframe's Studio, own code) */
 .main:has(.studio) { overflow: hidden; display: flex; flex-direction: column; padding: 0 14px 10px; }
 .studio { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -374,58 +359,75 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .sections-bar .e7, .sections-bar .e8 { border-bottom-color: var(--mc-warning); }
 .sections-bar .e9, .sections-bar .e10 { border-bottom-color: var(--mc-accent); }
 
-/* Director's timeline (ADR-0007, T1): read-only lanes. Tokens only. */
-.timeline { display: grid; gap: 8px; }
-.tl-bar-tools { align-items: center; }
-.tl-grid { display: grid; grid-template-columns: 64px 1fr; border: 1px solid var(--mc-divider); border-radius: var(--mc-r-ctl); background: var(--mc-bg-app); }
-.tl-labels { border-right: 1px solid var(--mc-divider); }
-.tl-lab { display: flex; align-items: center; padding: 0 8px; color: var(--mc-text-2); font-size: 12px; border-bottom: 1px solid var(--mc-divider); }
-.tl-scroll { overflow-x: auto; overflow-y: hidden; }
+/* Director's timeline (ADR-0007): the calm film strip, and Edit. Tokens only. */
+.timeline { position: relative; display: block; }
+.timeline-dock .fold-head { min-height: 44px; font-size: 15px; }
+.timeline-dock .fold-body { padding-top: 0; }
+.timeline-dock .fold { border-bottom: 0; }
+.tl-top { position: absolute; left: 100px; right: 44px; top: -44px; height: 36px; display: flex; align-items: center; gap: 12px; z-index: 2; }
+.tl-legend { display: flex; gap: 14px; color: var(--mc-text-3); font-size: 12px; white-space: nowrap; }
+.tl-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tl-legend .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--mc-text-3); }
+.tl-legend .dot.arc { background: var(--mc-accent); height: 3px; }
+.tl-legend .dot.head { background: var(--mc-accent); border-radius: 50%; }
+.tl-attn { display: inline-flex; align-items: center; gap: 6px; color: var(--mc-warning); font-size: 12px; white-space: nowrap; }
+.tl-info { display: inline-grid; place-items: center; width: 28px; height: 28px; color: var(--mc-text-3); border-radius: 50%; cursor: help; }
+.tl-info:hover, .tl-info:focus-visible { color: var(--mc-text); }
+.tl-zoom { display: inline-flex; align-items: center; gap: 2px; }
+.tl-zoom .icon-btn { width: 30px; height: 30px; }
+.tl-zoom .btn { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.tl-mode { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--mc-bg-app); border: 1px solid var(--mc-divider); }
+.tl-mode button { min-height: 26px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--mc-text-2); font-size: 13px; cursor: pointer; }
+.tl-mode button:hover:not(.on) { color: var(--mc-text); }
+.tl-mode button.on { background: color-mix(in srgb, var(--mc-accent) 16%, transparent); box-shadow: inset 0 0 0 1.5px var(--mc-accent); color: var(--mc-text); font-weight: 600; }
+.timeline .hint { display: none; }      /* the same words are the tooltip on the info mark, so the strip keeps its height */
+.tl-scroll { overflow-x: auto; overflow-y: hidden; border-radius: 12px; background: var(--mc-bg-app); }
 .tl-inner { position: relative; min-width: 100%; cursor: col-resize; }
-.tl-ruler, .tl-lane { position: relative; border-bottom: 1px solid var(--mc-divider); }
-.tl-tick-label { position: absolute; top: 4px; padding-left: 4px; font: 11px var(--mc-font-mono); color: var(--mc-text-3); border-left: 1px solid var(--mc-divider); height: 16px; }
-.tl-sec, .tl-arc { position: absolute; top: 2px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; background: var(--mc-bg-raised); border-bottom: 3px solid var(--mc-control-border); border-radius: 3px; color: var(--mc-text); font-size: 12px; }
-.tl-arc { border-bottom-color: var(--mc-brand-gold); }
-.tl-sec.e4, .tl-sec.e5, .tl-sec.e6 { border-bottom-color: var(--mc-text-3); }
-.tl-sec.e7, .tl-sec.e8 { border-bottom-color: var(--mc-warning); }
-.tl-sec.e9, .tl-sec.e10 { border-bottom-color: var(--mc-accent); }
-.tl-beat { position: absolute; bottom: 0; width: 1px; height: 8px; background: var(--mc-text-3); }
-.tl-layer { position: absolute; display: flex; align-items: center; gap: 4px; padding: 0 6px; overflow: hidden; white-space: nowrap; background: var(--mc-bg-raised); border: 1px solid var(--mc-control-border); border-radius: 4px; color: var(--mc-text); font-size: 12px; cursor: pointer; }
+.tl-ruler, .tl-lane, .tl-scenes, .tl-sound { position: relative; }
+.tl-tick-label { position: absolute; top: 5px; padding-left: 5px; font: 11px var(--mc-font-mono); color: var(--mc-text-3); border-left: 1px solid var(--mc-divider); height: 14px; line-height: 14px; }
+.tl-ruler .tl-mark { top: 8px; height: 14px; }
+/* scenes: the intent beats as cards on the time axis */
+.tl-scenes { list-style: none; margin: 0; padding: 0; }
+.tl-scenes li { position: absolute; top: 2px; bottom: 4px; }
+.tl-scene { position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--mc-bg-raised); color: var(--mc-text); text-align: left; cursor: pointer; }
+.tl-scene:hover { border-color: var(--mc-control-border); }
+.tl-scene.on { border-color: var(--mc-accent); }
+.tl-scene:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
+.tl-scene img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tl-scene-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 16px 8px 6px; background: linear-gradient(transparent, color-mix(in srgb, var(--mc-bg-app) 90%, transparent)); }
+.tl-scene-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.tl-scene-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; white-space: nowrap; background: color-mix(in srgb, var(--mc-bg-app) 80%, transparent); border: 1px solid var(--mc-divider); }
+.tl-scene-badge.needs-review { color: var(--mc-warning); border-color: var(--mc-warning); }
+/* the soundtrack strip: waveform, sections and the emotional arc together */
+.tl-sound { border-top: 1px solid var(--mc-divider); }
+.tl-wave { position: absolute; left: 0; top: 0; opacity: 0.5; pointer-events: none; }
+.tl-arcwrap { position: absolute; inset: 0; pointer-events: none; }
+.tl-arcsvg { display: block; }
+.tl-arcline { stroke: var(--mc-accent); stroke-width: 2.5; stroke-linecap: round; }
+.tl-arcfill { fill: var(--mc-accent); opacity: 0.1; stroke: none; }
+.tl-arcdot { fill: var(--mc-accent); stroke: var(--mc-bg-app); stroke-width: 2; }
+.tl-sec { position: absolute; top: 2px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; border-left: 2px solid var(--mc-text-3); border-radius: 0; background: transparent; color: var(--mc-text-2); font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
+.tl-sec.e9, .tl-sec.e10 { border-left-color: var(--mc-accent); }
+.tl-sec.e7, .tl-sec.e8 { border-left-color: var(--mc-warning); }
+.tl-beat { position: absolute; bottom: 0; width: 1px; height: 6px; background: var(--mc-text-3); opacity: 0.6; }
+.tl-empty { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--mc-text-3); font-size: 12px; white-space: nowrap; }
+/* Edit: the layers */
+.tl-layers { border-top: 1px solid var(--mc-divider); }
+.tl-layer { position: absolute; display: flex; align-items: center; gap: 4px; padding: 0 8px; overflow: hidden; white-space: nowrap; background: var(--mc-bg-raised); border: 1px solid var(--mc-control-border); border-radius: 6px; color: var(--mc-text); font-size: 12px; cursor: pointer; }
 .tl-layer.approved { border-style: double; border-width: 3px; }
 .tl-layer.on { background: var(--mc-accent); color: var(--mc-on-accent); border-color: var(--mc-accent); }
 .tl-layer:focus-visible, .timeline:focus-visible { box-shadow: var(--mc-focus); outline: none; }
-.tl-empty { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--mc-text-3); font-size: 12px; white-space: nowrap; }
-.tl-mark { position: absolute; top: 4px; width: 12px; height: 16px; margin-left: -6px; padding: 0; border: 0; border-radius: 3px; background: var(--mc-control-border); cursor: pointer; }
-.tl-mark.version { background: var(--mc-brand-gold); width: 4px; margin-left: -2px; }
-.tl-mark.qa.error { background: var(--mc-danger, var(--mc-accent)); }
-.tl-mark:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
 .tl-layer.editable { cursor: grab; touch-action: none; }
 .tl-layer.dragging { cursor: grabbing; opacity: 0.85; }
 .tl-grip { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; background: var(--mc-control-border); opacity: 0; }
 .tl-grip.in { left: 0; border-radius: 3px 0 0 3px; } .tl-grip.out { right: 0; border-radius: 0 3px 3px 0; }
 .tl-layer.editable:hover .tl-grip, .tl-layer.editable:focus-visible .tl-grip, .tl-layer.dragging .tl-grip { opacity: 0.7; }
-.tl-wave { position: absolute; left: 0; top: 0; height: 44px; opacity: 0.55; pointer-events: none; }
-.tl-arcsvg { display: block; }
-.tl-arcline { stroke: var(--mc-accent); stroke-width: 2.5; stroke-linecap: round; }
-.tl-arcfill { fill: var(--mc-accent); opacity: 0.1; stroke: none; }
-.tl-arcdot { fill: var(--mc-accent); stroke: var(--mc-bg-app); stroke-width: 2; }
+.tl-mark { position: absolute; top: 4px; width: 12px; height: 16px; margin-left: -6px; padding: 0; border: 0; border-radius: 3px; background: var(--mc-control-border); cursor: pointer; }
+.tl-mark.version { background: var(--mc-brand-gold); width: 4px; margin-left: -2px; }
+.tl-mark.qa.error { background: var(--mc-error); }
+.tl-mark:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
 .tl-playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--mc-accent); pointer-events: none; }
-
-/* timeline: the zoom buttons sit in the header row and the lanes start straight away */
-.timeline-dock .timeline { position: relative; }
-.timeline-dock .timeline .tl-bar-tools { position: absolute; right: 40px; top: -46px; z-index: 2; }
-.timeline-dock .fold-head { min-height: 46px; font-size: 15px; }
-.timeline-dock .fold-body { padding-top: 0; }
-.timeline-dock .fold { border-bottom: 0; }
-/* timeline: a quieter toolbar and a one-line hint, so the lanes get the room */
-.timeline .tl-bar-tools { gap: 4px; min-height: 0; }
-.timeline .tl-bar-tools .icon-btn { width: 32px; height: 32px; }
-.timeline .tl-bar-tools .muted { margin-left: auto; font-size: 12px; }
-.timeline .hint { display: none; }      /* the same words are the tooltip on the zoom status, so the lanes keep the height */
-.tl-ruler .tl-mark { top: 10px; height: 14px; }
-.tl-wave { height: 36px; }
-.tl-grid { grid-template-columns: 112px 1fr; }
-.tl-lab { line-height: 1.2; }
+.tl-playhead::before { content: ""; position: absolute; top: 0; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--mc-accent); }
 
 /* style cards: the drawn pictures of the twelve families */
 .style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-top: 10px; }
@@ -442,3 +444,10 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .style-card.compact { padding: 4px; }
 .style-card.compact .style-name { font-size: 12px; }
 .link-btn { align-self: flex-start; padding: 0 4px; min-height: 32px; color: var(--mc-accent); }
+
+/* calmer preview: the volume slider shows only when the speaker is hovered or focused */
+.transport.glass .volume input[type=range] { width: 0; opacity: 0; padding: 0; margin: 0; transition: width 0.15s, opacity 0.15s; }
+.transport.glass .volume:hover input[type=range], .transport.glass .volume:focus-within input[type=range] { width: 88px; opacity: 1; }
+.fold .fold { border-bottom: 1px solid var(--mc-divider); }
+.fold .fold-head { font-size: 15px; }
+.header .mode-chip { width: 36px; padding: 0; justify-content: center; }

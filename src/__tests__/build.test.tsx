@@ -53,7 +53,10 @@ async function toBuild(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole("heading", { name: "Brief" });
   const bar = screen.getByRole("navigation", { name: "Stages" });
   await user.click(Array.from(bar.querySelectorAll("button")).find((b) => b.textContent === "Build")!);
-  const head = await screen.findByRole("button", { name: /^Text$/ });          // the Text panel starts closed: the inspector is kept calm
+  // The inspector is kept calm: adding things lives in one closed panel, "Add to the scene", with Text inside it.
+  const group = await screen.findByRole("button", { name: /^Add to the scene$/ });
+  if (group.getAttribute("aria-expanded") === "false") await user.click(group);
+  const head = await screen.findByRole("button", { name: /^Text$/ });
   if (head.getAttribute("aria-expanded") === "false") await user.click(head);
 }
 

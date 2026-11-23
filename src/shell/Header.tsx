@@ -40,9 +40,9 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
       )}
       <span className="grow" />
       {project && (
-        <button className="chip" onClick={onManual} aria-label="Working mode: Manual. Everything works without AI. Open help"
+        <button className="chip mode-chip" onClick={onManual} aria-label="Working mode: Manual. Everything works without AI. Open help"
           title="You are working manually. Every page works without an AI provider.">
-          <Bot size={16} aria-hidden="true" />{hasAnyProvider() ? "Mixed mode" : "Working mode: Manual"}
+          <Bot size={16} aria-hidden="true" /><span className="visually-hidden">{hasAnyProvider() ? "Mixed mode" : "Working mode: Manual"}</span>
         </button>
       )}
       {project && key && (

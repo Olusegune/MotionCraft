@@ -133,6 +133,15 @@ export function waveBars(peaks: number[], n: number): number[] {
   return out;
 }
 
+/** Which timeline view a project uses: the calm film strip (default) or Edit. Remembered per project; anything unreadable gives the calm view. */
+const MODE_KEY = (project: string) => `mc-tlmode:${String(project).slice(0, 200)}`;
+export function readMode(project: string, store: Pick<Storage, "getItem"> | null = safeStore()): "strip" | "edit" {
+  try { return store?.getItem(MODE_KEY(project)) === "edit" ? "edit" : "strip"; } catch { return "strip"; }
+}
+export function writeMode(project: string, mode: "strip" | "edit", store: Pick<Storage, "setItem"> | null = safeStore()): void {
+  try { store?.setItem(MODE_KEY(project), mode); } catch { /* remembering is a convenience only */ }
+}
+
 /** The height of the timeline dock on Build, chosen by dragging the divider. Always at least DOCK_MIN, and the preview keeps at least PREVIEW_MIN of the page. */
 export const DOCK_MIN = 120;
 export const PREVIEW_MIN = 220;
