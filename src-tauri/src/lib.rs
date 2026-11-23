@@ -433,11 +433,11 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 32] = [
+const ENGINE_METHODS: [&str; 33] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
     "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
     "snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore",
-    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers",
+    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read",
 ];
 const MODEL_METHODS: [&str; 11] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
@@ -1529,6 +1529,7 @@ mod tests {
             assert!(ENGINE_METHODS.contains(&m) && !PAID_ENGINE_METHODS.contains(&m), "{m} needs the engine and costs nothing");
         }
         assert!(WRITE_METHODS.contains(&"snapshot_save") && WRITE_METHODS.contains(&"snapshot_restore"), "saving and restoring a version write the project");
+        assert!(ENGINE_METHODS.contains(&"timeline_read") && !WRITE_METHODS.contains(&"timeline_read") && !PAID_ENGINE_METHODS.contains(&"timeline_read"), "the timeline only reads and costs nothing");
         assert!(!WRITE_METHODS.contains(&"snapshot_diff") && !WRITE_METHODS.contains(&"snapshot_preview"), "comparing and previewing only read");
         assert!(!PAID_ENGINE_METHODS.contains(&"builder_execute"), "a plan costs a known $0 today; a paid plan would need its own token path");
         assert!(LLM_CALL_METHODS.contains(&"director_intent"), "the Director calls a model, so it goes through the same gate");
