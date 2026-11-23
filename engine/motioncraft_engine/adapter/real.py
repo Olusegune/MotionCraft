@@ -214,7 +214,14 @@ class EffectCraftAdapter(BaseAdapter):
         io = self._need()
         args: dict[str, Any] = {"comp": comp, "max_side": max_side}
         args.update({"times": times} if len(times) > 1 else {"time": times[0]})
-        res = io.call("tools/call", {"name": "render_preview", "arguments": args})
+        try:
+            res = io.call("tools/call", {"name": "render_preview", "arguments": args})
+        except AdapterContractError:
+            if len(times) <= 1:
+                raise
+            # The released EffectCraft 0.24.1 has no contact sheet (`times`), the pinned commit does: fall back to one frame.
+            res = io.call("tools/call", {"name": "render_preview", "arguments": {"comp": comp, "max_side": max_side, "time": times[0]}})
+            times = times[:1]
         png = next((base64.b64decode(c["data"]) for c in res.get("content", []) if c.get("type") == "image"), b"")
         meta = next((json.loads(c["text"]) for c in res.get("content", []) if c.get("type") == "text"), {})
         if not png:

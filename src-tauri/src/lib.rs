@@ -637,6 +637,71 @@ fn effectcraft_window_open(st: State<EngineState>) -> bool {
     gui_running(&st)
 }
 
+/// What a file is, from its first bytes (never from its name). Pictures, video and audio only.
+pub fn sniff(head: &[u8]) -> Option<(&'static str, &'static str)> {
+    let h = head;
+    if h.starts_with(b"\x89PNG") {
+        Some(("image", "png"))
+    } else if h.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some(("image", "jpg"))
+    } else if h.len() >= 12 && &h[0..4] == b"RIFF" && &h[8..12] == b"WEBP" {
+        Some(("image", "webp"))
+    } else if h.starts_with(b"GIF8") {
+        Some(("image", "gif"))
+    } else if h.len() >= 12 && &h[4..8] == b"ftyp" {
+        Some(("video", "mp4"))
+    } else if h.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+        Some(("video", "webm"))
+    } else if h.len() >= 12 && &h[0..4] == b"RIFF" && &h[8..12] == b"WAVE" {
+        Some(("audio", "wav"))
+    } else if h.starts_with(b"ID3") || (h.len() >= 2 && h[0] == 0xff && (h[1] & 0xe0) == 0xe0) {
+        Some(("audio", "mp3"))
+    } else if h.starts_with(b"fLaC") {
+        Some(("audio", "flac"))
+    } else {
+        None
+    }
+}
+
+#[derive(Serialize)]
+pub struct ImportedAsset {
+    kind: &'static str,
+    path: String,
+    name: String,
+}
+
+/// Copies a picture, video or audio file into the project's assets folder. The type comes from the file's bytes, sizes are
+/// capped, the new name is generated from a sanitised stem, and nothing outside the package is written.
+#[tauri::command]
+fn import_asset(app: tauri::AppHandle, path: String, source: String) -> Result<ImportedAsset, String> {
+    use std::io::Read;
+    let dir = check_package(&projects_root(&app)?, &path)?;
+    let src = PathBuf::from(&source).canonicalize().map_err(|_| "That file does not exist.".to_string())?;
+    if !src.is_file() {
+        return Err("Choose a file, not a folder.".into());
+    }
+    let mut head = [0u8; 16];
+    let n = fs::File::open(&src).and_then(|mut f| f.read(&mut head)).map_err(|e| format!("Could not read the file: {e}"))?;
+    let (kind, ext) = sniff(&head[..n]).ok_or("That is not a picture, video or audio file MotionCraft can use.")?;
+    let size = src.metadata().map_err(|e| e.to_string())?.len();
+    let cap: u64 = match kind {
+        "image" => 60 * 1024 * 1024,
+        "audio" => 400 * 1024 * 1024,
+        _ => 4 * 1024 * 1024 * 1024,
+    };
+    if size > cap {
+        return Err(format!("That file is too large ({} MB).", size / 1_048_576));
+    }
+    let stem = safe_name(src.file_stem().and_then(|s| s.to_str()).unwrap_or("file")).unwrap_or_else(|_| "file".into());
+    let sub = match kind { "image" => "images", "video" => "video", _ => "audio" };
+    let folder = dir.join("assets").join(sub);
+    fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let id = random_token()?;
+    let name = format!("imp-{}-{}.{}", &id[..8], stem.replace(' ', "-"), ext);
+    fs::copy(&src, folder.join(&name)).map_err(|e| format!("Could not copy the file: {e}"))?;
+    Ok(ImportedAsset { kind, path: format!("assets/{sub}/{name}"), name: stem })
+}
+
 fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<(), String> {
     if depth > 8 {
         return Err("The project folder is nested too deeply to copy.".into());
@@ -852,6 +917,7 @@ pub fn run() {
             reveal_projects_folder,
             import_project,
             duplicate_project,
+            import_asset,
             app_ready
         ])
         .run(tauri::generate_context!())
@@ -1001,6 +1067,18 @@ mod tests {
         assert_eq!(fs::read(dst.join("assets").join("images").join("x.png")).unwrap(), b"png");
         assert_eq!(unique_package(&base, "a").file_name().unwrap(), "a 2.motioncraft");
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn media_is_recognised_by_its_bytes_not_its_name() {
+        assert_eq!(sniff(b"\x89PNG\r\n\x1a\n....").unwrap(), ("image", "png"));
+        assert_eq!(sniff(&[0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap(), ("image", "jpg"));
+        assert_eq!(sniff(b"\0\0\0\x18ftypmp42").unwrap(), ("video", "mp4"));
+        assert_eq!(sniff(b"RIFF\0\0\0\0WAVEfmt ").unwrap(), ("audio", "wav"));
+        assert_eq!(sniff(b"ID3\x04\0\0").unwrap(), ("audio", "mp3"));
+        assert!(sniff(b"MZ\x90\0 an exe renamed to .png").is_none());
+        assert!(sniff(b"<html>").is_none());
+        assert!(sniff(b"").is_none());
     }
 
     #[test]

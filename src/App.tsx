@@ -46,7 +46,15 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-  useEffect(() => { document.documentElement.style.setProperty("--mc-scale", String(settings.uiScale / 100)); }, [settings.uiScale]);
+  useEffect(() => {
+    const apply = () => document.documentElement.classList.toggle("narrow", window.innerWidth / (settings.uiScale / 100) < 980);
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [settings.uiScale]);
+
+  useEffect(() => { document.documentElement.style.setProperty("--mc-scale", String(settings.uiScale / 100));
+    document.documentElement.style.zoom = String(settings.uiScale / 100); }, [settings.uiScale]);
 
   const refreshProjects = useCallback(async () => {
     setListing(true);

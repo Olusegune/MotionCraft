@@ -40,7 +40,8 @@ export interface LayerBinding {
 }
 
 export interface AssetReference {
-  id: string; kind: "image" | "video"; path: string;          // path is relative to the package folder
+  id: string; kind: "image" | "video" | "audio"; path: string;   // path is relative to the package folder
+  name?: string;
   provenance: { actor: string; prompt?: string; provider: string; model: string; at: string; licence: string;
                 costReported: boolean; costValue: number | null; costUnit: string | null };
 }
@@ -50,9 +51,10 @@ export interface MotionProject {
   brief: { text: string; script?: string; audio: string[]; references: string[]; brandDocs: string[]; storyboards: string[];
            deliverables: Deliverable[] };
   intent: { purpose?: Purpose; tone: Tone[]; arc: Beat[]; summary: string; firedRules: string[]; source: "agent" | "user" };
-  style: { dimensions: Partial<Record<Dimension, { familyId: string; intensity: Intensity }>>;
+  style: { moodboard?: string[];   // asset ids chosen as references
+           dimensions: Partial<Record<Dimension, { familyId: string; intensity: Intensity }>>;
            conflicts: { a: string; b: string; reason: string; overridden: boolean }[] };
-  treatment: Record<string, { plan: string; motion: string }>;   // keyed by beatId (added in P1-01; see PR)
+  treatment: Record<string, { plan: string; motion: string; frameAssetId?: string }>;   // keyed by beatId (added in P1-01; see PR)
   review: { comments: ReviewComment[] };
   controlModes: Record<ModeKey, ControlMode>;
   engine: { kind: "effectcraft"; version: string; commit: string; projectPath: string };

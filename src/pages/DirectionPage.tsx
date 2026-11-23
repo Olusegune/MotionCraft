@@ -7,13 +7,19 @@ import { Segmented } from "../shell/Segmented";
 import { DIMENSIONS, detectConflicts, FAMILIES, familyLabel } from "../lib/styles";
 import { gateState } from "../lib/project";
 import { LockBar, useLocked, type FrameProps } from "./common";
+import { MediaWall, useImportMedia } from "../shell/Media";
+import { ImagePlus } from "lucide-react";
 
 const INTENSITIES: Intensity[] = ["subtle", "moderate", "strong"];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function DirectionPage(f: FrameProps) {
   const { project, update, approveGate } = useApp();
+  const imp = useImportMedia();
   const locked = useLocked("B");
+  const images = (project.assets ?? []).filter((a) => a.kind === "image");
+  const mood = project.style.moodboard ?? [];
+  const toggleMood = (id: string) => update((p) => ({ ...p, style: { ...p.style, moodboard: mood.includes(id) ? mood.filter((x) => x !== id) : [...mood, id] }, updatedAt: new Date().toISOString() }));
   const conflicts = detectConflicts(project);
   const open = conflicts.filter((c) => !c.overridden);
   const chosen = Object.keys(project.style.dimensions).length;
@@ -31,6 +37,12 @@ export function DirectionPage(f: FrameProps) {
   const main = (
     <div className="stack">
       <LockBar gate="B" kind="style_change" />
+      <section aria-labelledby="mood-h">
+        <div className="beats-head"><h2 id="mood-h">Moodboard</h2><button className="btn" disabled={imp.busy || locked} onClick={() => void imp.run()}><ImagePlus size={16} aria-hidden="true" />Add pictures…</button></div>
+        <p className="muted">Pick the pictures that show the feeling you want. They become references for the style, as principles, never as work to copy.</p>
+        <MediaWall assets={images} selected={mood} onPick={locked ? undefined : (a) => toggleMood(a.id)} empty="No pictures yet. Add reference images, then click the ones that belong on the moodboard." />
+        {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
+      </section>
       <div className="proposal-empty">
         <p className="strong">Proposals</p>
         <p>The Director drafts two or three directions with stills once an AI provider is configured. You can build one yourself below; each dimension gets a style family and an intensity, never a blend percentage.</p>

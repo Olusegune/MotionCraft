@@ -34,3 +34,16 @@ describe("finding Settings and working manually", () => {
     expect(screen.getByRole("button", { name: "Find automatically" })).toBeInTheDocument();
   });
 });
+
+describe("sheets", () => {
+  it("do not steal focus or scroll back when the app re-renders", async () => {
+    const { Sheet } = await import("../shell/Sheet");
+    const view = (close: () => void) => <Sheet title="T" onClose={close}><input aria-label="first" /><input aria-label="second" /></Sheet>;
+    const { rerender } = render(view(() => undefined));
+    const second = screen.getByLabelText("second");
+    second.focus();
+    rerender(view(() => undefined));        // a new onClose, as the app passes every render
+    rerender(view(() => undefined));
+    expect(document.activeElement).toBe(second);
+  });
+});
