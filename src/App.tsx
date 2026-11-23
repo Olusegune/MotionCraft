@@ -56,6 +56,9 @@ export default function App() {
   useEffect(() => { document.documentElement.style.setProperty("--mc-scale", String(settings.uiScale / 100));
     document.documentElement.style.zoom = String(settings.uiScale / 100); }, [settings.uiScale]);
 
+  // Real start-up progress for the splash: each step is reported when it has actually finished.
+  const readyOnce = useRef(false);
+  useEffect(() => { getApi().then((a) => a.startupStep("ui")).catch(() => undefined); }, []);
   const refreshProjects = useCallback(async () => {
     setListing(true);
     try { setProjects(await (await getApi()).list()); setListError(null); }
@@ -63,6 +66,11 @@ export default function App() {
     setListing(false);
   }, []);
   useEffect(() => { void refreshProjects(); }, [refreshProjects]);
+  useEffect(() => { if (!listing) getApi().then((a) => a.startupStep("projects")).catch(() => undefined); }, [listing]);
+  useEffect(() => { if (engine) getApi().then((a) => a.startupStep("engine")).catch(() => undefined); }, [engine]);
+  useEffect(() => {
+    if (!listing && engine && !readyOnce.current) { readyOnce.current = true; getApi().then((a) => a.appReady()).catch(() => undefined); }
+  }, [listing, engine]);
 
   const refreshEngine = useCallback(() => {
     setEngine(null);
@@ -188,6 +196,7 @@ export default function App() {
       case "view-zoom-reset": updateSettings({ uiScale: 100 }); break;
       case "tools-models": setOverlay({ kind: "models" }); break;
       case "tools-effectcraft": if (needProject()) getApi().then((a) => a.openEffectCraft(pathRef.current, settings.enginePath)).catch((e) => say(String(e instanceof Error ? e.message : e))); break;
+      case "help-docs": getApi().then((a) => a.openDocs()).catch((e) => say(String(e instanceof Error ? e.message : e))); break;
       case "help-manual": setOverlay({ kind: "manual" }); break;
       case "help-about": setOverlay({ kind: "about" }); break;
     }

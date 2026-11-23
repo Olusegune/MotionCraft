@@ -122,7 +122,7 @@ fn summary(dir: &Path, v: &Value) -> ProjectSummary {
     ProjectSummary { id: s("id"), name: s("name"), path: dir.to_string_lossy().into_owned(), updated_at: s("updatedAt") }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_projects(app: tauri::AppHandle) -> Result<Vec<ProjectSummary>, String> {
     let root = projects_root(&app)?;
     let mut out = vec![];
@@ -141,7 +141,7 @@ fn list_projects(app: tauri::AppHandle) -> Result<Vec<ProjectSummary>, String> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_project(app: tauri::AppHandle, project: Value) -> Result<ProjectSummary, String> {
     let root = projects_root(&app)?;
     let bytes = serialise(&project)?;
@@ -162,7 +162,7 @@ fn create_project(app: tauri::AppHandle, project: Value) -> Result<ProjectSummar
     Ok(summary(&dir.canonicalize().unwrap_or(dir), &project))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn load_project(app: tauri::AppHandle, path: String) -> Result<Value, String> {
     let dir = check_package(&projects_root(&app)?, &path)?;
     let text = fs::read_to_string(dir.join("project.json")).map_err(|e| format!("Could not read project.json: {e}"))?;
@@ -173,7 +173,7 @@ fn load_project(app: tauri::AppHandle, path: String) -> Result<Value, String> {
     Ok(v)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn save_project(app: tauri::AppHandle, path: String, project: Value) -> Result<(), String> {
     let dir = check_package(&projects_root(&app)?, &path)?;
     atomic_write(&dir.join("project.json"), &serialise(&project)?)
@@ -274,7 +274,7 @@ fn find_cli(override_path: &str) -> Option<PathBuf> {
     candidates(override_path).into_iter().find(|p| looks_like_cli(p))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn engine_status(override_path: String) -> EngineStatus {
     let Some(cli) = find_cli(&override_path) else {
         return EngineStatus {
@@ -418,7 +418,7 @@ fn key_entry(provider: &str) -> Result<keyring::Entry, String> {
 }
 
 /// Keys live only in the operating system credential store. They are never returned to the page.
-#[tauri::command]
+#[tauri::command(async)]
 fn set_provider_key(provider: String, key: String) -> Result<(), String> {
     let k = key.trim();
     if k.len() < 8 || k.len() > 512 || k.chars().any(|c| c.is_control() || c.is_whitespace()) {
@@ -427,7 +427,7 @@ fn set_provider_key(provider: String, key: String) -> Result<(), String> {
     key_entry(&provider)?.set_password(k).map_err(|e| format!("Could not save the key: {e}"))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_provider_key(provider: String) -> Result<(), String> {
     match key_entry(&provider)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -435,7 +435,7 @@ fn delete_provider_key(provider: String) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn provider_key_status() -> HashMap<String, bool> {
     PROVIDERS.iter().map(|p| (p.to_string(), key_entry(p).ok().and_then(|e| e.get_password().ok()).is_some())).collect()
 }
@@ -452,7 +452,7 @@ fn random_token() -> Result<String, String> {
 
 /// The spend gate (S-01). The page calls this from the click on the confirmation sheet, which has shown the price. The token is
 /// single use and expires; `engine_call` refuses `generate_start` without a live one.
-#[tauri::command]
+#[tauri::command(async)]
 fn confirm_spend(st: State<EngineState>, provider: String, model: String) -> Result<String, String> {
     if provider != "local-render" {
         provider_ok(&provider)?; // a final render on this computer is the only non-provider spend
@@ -476,7 +476,7 @@ fn take_spend(st: &EngineState, token: &str) -> bool {
 /// One request to the Python engine helper. The method list is closed, the package path is re-validated here, writes are refused
 /// while an EffectCraft window has the project open (P0-07), keys are injected for the one provider a call uses, and a paid call
 /// needs a live spend token.
-#[tauri::command]
+#[tauri::command(async)]
 fn engine_call(
     app: tauri::AppHandle,
     st: State<EngineState>,
@@ -591,7 +591,7 @@ fn sidecar_request(st: &EngineState, cli: Option<&Path>, data_dir: Option<&Path>
 
 /// Starts the EffectCraft GUI on this project. The project opens on its last active composition (P0-14). Returns at once;
 /// while the window is running, `engine_call` refuses writes.
-#[tauri::command]
+#[tauri::command(async)]
 fn open_in_effectcraft(app: tauri::AppHandle, st: State<EngineState>, path: String, override_path: String) -> Result<(), String> {
     let dir = check_package(&projects_root(&app)?, &path)?;
     let cli = find_cli(&override_path).ok_or("EffectCraft was not found. Set its path in Settings.")?;
@@ -618,7 +618,7 @@ fn open_in_effectcraft(app: tauri::AppHandle, st: State<EngineState>, path: Stri
 }
 
 /// A generated picture as a data URL, for the thumbnail. Only files under the package's assets/images folder, images only.
-#[tauri::command]
+#[tauri::command(async)]
 fn asset_data_url(app: tauri::AppHandle, path: String, rel: String) -> Result<String, String> {
     use base64::Engine as _;
     let dir = check_package(&projects_root(&app)?, &path)?;
@@ -647,7 +647,7 @@ fn asset_data_url(app: tauri::AppHandle, path: String, rel: String) -> Result<St
 
 /// The absolute path of a file the page may play or show: only under previews/, renders/ or assets/ of a project package. The
 /// page turns it into a URL with the asset protocol, whose scope is the projects folder.
-#[tauri::command]
+#[tauri::command(async)]
 fn package_file(app: tauri::AppHandle, path: String, rel: String) -> Result<String, String> {
     let dir = check_package(&projects_root(&app)?, &path)?;
     let r = Path::new(&rel);
@@ -665,7 +665,7 @@ fn package_file(app: tauri::AppHandle, path: String, rel: String) -> Result<Stri
 }
 
 /// Collected editable project: copies the whole package (composition, assets, font manifest) into a folder the user chose.
-#[tauri::command]
+#[tauri::command(async)]
 fn export_package(app: tauri::AppHandle, path: String, dest_parent: String) -> Result<String, String> {
     let root = projects_root(&app)?;
     let src = check_package(&root, &path)?;
@@ -684,7 +684,7 @@ fn export_package(app: tauri::AppHandle, path: String, dest_parent: String) -> R
     Ok(dst.to_string_lossy().into_owned())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn effectcraft_window_open(st: State<EngineState>) -> bool {
     gui_running(&st)
 }
@@ -724,7 +724,7 @@ pub struct ImportedAsset {
 
 /// Copies a picture, video or audio file into the project's assets folder. The type comes from the file's bytes, sizes are
 /// capped, the new name is generated from a sanitised stem, and nothing outside the package is written.
-#[tauri::command]
+#[tauri::command(async)]
 fn import_asset(app: tauri::AppHandle, path: String, source: String) -> Result<ImportedAsset, String> {
     use std::io::Read;
     let dir = check_package(&projects_root(&app)?, &path)?;
@@ -784,13 +784,13 @@ fn unique_package(root: &Path, base: &str) -> PathBuf {
     dir
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn projects_folder(app: tauri::AppHandle) -> Result<String, String> {
     Ok(projects_root(&app)?.to_string_lossy().into_owned())
 }
 
 /// Shows the projects folder in the system file browser. Fixed program, the folder is our own canonical root.
-#[tauri::command]
+#[tauri::command(async)]
 fn reveal_projects_folder(app: tauri::AppHandle) -> Result<(), String> {
     let root = projects_root(&app)?;
     let prog = if cfg!(windows) { "explorer.exe" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
@@ -799,7 +799,7 @@ fn reveal_projects_folder(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Brings a `.motioncraft` folder from anywhere into the projects folder (a copy) so it can be opened. Used by File > Open Project Folder.
-#[tauri::command]
+#[tauri::command(async)]
 fn import_project(app: tauri::AppHandle, source: String) -> Result<ProjectSummary, String> {
     let root = projects_root(&app)?;
     let src = PathBuf::from(&source).canonicalize().map_err(|_| "That folder does not exist.".to_string())?;
@@ -827,7 +827,7 @@ fn import_project(app: tauri::AppHandle, source: String) -> Result<ProjectSummar
 
 /// File > Save a Copy: copies the whole package (assets and composition) under a new name; the page supplies the new project.json
 /// (new id and name). The original is not touched.
-#[tauri::command]
+#[tauri::command(async)]
 fn duplicate_project(app: tauri::AppHandle, path: String, project: Value) -> Result<ProjectSummary, String> {
     let root = projects_root(&app)?;
     let src = check_package(&root, &path)?;
@@ -841,8 +841,13 @@ fn duplicate_project(app: tauri::AppHandle, path: String, project: Value) -> Res
     Ok(summary(&dst.canonicalize().unwrap_or(dst), &project))
 }
 
-/// Closes the splash and shows the main window (idempotent). The page calls it when it has drawn; a timer calls it too, so a
-/// page that never loads cannot leave the user looking at the splash forever.
+/// When the splash was shown, and the minimum time it stays up (so it is not a flash).
+static SPLASH_AT: Mutex<Option<Instant>> = Mutex::new(None);
+const SPLASH_MIN: Duration = Duration::from_millis(1500);
+const DOCS_URL: &str = "https://github.com/Olusegune/MotionCraft/tree/main/docs";
+
+/// Closes the splash and shows the main window (idempotent). A timer calls it too, so a page that never loads cannot leave the
+/// user looking at the splash forever.
 fn show_main(app: &tauri::AppHandle) {
     if let Some(sp) = app.get_webview_window("splashscreen") {
         let _ = sp.close();
@@ -853,9 +858,57 @@ fn show_main(app: &tauri::AppHandle) {
     }
 }
 
-#[tauri::command]
+/// Moves the splash bar. The text is from a fixed list in this file, and is JSON-quoted when it is sent to the page.
+fn splash_progress(app: &tauri::AppHandle, pct: u32, text: &str) {
+    if let Some(w) = app.get_webview_window("splashscreen") {
+        let t = serde_json::to_string(text).unwrap_or_else(|_| "\"\"".into());
+        let _ = w.eval(format!("window.setProgress && window.setProgress({pct}, {t})"));
+    }
+}
+
+/// The page reports each real start-up step as it finishes; the bar only ever moves for something that happened.
+#[tauri::command(async)]
+fn startup_step(app: tauri::AppHandle, step: String) {
+    match step.as_str() {
+        "ui" => splash_progress(&app, 55, "Opening projects"),
+        "projects" => splash_progress(&app, 75, "Looking for EffectCraft"),
+        "engine" => splash_progress(&app, 92, "Almost ready"),
+        _ => {}
+    }
+}
+
+#[tauri::command(async)]
 fn app_ready(app: tauri::AppHandle) {
-    show_main(&app);
+    splash_progress(&app, 100, "Ready");
+    std::thread::spawn(move || {
+        // Wait for the splash to have been shown (it appears once its picture has loaded), then for its minimum time.
+        for _ in 0..40 {
+            if SPLASH_AT.lock().unwrap().is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let left = match *SPLASH_AT.lock().unwrap() {
+            Some(at) => SPLASH_MIN.saturating_sub(at.elapsed()),
+            None => Duration::ZERO,
+        };
+        std::thread::sleep(left.max(Duration::from_millis(350)));   // let the bar be seen reaching 100%
+        show_main(&app);
+    });
+}
+
+/// Opens the documentation: the copy that ships with the app when there is one, otherwise the project page. Fixed program and
+/// fixed or app-resource targets only.
+fn open_docs_now(app: &tauri::AppHandle) {
+    let local = app.path().resource_dir().ok().map(|d| d.join("docs")).filter(|d| d.is_dir());
+    let target = local.map(|d| d.to_string_lossy().into_owned()).unwrap_or_else(|| DOCS_URL.to_string());
+    let prog = if cfg!(windows) { "explorer.exe" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    let _ = Command::new(prog).arg(target).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+}
+
+#[tauri::command(async)]
+fn open_docs(app: tauri::AppHandle) {
+    open_docs_now(&app);
 }
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
@@ -923,6 +976,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&PredefinedMenuItem::close_window(app, None)?)
         .build()?;
     let help = SubmenuBuilder::new(app, "&Help")
+        .item(&it("help-docs", "&Documentation", Some("F1"))?)
         .item(&it("help-shortcuts", "&Keyboard Shortcuts", None)?)
         .item(&it("help-manual", "Working &Manually (no AI)", None)?)
         .item(&it("help-about", "&About MotionCraft", None)?)
@@ -935,8 +989,47 @@ pub fn run() {
     use tauri::Emitter;
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(EngineState::default())
+        .on_page_load(|webview, payload| {
+            use tauri::webview::PageLoadEvent;
+            let app = webview.app_handle().clone();
+            match (webview.label(), payload.event()) {
+                ("splashscreen", PageLoadEvent::Finished) => {
+                    *SPLASH_AT.lock().unwrap() = Some(Instant::now());
+                    let _ = webview.window().show();
+                    let v = serde_json::to_string(&app.package_info().version.to_string()).unwrap_or_default();
+                    let _ = webview.eval(format!("window.setVersion && window.setVersion({v})"));
+                    splash_progress(&app, 10, "Starting");
+                }
+                ("main", PageLoadEvent::Started) => splash_progress(&app, 25, "Loading the interface"),
+                ("main", PageLoadEvent::Finished) => splash_progress(&app, 45, "Interface loaded"),
+                _ => {}
+            }
+        })
         .setup(|app| {
+            // The splash is created here (hidden) so its link can be handled: mc-open://docs opens the documentation, nothing else may
+            // be navigated to.
+            let docs_app = app.handle().clone();
+            tauri::WebviewWindowBuilder::new(app, "splashscreen", tauri::WebviewUrl::App("splash.html".into()))
+                .title("MotionCraft")
+                .inner_size(1050.0, 450.0)
+                .resizable(false)
+                .decorations(false)
+                .center()
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .shadow(true)
+                .visible(false)
+                .background_color(tauri::window::Color(24, 26, 28, 255))
+                .on_navigation(move |url| {
+                    if url.scheme() == "mc-open" {
+                        if url.host_str() == Some("docs") {
+                            open_docs_now(&docs_app);
+                        }
+                        return false;
+                    }
+                    matches!(url.host_str(), Some("tauri.localhost") | Some("localhost")) || url.scheme() == "tauri"
+                })
+                .build()?;
             // The menu belongs to the main window only; the splash window must not get a menu bar.
             if let Some(main) = app.get_webview_window("main") {
                 main.set_menu(build_menu(app.handle())?)?;
@@ -972,7 +1065,9 @@ pub fn run() {
             import_asset,
             package_file,
             export_package,
-            app_ready
+            app_ready,
+            startup_step,
+            open_docs
         ])
         .run(tauri::generate_context!())
         .expect("error while running MotionCraft");

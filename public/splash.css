@@ -1,0 +1,13 @@
+html, body { margin: 0; height: 100%; background: #181A1C; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; color: #F2F3F4; }
+.splash { position: relative; width: 100%; height: 100%; }
+.art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: in 400ms ease-out both; }
+.progress { position: absolute; left: 50%; top: 66%; width: 34%; transform: translateX(-50%); text-align: center; animation: in 400ms ease-out both; }
+.track { height: 4px; border-radius: 2px; background: rgba(242, 243, 244, 0.22); overflow: hidden; }
+.fill { height: 100%; width: 0; border-radius: 2px; background: #E3C48F; transition: width 260ms ease-out; }
+.status { margin: 10px 0 0; font-size: 12px; letter-spacing: 0.02em; color: #E4E6E8; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
+.foot { position: absolute; left: 18px; right: 18px; bottom: 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.docs { color: #F2F3F4; text-decoration: none; padding: 6px 12px; border: 1px solid rgba(242, 243, 244, 0.55); border-radius: 6px; background: rgba(24, 26, 28, 0.55); }
+.docs:hover, .docs:focus-visible { background: rgba(24, 26, 28, 0.85); border-color: #F2F3F4; outline: none; }
+.version { color: #E4E6E8; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); font-variant-numeric: tabular-nums; }
+@keyframes in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .art, .progress { animation: none; } .fill { transition: none; } }
