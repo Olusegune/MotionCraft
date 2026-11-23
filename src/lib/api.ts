@@ -44,6 +44,9 @@ export interface Api {
   pickPath(kind: "folder" | "engine", startIn?: string): Promise<string | null>;
   appReady(): Promise<void>;
   pickMedia(): Promise<string[]>;
+  /** A playable URL for a file under previews/, renders/ or assets/ of the project (the shell checks the path). */
+  fileUrl(path: string, rel: string): Promise<string>;
+  exportPackage(path: string, destParent: string): Promise<string>;
   importAsset(path: string, source: string): Promise<{ kind: "image" | "video" | "audio"; path: string; name: string }>;
 }
 
@@ -88,6 +91,12 @@ async function tauriApi(): Promise<Api> {
       return Array.isArray(r) ? r : typeof r === "string" ? [r] : [];
     },
     importAsset: (path, source) => invoke("import_asset", { path, source }),
+    async fileUrl(path, rel) {
+      const abs = await invoke<string>("package_file", { path, rel });
+      const { convertFileSrc } = await import("@tauri-apps/api/core");
+      return convertFileSrc(abs);
+    },
+    exportPackage: (path, destParent) => invoke("export_package", { path, destParent }),
   };
 }
 
@@ -136,6 +145,8 @@ function webApi(): Api {
     async appReady() { /* no splash in the browser */ },
     async pickMedia() { return []; },
     async importAsset() { throw new Error("Adding media needs the desktop app."); },
+    async fileUrl() { throw new Error("Playback needs the desktop app."); },
+    async exportPackage() { throw new Error("Exporting needs the desktop app."); },
   };
 }
 

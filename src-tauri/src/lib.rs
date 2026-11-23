@@ -324,9 +324,14 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 9] = ["open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close"];
+const ENGINE_METHODS: [&str; 19] = [
+    "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
+    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll",
+];
 const MODEL_METHODS: [&str; 5] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel"];
-const WRITE_METHODS: [&str; 5] = ["add_text", "set_text", "add_camera", "lock", "unlock"];
+const WRITE_METHODS: [&str; 10] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers"];
+/// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
+const PAID_ENGINE_METHODS: [&str; 1] = ["render_start"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
 const KEY_SERVICE: &str = "motioncraft";
 const SPEND_TTL: Duration = Duration::from_secs(300);
@@ -449,7 +454,9 @@ fn random_token() -> Result<String, String> {
 /// single use and expires; `engine_call` refuses `generate_start` without a live one.
 #[tauri::command]
 fn confirm_spend(st: State<EngineState>, provider: String, model: String) -> Result<String, String> {
-    provider_ok(&provider)?;
+    if provider != "local-render" {
+        provider_ok(&provider)?; // a final render on this computer is the only non-provider spend
+    }
     if model.is_empty() || model.len() > 200 {
         return Err("Bad model.".into());
     }
@@ -499,6 +506,12 @@ fn engine_call(
         let root = projects_root(&app)?;
         let pkg = check_package(&root, package.as_deref().ok_or("No project path.")?)?;
         params.as_object_mut().unwrap().insert("package".into(), Value::String(pkg.to_string_lossy().into_owned()));
+    }
+    if PAID_ENGINE_METHODS.contains(&method.as_str()) {
+        let token = params.get("spend_token").and_then(Value::as_str).unwrap_or("").to_string();
+        if !take_spend(&st, &token) {
+            return Err("A final render needs a confirmation from a click on the render sheet. Confirm again.".into());
+        }
     }
     if method == "generate_start" {
         let provider = params.get("provider").and_then(Value::as_str).ok_or("No provider.")?.to_string();
@@ -630,6 +643,45 @@ fn asset_data_url(app: tauri::AppHandle, path: String, rel: String) -> Result<St
     }
     let bytes = fs::read(&file).map_err(|e| e.to_string())?;
     Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+/// The absolute path of a file the page may play or show: only under previews/, renders/ or assets/ of a project package. The
+/// page turns it into a URL with the asset protocol, whose scope is the projects folder.
+#[tauri::command]
+fn package_file(app: tauri::AppHandle, path: String, rel: String) -> Result<String, String> {
+    let dir = check_package(&projects_root(&app)?, &path)?;
+    let r = Path::new(&rel);
+    let comps: Vec<_> = r.components().collect();
+    let plain = comps.iter().all(|c| matches!(c, std::path::Component::Normal(_)));
+    let top = comps.first().and_then(|c| c.as_os_str().to_str()).unwrap_or("");
+    if !plain || comps.len() < 2 || !["previews", "renders", "assets"].contains(&top) {
+        return Err("Not a file of this project.".into());
+    }
+    let file = dir.join(r).canonicalize().map_err(|_| "That file no longer exists.".to_string())?;
+    if !file.starts_with(&dir) || !file.is_file() {
+        return Err("Not a file of this project.".into());
+    }
+    Ok(file.to_string_lossy().into_owned())
+}
+
+/// Collected editable project: copies the whole package (composition, assets, font manifest) into a folder the user chose.
+#[tauri::command]
+fn export_package(app: tauri::AppHandle, path: String, dest_parent: String) -> Result<String, String> {
+    let root = projects_root(&app)?;
+    let src = check_package(&root, &path)?;
+    let parent = PathBuf::from(&dest_parent).canonicalize().map_err(|_| "That folder does not exist.".to_string())?;
+    if !parent.is_dir() {
+        return Err("Choose a folder.".into());
+    }
+    if parent.starts_with(&src) {
+        return Err("Choose a folder outside the project itself.".into());
+    }
+    let base = src.file_stem().and_then(|s| s.to_str()).unwrap_or("project").to_string();
+    let dst = unique_package(&parent, &base);
+    copy_dir(&src, &dst, 0).inspect_err(|_| {
+        let _ = fs::remove_dir_all(&dst);
+    })?;
+    Ok(dst.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -918,6 +970,8 @@ pub fn run() {
             import_project,
             duplicate_project,
             import_asset,
+            package_file,
+            export_package,
             app_ready
         ])
         .run(tauri::generate_context!())
@@ -1079,6 +1133,48 @@ mod tests {
         assert!(sniff(b"MZ\x90\0 an exe renamed to .png").is_none());
         assert!(sniff(b"<html>").is_none());
         assert!(sniff(b"").is_none());
+    }
+
+    #[test]
+    fn paid_engine_methods_are_registered_and_not_free_writes() {
+        assert!(PAID_ENGINE_METHODS.contains(&"render_start"));
+        assert!(ENGINE_METHODS.contains(&"render_start"));
+        assert!(!MODEL_METHODS.contains(&"render_start"));
+        assert!(!WRITE_METHODS.contains(&"render_start"), "a render does not write the project");
+        for m in ["preview_movie_start", "render_poll", "audio_analyze", "primitives"] {
+            assert!(!WRITE_METHODS.contains(&m), "{m} must stay allowed while EffectCraft is open");
+        }
+    }
+
+    /// Needs a real engine (see sidecar_round_trip_with_the_real_engine): motion, draft movie and final render through the helper.
+    #[test]
+    #[ignore]
+    fn render_round_trip_with_the_real_engine() {
+        let cli = PathBuf::from(std::env::var("EFFECTCRAFT_CLI").expect("EFFECTCRAFT_CLI"));
+        let base = std::env::temp_dir().join(format!("mc-render-{}", std::process::id()));
+        let pkg = base.join("R.motioncraft");
+        fs::create_dir_all(&pkg).unwrap();
+        let st = EngineState::default();
+        let call = |m: &str, p: Value| sidecar_request(&st, Some(&cli), None, m, p);
+        call("open", serde_json::json!({"package": pkg.to_string_lossy(), "settings": {"width": 640, "height": 360, "frame_rate": 30, "duration": 3}})).unwrap();
+        let t = call("add_text", serde_json::json!({"text": "Rust render"})).unwrap();
+        let lid = t["layer"].clone();
+        call("apply_primitive", serde_json::json!({"layer": lid, "primitive": "entrance.fade-in", "params": {"duration": 1.0}})).unwrap();
+        let wait = |mut j: Value| {
+            for _ in 0..600 {
+                if j["state"] != "running" { return j; }
+                std::thread::sleep(Duration::from_millis(100));
+                j = call("render_poll", serde_json::json!({"job": j["id"]})).unwrap();
+            }
+            panic!("render did not finish");
+        };
+        let prev = wait(call("preview_movie_start", serde_json::json!({})).unwrap());
+        assert_eq!(prev["state"], "done", "{prev}");
+        assert!(pkg.join(prev["output"].as_str().unwrap()).is_file());
+        let fin = wait(call("render_start", serde_json::json!({"preset": "h264", "name": "Rust", "spend_token": "t"})).unwrap());
+        assert_eq!(fin["state"], "done", "{fin}");
+        assert_eq!(fin["frames"], 90);
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]

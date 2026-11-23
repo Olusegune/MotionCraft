@@ -19,8 +19,11 @@ from typing import Any
 
 from .adapter import USER, Command, CompSettings, MockAdapter, UserAction
 from .adapter.base import BaseAdapter
-from .adapter.errors import AdapterError
+from .adapter.errors import AdapterError, CommandFailed, LockedLayerError
 from .adapter.real import EffectCraftAdapter
+from . import audio as audio_mod
+from .primitives import library as prim
+from .renderjobs import RenderJobs
 from .providers.jobs import JobRefused, Jobs
 from .providers.net import Net
 from .providers.registry import Registry
@@ -33,6 +36,7 @@ class Service:
         self._factory = adapter_factory
         self.reg = Registry((data_dir or Path.home() / ".motioncraft") / "registry.json")
         self.jobs = jobs or Jobs(self.reg, Net())
+        self.renders = RenderJobs(adapter_factory)
         self.a: BaseAdapter | None = None
         self.pkg: Path | None = None
 
@@ -133,6 +137,117 @@ class Service:
 
     def generate_cancel(self, job: str) -> dict:
         return self.jobs.cancel(job)
+
+    # ------------------------------------------------------------ more layers, primitives, audio, renders (Phase 2 to 5 slice)
+    def _asset(self, rel: str, kinds: tuple[str, ...]) -> Path:
+        """A file under this package's assets folder, by relative path. No `..`, no absolute paths, no links."""
+        if self.pkg is None:
+            raise AdapterError("no project is open in the engine")
+        r = Path(rel)
+        parts = r.parts
+        if r.is_absolute() or len(parts) != 3 or parts[0] != "assets" or parts[1] not in kinds or any(x in ("..", ".") for x in parts):
+            raise AdapterError("That is not a media file of this project.")
+        f = (self.pkg / r).resolve()
+        if self.pkg not in f.parents or not f.is_file():
+            raise AdapterError("That media file no longer exists.")
+        return f
+
+    def add_shape(self, kind: str = "rect", name: str = "") -> dict:
+        if kind not in ("rect", "rounded", "ellipse", "star", "polygon"):
+            raise AdapterError("Unknown shape.")
+        a = self._need()
+        params = {"kind": kind, "size": [320, 320] if kind != "rect" else [480, 270]}
+        if name.strip():
+            params["name"] = name.strip()[:80]
+        r = a.execute([Command(id="layer.newShape", params=params)], actor=USER)
+        a.save()
+        return {"layer": r.results[0].result["layer"], **self._snapshot()}
+
+    def add_solid(self, name: str = "Background", color: list[float] | None = None) -> dict:
+        a = self._need()
+        col = [min(1.0, max(0.0, float(x))) for x in (color or [0.12, 0.12, 0.14])][:3]
+        r = a.execute([Command(id="layer.newSolid", params={"name": name.strip()[:80] or "Background", "color": col})], actor=USER)
+        a.save()
+        return {"layer": r.results[0].result["layer"], **self._snapshot()}
+
+    def add_media(self, rel: str) -> dict:
+        """Puts an imported picture, video or audio file into the composition as a new layer."""
+        f = self._asset(rel, ("images", "video", "audio"))
+        a = self._need()
+        imp = a.execute([Command(id="file.import", params={"paths": [str(f)]})], actor=USER).results[0].result or {}
+        if imp.get("errors") or not imp.get("items"):
+            raise AdapterError(f"EffectCraft could not import that file: {imp.get('errors') or 'no item'}")
+        r = a.execute([Command(id="layer.addItem", params={"item": imp["items"][0]})], actor=USER)
+        a.save()
+        return {"layer": r.results[0].result["layer"], **self._snapshot()}
+
+    def primitives(self) -> dict:
+        return {"primitives": prim.describe()}
+
+    def apply_primitive(self, layer: int, primitive: str, params: dict | None = None) -> dict:
+        a = self._need()
+        snap = a.inspect()
+        comp = snap.comp(None)
+        info = next((l for l in comp.layers if l.id == int(layer)), None)
+        if info is None:
+            raise AdapterError("That layer does not exist.")
+        if int(layer) in a._locked.get(comp.id, set()):
+            raise LockedLayerError([int(layer)], "primitive")          # approved layers are unlocked by a person first
+        props = a.layer_props(comp.id, int(layer))["props"]
+
+        def val(path: str, default):
+            v = (props.get(path) or {}).get("value")
+            return list(v) if isinstance(v, list) else (v if v is not None else default)
+        ctx = prim.Ctx(layer=int(layer), layer_kind=info.kind, fps=comp.frame_rate, comp_duration=comp.duration,
+                       rest_position=[float(x) for x in val("transform/position", [0, 0, 0])],
+                       rest_scale=[float(x) for x in val("transform/scale", [100, 100, 100])],
+                       rest_opacity=float(val("transform/opacity", 100.0)),
+                       has_animators=any(k.startswith("text/animators/") for k in props))
+        cmds = prim.build(primitive, ctx, params)
+        # Keyframe recipes replace nothing: an existing key at the same time is overwritten by the engine. Stop at the first error.
+        a.execute(cmds, actor=USER)
+        a.save()
+        return {"applied": primitive, "commands": len(cmds), **self._snapshot()}
+
+    def audio_analyze(self, rel: str) -> dict:
+        f = self._asset(rel, ("audio",))
+        try:
+            return audio_mod.analyze(f)
+        except audio_mod.AudioError as e:
+            raise AdapterError(str(e)) from None
+
+    def sync_markers(self, times: list[float], comment: str = "motioncraft:beat", replace: bool = False) -> dict:
+        a = self._need()
+        ts = sorted({round(float(t), 3) for t in times if 0 <= float(t) < 36000})[:2000]
+        if not ts:
+            raise AdapterError("There are no marker times to write.")
+        if replace:
+            try:
+                a.execute([Command(id="comp.deleteAllMarkers", params={})], actor=USER)
+            except CommandFailed as e:
+                if "no markers" not in str(e):          # nothing to delete is fine
+                    raise
+        a.execute([Command(id="comp.addMarker", params={"time": t, "comment": comment[:80]}) for t in ts], actor=USER)
+        a.save()
+        return {"markers": len(ts), "replaced": replace}
+
+    def preview_movie_start(self) -> dict:
+        if self.a is not None:
+            self.a.save()                                  # the render reads the file on disk
+        return self.renders.start_movie(self._pkg())
+
+    def render_start(self, preset: str, name: str = "render", spend_token: str = "") -> dict:
+        if self.a is not None:
+            self.a.save()
+        return self.renders.start_final(self._pkg(), preset, name, spend_token)
+
+    def render_poll(self, job: str) -> dict:
+        return self.renders.poll(job, self._pkg())
+
+    def _pkg(self) -> Path:
+        if self.pkg is None:
+            raise AdapterError("no project is open in the engine")
+        return self.pkg
 
     def close(self) -> dict:
         if self.a is not None:

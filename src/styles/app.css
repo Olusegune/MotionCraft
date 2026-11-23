@@ -214,3 +214,26 @@ html.narrow .rail { width: auto; }
 html.narrow .header { flex-wrap: wrap; height: auto; min-height: 48px; row-gap: 4px; padding-top: 4px; padding-bottom: 4px; }
 html.narrow .app { grid-template-rows: auto minmax(0, 1fr) auto; }
 html.narrow .stagebar { flex-wrap: wrap; }
+
+/* player, transport, ruler */
+.player { display: flex; flex-direction: column; gap: 8px; outline: none; }
+.player:focus-visible { box-shadow: var(--mc-focus); border-radius: var(--mc-r-panel); }
+.player-screen { width: min(100%, 62vh, 860px); padding: 0; overflow: hidden; background: var(--mc-bg-app); }
+.player-screen video { width: 100%; height: 100%; display: block; object-fit: contain; background: var(--mc-bg-app); }
+.transport { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.timecode { font-size: 14px; margin-left: 8px; }
+.ruler { position: relative; height: 64px; background: var(--mc-bg-app); border: 1px solid var(--mc-divider); border-radius: var(--mc-r-ctl); overflow: hidden; }
+.ruler .wave { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.8; }
+.ruler .marks { position: absolute; inset: 0; pointer-events: none; }
+.ruler .mark { position: absolute; top: 0; bottom: 0; width: 12px; margin-left: -6px; padding: 0; background: none; border: 0; cursor: pointer; pointer-events: auto; }
+.ruler .mark::after { content: ""; position: absolute; left: 5px; width: 2px; top: 6px; bottom: 6px; background: var(--mc-text-3); }
+.ruler .mark.beat::after { background: var(--mc-brand-gold); opacity: 0.7; top: 22px; bottom: 6px; }
+.ruler .mark.section::after { background: var(--mc-accent); top: 0; bottom: 38px; width: 3px; }
+.ruler .mark.note::after { background: var(--mc-warning); top: 0; bottom: 0; }
+.ruler .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--mc-text); margin-left: -1px; pointer-events: none; }
+.ruler .scrub { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.ruler .scrub:focus-visible { opacity: 0.001; }
+.ruler:focus-within { box-shadow: var(--mc-focus); }
+
+.proposal-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 8px; }
+.proposal-card { display: flex; flex-direction: column; gap: 8px; background: var(--mc-bg-raised); border-radius: var(--mc-r-card); padding: 12px; }

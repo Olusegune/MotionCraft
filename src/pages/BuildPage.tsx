@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ExternalLink, LockKeyhole, RotateCcw, TriangleAlert, Type } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Camera, ExternalLink, LockKeyhole, RotateCcw, TriangleAlert } from "lucide-react";
 import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Sheet } from "../shell/Sheet";
-import { getApi, type PreviewImage } from "../lib/api";
+import { Player, type Marker } from "../shell/Player";
+import { getApi } from "../lib/api";
 import { useSettings } from "../lib/settings";
 import { approveLayer, bindingFor, isChangedSinceApproval, reconcile, unlockLayer, type EngineLayer, type EngineSnapshot } from "../lib/layers";
 import { hasAnyProvider } from "../lib/project";
+import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write } from "./build/Panels";
+import { usePreviewMovie } from "./build/usePreview";
 import type { FrameProps } from "./common";
-
-type Preview = { state: "none" } | { state: "rendering"; since: number } | { state: "ready"; img: PreviewImage; at: number; seconds: number; stale: boolean } | { state: "error"; message: string };
 
 export function BuildPage(f: FrameProps) {
   const { engine, project, projectPath, update, openEffectCraft, showSettings, refreshEngine } = useApp();
@@ -21,15 +22,15 @@ export function BuildPage(f: FrameProps) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  const [newText, setNewText] = useState("");
-  const [editText, setEditText] = useState("");
-  const [preview, setPreview] = useState<Preview>({ state: "none" });
   const [now, setNow] = useState(Date.now());
   const [guiOpen, setGuiOpen] = useState(false);
   const [unlocking, setUnlocking] = useState<EngineLayer | null>(null);
+  const [audio, setAudio] = useState<AudioInfo | null>(null);
+  const [playhead, setPlayhead] = useState(0);
   const wasOpen = useRef(false);
   const projectRef = useRef(project);
   projectRef.current = project;
+  const movie = usePreviewMovie();
 
   const call = useCallback(async <T = EngineSnapshot,>(method: string, params: Record<string, unknown> = {}) =>
     (await getApi()).engine<T>(method, params, projectPath, enginePath), [projectPath, enginePath]);
@@ -41,7 +42,6 @@ export function BuildPage(f: FrameProps) {
       const locked = (projectRef.current.layerMap ?? []).filter((b) => b.lock === "approved").map((b) => b.engineLayerId);
       const s = await call<EngineSnapshot>("open", { settings: { name: "Main", width: d.width, height: d.height, frame_rate: d.fps, duration: d.durationSec }, locked });
       setSnap(s); update((p) => reconcile(p, s));
-      setPreview((p) => (p.state === "ready" ? { ...p, stale: true } : p));
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
     setLoading(false);
   }, [call, d.width, d.height, d.fps, d.durationSec, update]);
@@ -63,32 +63,29 @@ export function BuildPage(f: FrameProps) {
     return () => window.clearInterval(t);
   }, [connected, load]);
 
-  const write = async (label: string, method: string, params: Record<string, unknown>, targets: number[] = []) => {
+  const write: Write = async (label, method, params, targets = []) => {
     setBusy(label); setErr(null);
     try {
       const r = await call<EngineSnapshot & { layer?: number }>(method, params);
       const own = r.layer !== undefined ? [r.layer, ...targets] : targets;
       setSnap(r); update((p) => reconcile(p, r, own));
-      setPreview((p) => (p.state === "ready" ? { ...p, stale: true } : p));
       return r;
-    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); return undefined; }
     finally { setBusy(null); }
-  };
-
-  const buildPreview = async () => {
-    const t0 = Date.now();
-    setPreview({ state: "rendering", since: t0 }); setErr(null);
-    try {
-      const img = await call<PreviewImage>("preview", { times: [0], max_side: 1280 });
-      setPreview({ state: "ready", img, at: Date.now(), seconds: (Date.now() - t0) / 1000, stale: false });
-    } catch (e) { setPreview({ state: "error", message: String(e instanceof Error ? e.message : e) }); }
   };
 
   const layers = snap?.layers ?? [];
   const sel = layers.find((l) => l.id === selected) ?? null;
   const selLocked = !!sel && (bindingFor(project, sel.id)?.lock === "approved" || sel.approvedHere);
-
+  const writesOff = !connected || guiOpen || !!busy;
   const open = async () => { setErr(null); try { await openEffectCraft(); setGuiOpen(true); wasOpen.current = true; } catch (e) { setErr(String(e instanceof Error ? e.message : e)); } };
+
+  const markers: Marker[] = useMemo(() => {
+    const m: Marker[] = project.intent.arc.map((b) => ({ t: b.startSec, label: b.primary || "Beat", kind: "section" as const }));
+    for (const t of audio?.beats ?? []) m.push({ t, label: "Beat", kind: "beat" });
+    for (const c of project.review.comments) m.push({ t: c.atSec, label: c.text, kind: "note" });
+    return m;
+  }, [project.intent.arc, project.review.comments, audio]);
 
   const main = !connected ? (
     <div className="engine-down" role="alert">
@@ -101,16 +98,9 @@ export function BuildPage(f: FrameProps) {
     <div className="stack">
       {guiOpen && <div className="lockbar" role="status"><ExternalLink size={18} aria-hidden="true" /><span>EffectCraft has this project open. MotionCraft is read-only until you close it, then it reloads and logs what you changed.</span></div>}
       {err && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {err}</p>}
-      <div className="viewer-surround">
-        {preview.state === "ready" ? <img className="preview-img" alt="Latest preview of the composition" src={`data:image/png;base64,${preview.img.png}`} />
-          : <div className="viewer" style={{ aspectRatio: `${d.width} / ${d.height}` }}><div className="viewer-empty">
-            <p className="strong">{preview.state === "rendering" ? "Rendering…" : preview.state === "error" ? "Preview failed" : "No preview yet"}</p>
-            <p>{preview.state === "error" ? preview.message : preview.state === "rendering" ? `${((now - preview.since) / 1000).toFixed(0)} s elapsed. Targets: first preview 60 s, small edit 10 s.` : "Add a text layer, then press Build preview."}</p></div></div>}
-        <p className="viewer-meta" role="status">
-          {preview.state === "ready" ? <><span className="mono">{preview.img.width}×{preview.img.height}</span> Ready in {preview.seconds.toFixed(2)} s{preview.stale ? " · Out of date: the project changed since" : ""}</>
-            : preview.state === "rendering" ? "Rendering…" : "No render yet."}
-        </p>
-      </div>
+      {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
+      <Player src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
+        onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
     </div>
   );
 
@@ -118,7 +108,7 @@ export function BuildPage(f: FrameProps) {
     <>
       <Fold title="Layers" defaultOpen meta={<span className="count">{layers.length}</span>}>
         {loading && <p className="muted" role="status">Opening the composition…</p>}
-        {!loading && layers.length === 0 && <p className="muted">No layers yet. Add a text layer below, or open EffectCraft.</p>}
+        {!loading && layers.length === 0 && <p className="muted">No layers yet. Add some below, or open EffectCraft.</p>}
         <ul className="layers">
           {layers.map((l) => {
             const b = bindingFor(project, l.id);
@@ -126,7 +116,7 @@ export function BuildPage(f: FrameProps) {
             const changed = isChangedSinceApproval(project, l);
             return (
               <li key={l.id} className={selected === l.id ? "on" : ""}>
-                <button className="layer-row" aria-pressed={selected === l.id} onClick={() => { setSelected(l.id); setEditText(l.kind === "Text" ? l.name : ""); }}>
+                <button className="layer-row" aria-pressed={selected === l.id} onClick={() => setSelected(l.id)}>
                   <span className="strong">{l.name}</span><span className="muted">{l.kind}</span>
                   {locked && <span className="badge"><LockKeyhole size={14} aria-hidden="true" />Approved</span>}
                   {changed && <span className="badge warn"><TriangleAlert size={14} aria-hidden="true" />Changed in EffectCraft</span>}
@@ -147,21 +137,15 @@ export function BuildPage(f: FrameProps) {
         <button className="btn quiet" onClick={() => void load()} disabled={!connected || loading || guiOpen}><RotateCcw size={16} aria-hidden="true" />Refresh from file</button>
       </Fold>
       <Fold title="Text" defaultOpen>
-        <label className="field"><span className="field-label">New text layer</span><input value={newText} placeholder="Words to show" onChange={(e) => setNewText(e.target.value)} /></label>
-        <button className="btn" disabled={!connected || !newText.trim() || !!busy || guiOpen} onClick={async () => { const r = await write("add text", "add_text", { text: newText.trim() }); if (r) { setNewText(""); if (r.layer !== undefined) setSelected(r.layer); } }}><Type size={16} aria-hidden="true" />Add text layer</button>
-        <label className="field"><span className="field-label">Change the words of the selected layer</span>
-          <input value={editText} disabled={!sel || sel.kind !== "Text" || selLocked} onChange={(e) => setEditText(e.target.value)} /></label>
-        <button className="btn" disabled={!sel || sel.kind !== "Text" || selLocked || !editText.trim() || !!busy || guiOpen} onClick={() => sel && write("change text", "set_text", { layer: sel.id, text: editText.trim() }, [sel.id])}>Change text</button>
-        {selLocked && <p className="why">Approved. Unlock to edit; this creates a revision.</p>}
-        {!sel && <p className="why">Select a text layer to change its words.</p>}
-        <p className="hint">Fonts, sizes, colours and animation are edited in EffectCraft. Native, editable text only.</p>
+        <TextPanel write={write} disabled={writesOff} sel={sel} locked={selLocked} onAdded={(id) => id !== undefined && setSelected(id)} />
       </Fold>
+      <AddLayerPanel write={write} disabled={writesOff} onAdded={(id) => id !== undefined && setSelected(id)} />
+      <PrimitivesPanel write={write} selected={sel} locked={selLocked} playhead={playhead} disabled={writesOff} onApplied={() => undefined} />
+      <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} />
       <Fold title="Camera">
-        <p className="muted">Adds a camera layer so the composition can use 2.5D moves. Push, drift and parallax rack arrive with the primitive library (Phase 2).</p>
-        <button className="btn" disabled={!connected || !!busy || guiOpen} onClick={() => write("camera", "add_camera", {})}><Camera size={16} aria-hidden="true" />Add camera</button>
+        <p className="muted">Adds a camera layer. A camera only affects layers that are 3D; turn that on in EffectCraft.</p>
+        <button className="btn" disabled={writesOff} onClick={() => write("camera", "add_camera", {})}><Camera size={16} aria-hidden="true" />Add camera</button>
       </Fold>
-      <Fold title="Primitives"><p className="muted">The primitive library arrives in Phase 2 (P2-01 to P2-03).</p></Fold>
-      <Fold title="Audio"><p className="muted">Waveform, sections, beats, sync mode and the restraint slider arrive in Phase 3.</p></Fold>
       <Fold title="Agent"><p className="muted">{hasAnyProvider() ? "Plan, cost and progress appear here." : "No AI provider is configured, so no agent runs. Everything here is manual."}</p></Fold>
       {unlocking && (
         <Sheet title="Unlock approved layer" onClose={() => setUnlocking(null)}
@@ -174,10 +158,28 @@ export function BuildPage(f: FrameProps) {
   );
 
   return (
-    <PageFrame {...f} title="Build" intro="Preview the composition and make light edits. Detailed work opens in EffectCraft." strip main={main} inspector={inspector}
+    <PageFrame {...f} title="Build" intro="Build the composition, play a draft, and refine in EffectCraft." strip main={main} inspector={inspector}
       action={{
-        label: "Build preview", onClick: () => void buildPreview(),
-        disabledReason: !connected ? "Needs a connected EffectCraft engine." : layers.length === 0 ? "Add a layer first." : preview.state === "rendering" ? "Rendering…" : guiOpen ? undefined : undefined,
+        label: movie.status.state === "rendering" ? "Rendering…" : "Build preview", onClick: () => void movie.start(),
+        disabledReason: !connected ? "Needs a connected EffectCraft engine." : layers.length === 0 ? "Add a layer first." : movie.status.state === "rendering" ? "Rendering a draft…" : guiOpen ? "Close EffectCraft first so the draft shows your latest changes." : undefined,
       }} />
+  );
+}
+
+function TextPanel({ write, disabled, sel, locked, onAdded }: { write: Write; disabled: boolean; sel: EngineLayer | null; locked: boolean; onAdded: (id?: number) => void }) {
+  const [newText, setNewText] = useState("");
+  const [editText, setEditText] = useState("");
+  useEffect(() => { setEditText(sel?.kind === "Text" ? sel.name : ""); }, [sel?.id, sel?.kind, sel?.name]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      <label className="field"><span className="field-label">New text layer</span><input value={newText} placeholder="Words to show" onChange={(e) => setNewText(e.target.value)} /></label>
+      <button className="btn" disabled={disabled || !newText.trim()} onClick={async () => { const r = await write("add text", "add_text", { text: newText.trim() }); if (r) { setNewText(""); onAdded(r.layer); } }}>Add text layer</button>
+      <label className="field"><span className="field-label">Change the words of the selected layer</span>
+        <input value={editText} disabled={!sel || sel.kind !== "Text" || locked} onChange={(e) => setEditText(e.target.value)} /></label>
+      <button className="btn" disabled={disabled || !sel || sel.kind !== "Text" || locked || !editText.trim()} onClick={() => sel && write("change text", "set_text", { layer: sel.id, text: editText.trim() }, [sel.id])}>Change text</button>
+      {locked && <p className="why">Approved. Unlock to edit; this creates a revision.</p>}
+      {!sel && <p className="why">Select a text layer to change its words.</p>}
+      <p className="hint">Fonts, sizes and colours are edited in EffectCraft. Native, editable text only.</p>
+    </>
   );
 }

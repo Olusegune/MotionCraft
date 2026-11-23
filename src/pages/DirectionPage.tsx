@@ -8,6 +8,7 @@ import { DIMENSIONS, detectConflicts, FAMILIES, familyLabel } from "../lib/style
 import { gateState } from "../lib/project";
 import { LockBar, useLocked, type FrameProps } from "./common";
 import { MediaWall, useImportMedia } from "../shell/Media";
+import { Proposals } from "./Proposals";
 import { ImagePlus } from "lucide-react";
 
 const INTENSITIES: Intensity[] = ["subtle", "moderate", "strong"];
@@ -43,10 +44,7 @@ export function DirectionPage(f: FrameProps) {
         <MediaWall assets={images} selected={mood} onPick={locked ? undefined : (a) => toggleMood(a.id)} empty="No pictures yet. Add reference images, then click the ones that belong on the moodboard." />
         {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
       </section>
-      <div className="proposal-empty">
-        <p className="strong">Proposals</p>
-        <p>The Director drafts two or three directions with stills once an AI provider is configured. You can build one yourself below; each dimension gets a style family and an intensity, never a blend percentage.</p>
-      </div>
+      <Proposals />
       <fieldset className="grp" disabled={locked}>
         <legend className="visually-hidden">Style system</legend>
         <h2>Style system</h2>

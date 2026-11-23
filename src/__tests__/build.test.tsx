@@ -6,7 +6,6 @@ import { setApiForTests, type Api } from "../lib/api";
 import type { EngineLayer, EngineSnapshot } from "../lib/layers";
 import type { MotionProject, ProjectSummary } from "../types";
 
-const PNG = "iVBORw0KGgo=";
 
 function fakeApi() {
   const store = new Map<string, MotionProject>();
@@ -28,12 +27,16 @@ function fakeApi() {
     async deleteKey() { /* none */ },
     async confirmSpend() { return "t"; },
     async assetDataUrl() { return "data:image/png;base64,AA=="; },
+    async fileUrl() { return "asset://localhost/preview.mp4"; },
     async engine(method: string, params: Record<string, unknown>) {
       calls.push(method);
       if (guiOpen && ["add_text", "set_text", "lock", "unlock"].includes(method)) throw new Error("EffectCraft has this project open.");
       if (method === "add_text") { layers = [...layers, { id: 2 + layers.length, name: String(params.text), kind: "Text", index: 1, parent: null, nativeLocked: false, approvedHere: false, hash: `h${hashSeed++}` }]; return { layer: layers[layers.length - 1].id, ...snap() } as never; }
       if (method === "lock") { layers = layers.map((l) => ((params.layers as number[]).includes(l.id) ? { ...l, approvedHere: true } : l)); return snap() as never; }
-      if (method === "preview") return { width: 640, height: 360, png: PNG } as never;
+      if (method === "preview_movie_start") return { id: "m1", kind: "preview", state: "running", detail: "rendering", output: null, frames: null, bytes: null, error: null, elapsed: 0, preset: null } as never;
+      if (method === "render_poll") return { id: "m1", kind: "preview", state: "done", detail: "done", output: "previews/preview-m1.mp4", frames: 150, bytes: 1000, error: null, elapsed: 1, preset: null } as never;
+      if (method === "primitives") return { primitives: [{ id: "entrance.fade-in", name: "Fade in", category: "entrance", appliesTo: ["*"], description: "d", tags: [], params: { start: { label: "Start", kind: "float", default: 0, min: 0, max: 600, choices: [], unit: "s" }, duration: { label: "Duration", kind: "float", default: 0.8, min: 0.1, max: 30, choices: [], unit: "s" } } }] } as never;
+      if (method === "apply_primitive") { calls.push("applied:" + JSON.stringify(params)); return snap() as never; }
       return snap() as never;
     },
   } as unknown as Api;
@@ -62,8 +65,9 @@ describe("Build page with the engine connected", () => {
     expect(await screen.findByText("Hello")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Build preview" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Build preview" }));
-    expect(await screen.findByAltText("Latest preview of the composition")).toBeInTheDocument();
-    expect(f.calls).toContain("preview");
+    expect(await screen.findByLabelText("Preview movie", {}, { timeout: 8000 })).toBeInTheDocument();
+    expect(f.calls).toContain("preview_movie_start");
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
   });
 
   it("approving a layer disables its text edit with a reason and unlocking needs confirmation", async () => {
