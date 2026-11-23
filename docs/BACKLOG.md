@@ -73,3 +73,19 @@ the fallback is chosen, in which case the adapter target changes but these ticke
 | P5-04 | MCP server for MotionCraft itself: import/export package tools (hub contract) | Contract doc + test |
 | P5-05 | Offline end-to-end run | AT-17 |
 | P5-06 | Golden briefs (10) + reviewer sheets; release checklist | **Gate: all 19 AT pass, rubric median ≥ 4, none < 3** |
+
+## Phase 6 — Other editors: After Effects and DaVinci Resolve (Fusion)
+
+Proposed by Victor on 2026-11-23; plan and evidence in [INTEROP_PLAN.md](INTEROP_PLAN.md), decision pending in
+[ADR-0006](adr/0006-other-editors-as-hand-off-targets.md). These are hand-off targets: EffectCraft stays the engine of record.
+
+| Id | Ticket | Done when |
+| --- | --- | --- |
+| P6-01 | Spike: After Effects round trip with `file.exportAep` and `file.importAep`, opened in After Effects 2025 (and 2026 if available) | Table with pictures and a list of gaps |
+| P6-02 | Open in After Effects: dry-run report sheet, allow-losses confirmation, export to `handoff/`, launch | A person opens a project in After Effects from MotionCraft |
+| P6-03 | Bring back from After Effects: import as a new composition, revision, bindings re-made, approvals revoked with a note | Round-trip test |
+| P6-04 | Hand off to DaVinci Resolve: confirmed render, audio, FCPXML or EDL timeline (port of FilmCrafter3 `editor_export.py`) | Timeline opens in Resolve with media linked |
+| P6-05 | Spike: Fusion (Studio versus free, ProRes 4444 alpha clips, title macro generation) | Decision note with evidence |
+| P6-06 | Detect After Effects and Resolve in Settings (known folders, Browse, versions) | Same behaviour and tests as EffectCraft detection |
+| P6-07 | Editor-neutral QA on the hand-off package (fonts, frame rate, colour space, alpha) | Findings with evidence |
+| P6-08 | Later: live bridges (ExtendScript or `aerender`; Resolve Python API, Studio only), behind their own ADR | Separate ADR first |

@@ -155,6 +155,9 @@ is silently lost: MotionCraft is read-only while an EffectCraft window it launch
 7. Audio: sections, word timings, Pulseframe analysis package (P3-01); ElevenLabs and music import with licence notes (P3-05).
 8. Autosave kill test, crash recovery sheet, revision snapshots wired to compare (P1-06, P1-13).
 9. Reproducible builds: pin the toolchain, try `/Brepro` and path remapping (Phase 0 criterion 7).
+10. **After Effects and DaVinci Resolve (Fusion) as hand-off targets** (Victor's request, 2026-11-23): `docs/INTEROP_PLAN.md`, proposed
+    `docs/adr/0006-other-editors-as-hand-off-targets.md`, backlog Phase 6. Start with P6-01 (open an `file.exportAep` result in After
+    Effects). It needs Victor's decision first: hand-off targets (recommended) or full alternative editors.
 
 ## 9. Working agreements
 
