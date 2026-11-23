@@ -86,7 +86,7 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
   }, [peaks]);
   const width = Math.max(1, duration * pps);
   const arcPts = useMemo(() => arcPoints(arc, duration), [arc, duration]);
-  const arcD = useMemo(() => arcPath(arcPts, duration, width, 44), [arcPts, duration, width]);
+  const arcD = useMemo(() => arcPath(arcPts, duration, width, 36), [arcPts, duration, width]);
   const arcNow = arcAt(arcPts, playhead);
 
   const lanes = useMemo(() => packLanes(layers.map((l) => ({ id: l.id, start: l.in, end: l.out })), [...layers].sort((a, b) => a.index - b.index).map((l) => l.id)), [layers]);
@@ -110,6 +110,7 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
   };
   const onWheel = (e: React.WheelEvent) => { if (e.ctrlKey) { e.preventDefault(); setPps(pps * (e.deltaY < 0 ? 1.25 : 0.8), e.clientX - (scroller.current?.getBoundingClientRect().left ?? 0)); } };
 
+  const hintText = `Click to move the playhead; Left and Right step one frame (Shift: one second). Ctrl and the wheel zoom. ${editable ? "Drag a layer to move it or its edges to trim it (Alt and arrows nudge). Approved layers stay put: unlock them first. Keyframes stay where they are in time; edit them in EffectCraft." : "Moving and trimming are off right now (EffectCraft has the project open, or the engine is busy)."}`;
   const label = (l: TLLayer) => `Layer ${l.name}, ${l.kind}, ${clock(l.in)} to ${clock(l.out)}${l.approved ? ", approved" : ""}${l.changed ? ", changed in EffectCraft" : ""}${l.madeBy ? `, made by ${l.madeBy}` : ""}`;
 
   return (
@@ -119,25 +120,28 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
           <button className="icon-btn" aria-label="Zoom out" onClick={() => setPps(pps * 0.8)}><ZoomOut size={18} strokeWidth={1.75} /></button>
           <button className="icon-btn" aria-label="Zoom in" onClick={() => setPps(pps * 1.25)}><ZoomIn size={18} strokeWidth={1.75} /></button>
           <button className="icon-btn" aria-label="Fit the whole piece" onClick={() => { setPps(fitPps(duration, scroller.current?.clientWidth ?? 600)); if (scroller.current) scroller.current.scrollLeft = 0; }}><Maximize2 size={18} strokeWidth={1.75} /></button>
-          <span className="muted" role="status">{pps} px per second · {timecode(playhead, fps)}</span>
+          <span className="muted" role="status" title={hintText}>{pps} px per second · {timecode(playhead, fps)}</span>
         </div>
         <div className="tl-grid">
           <div className="tl-labels" aria-hidden="true">
             <div className="tl-lab" style={{ height: 24 }} />
-            <div className="tl-lab" style={{ height: 44 }}>Audio</div>
+            <div className="tl-lab" style={{ height: 36 }}>Audio</div>
             {showIntent && <div className="tl-lab" style={{ height: 28 }}>Intent</div>}
-            {arc.length > 0 && <div className="tl-lab" style={{ height: 44 }}>Emotional arc</div>}
-            <div className="tl-lab" style={{ height: 24 }}>QA and versions</div>
+            {arc.length > 0 && <div className="tl-lab" style={{ height: 36 }}>Emotional arc</div>}
             <div className="tl-lab" style={{ height: Math.max(1, nLanes) * LANE_H + 8 }}>Layers</div>
           </div>
           <div className="tl-scroll" ref={scroller} onWheel={onWheel}>
             <div className="tl-inner" style={{ width }} onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("button")) seekAt(e.clientX, e.currentTarget); }}>
               <div className="tl-ruler" style={{ height: 24 }}>
                 {rulerTicks(duration, pps).map((t) => <span key={t} className="tl-tick-label" style={{ left: t * pps }}>{clock(t)}</span>)}
+                {marks.map((m) => (
+                  <button key={`${m.kind}:${m.id}`} type="button" className={`tl-mark ${m.kind}${m.severity ? ` ${m.severity}` : ""}`} style={{ left: m.t * pps }}
+                    aria-label={`${m.kind === "qa" ? "QA finding" : "Saved version"} at ${clock(m.t)}: ${m.label}`} title={`${m.label} · ${clock(m.t)}`} onClick={() => onSeek(snapFrame(clampTime(m.t, duration), fps))} />
+                ))}
               </div>
-              <div className="tl-lane" style={{ height: 44 }} aria-label="Audio structure">
-                {!!peaks?.length && <canvas ref={wave} className="tl-wave" width={1600} height={44} aria-hidden="true" style={{ width: Math.max(1, (audioDuration ?? duration) * pps) }} />}
-                {sections.map((s, i) => <span key={i} className={`tl-sec e${Math.min(10, Math.max(1, s.energy))}`} style={{ ...barBox(s.start, s.end, pps), height: 40 }} title={`${s.label} ${s.group} · ${clock(s.start)} to ${clock(s.end)} · energy ${s.energy} of 10`}><span className="sec-name">{s.label}</span></span>)}
+              <div className="tl-lane" style={{ height: 36 }} aria-label="Audio structure">
+                {!!peaks?.length && <canvas ref={wave} className="tl-wave" width={1600} height={36} aria-hidden="true" style={{ width: Math.max(1, (audioDuration ?? duration) * pps) }} />}
+                {sections.map((s, i) => <span key={i} className={`tl-sec e${Math.min(10, Math.max(1, s.energy))}`} style={{ ...barBox(s.start, s.end, pps), height: 30 }} title={`${s.label} ${s.group} · ${clock(s.start)} to ${clock(s.end)} · energy ${s.energy} of 10`}><span className="sec-name">{s.label}</span></span>)}
                 {downbeats.slice(0, 2000).map((t, i) => <i key={i} className="tl-beat" style={{ left: t * pps }} aria-hidden="true" />)}
                 {!sections.length && <span className="tl-empty">{downbeats.length ? "Beats only: analyse the audio for sections" : "No audio analysed yet (Audio panel)"}</span>}
               </div>
@@ -148,21 +152,14 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
                 </div>
               )}
               {arc.length > 0 && (
-                <div className="tl-lane" style={{ height: 44 }} aria-label="Emotional arc curve">
-                  <svg className="tl-arcsvg" width={width} height={44} aria-hidden="true">
-                    <path d={`${arcD} L${width} 44 L0 44 Z`} className="tl-arcfill" />
+                <div className="tl-lane" style={{ height: 36 }} aria-label="Emotional arc curve">
+                  <svg className="tl-arcsvg" width={width} height={36} aria-hidden="true">
+                    <path d={`${arcD} L${width} 36 L0 36 Z`} className="tl-arcfill" />
                     <path d={arcD} className="tl-arcline" fill="none" />
-                    <circle cx={Math.min(Math.max(playhead, 0), duration) / Math.max(duration, 0.001) * width} cy={4 + (1 - arcNow) * 36} r="5" className="tl-arcdot" />
+                    <circle cx={Math.min(Math.max(playhead, 0), duration) / Math.max(duration, 0.001) * width} cy={4 + (1 - arcNow) * 28} r="5" className="tl-arcdot" />
                   </svg>
                 </div>
               )}
-              <div className="tl-lane" style={{ height: 24 }} aria-label="QA findings and saved versions">
-                {marks.map((m) => (
-                  <button key={`${m.kind}:${m.id}`} type="button" className={`tl-mark ${m.kind}${m.severity ? ` ${m.severity}` : ""}`} style={{ left: m.t * pps }}
-                    aria-label={`${m.kind === "qa" ? "QA finding" : "Saved version"} at ${clock(m.t)}: ${m.label}`} title={`${m.label} · ${clock(m.t)}`} onClick={() => onSeek(snapFrame(clampTime(m.t, duration), fps))} />
-                ))}
-                {!marks.length && <span className="tl-empty">No QA findings with a time, no saved versions yet</span>}
-              </div>
               <div className="tl-lane" style={{ height: Math.max(1, nLanes) * LANE_H + 8 }} aria-label="Layers">
                 {layers.map((l) => {
                   const sh = shown(l); const edit = canEdit(l);
