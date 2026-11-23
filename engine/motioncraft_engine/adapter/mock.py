@@ -325,6 +325,10 @@ class MockAdapter(BaseAdapter):
         job.output.write_bytes(f"MOCKRENDER|{job.preset}|{job.start}|{job.end}|{len(c['layers'])}".encode() + bytes([10]))
         return RenderResult(output=job.output, frames=int(round(span * c["fps"])), bytes=job.output.stat().st_size)
 
+    def layer_spans(self, comp: int | str) -> dict[int, dict]:
+        c = self._comp(comp)
+        return {l["id"]: {"in": float(l.get("in", 0.0)), "out": float(l.get("out", c["dur"])), "start": float(l.get("start", 0.0))} for l in c["layers"]}
+
     def abort(self) -> None:
         self._aborted = True
 

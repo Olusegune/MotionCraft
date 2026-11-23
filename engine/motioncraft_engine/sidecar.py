@@ -270,6 +270,22 @@ class Service:
         self.a.open(pkg / ECPROJ)
         return {"before": before, "restored": id, **self._snapshot()}
 
+    # ------------------------------------------------------------ timeline (T1): read-only
+    def timeline_read(self) -> dict:
+        """What the director's timeline draws: the composition's length and every layer's in and out, in one engine call. Read-only."""
+        a = self._need()
+        snap = a.inspect()
+        comp = snap.comp(None)
+        spans = a.layer_spans(comp.id) if hasattr(a, "layer_spans") else {}
+        locked = a._locked.get(comp.id, set())
+        layers = []
+        for l in comp.layers:
+            sp = spans.get(l.id) or {"in": 0.0, "out": comp.duration, "start": 0.0}
+            a_in, a_out = max(0.0, min(sp["in"], comp.duration)), max(0.0, min(sp["out"], comp.duration))
+            layers.append({"id": l.id, "name": l.name, "kind": l.kind, "index": l.index, "parent": l.parent, "in": round(a_in, 3),
+                           "out": round(max(a_in, a_out), 3), "start": round(sp["start"], 3), "nativeLocked": l.native_locked, "approvedHere": l.id in locked})
+        return {"duration": comp.duration, "frameRate": comp.frame_rate, "layers": layers}
+
     # ------------------------------------------------------------ QA (P4-01, P4-02)
     def qa_run(self, facts: dict | None = None, contrast: bool = True) -> dict:
         """Runs the tier-1 checks on the open composition. Read-only: nothing in the project or the composition is changed.

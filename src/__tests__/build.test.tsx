@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { setApiForTests, type Api } from "../lib/api";
 import type { EngineLayer, EngineSnapshot } from "../lib/layers";
 import type { MotionProject, ProjectSummary } from "../types";
+
+/** The Layers list in the inspector. The timeline shows the same layer names as bars, so a name alone now matches twice. */
+const layerList = () => within(document.querySelector("ul.layers") as HTMLElement);
 
 
 function fakeApi() {
@@ -62,7 +65,7 @@ describe("Build page with the engine connected", () => {
     expect(screen.getByRole("button", { name: "Build preview" })).toBeDisabled();
     await user.type(await screen.findByLabelText("New text layer"), "Hello");
     await user.click(screen.getByRole("button", { name: "Add text layer" }));
-    expect(await screen.findByText("Hello")).toBeInTheDocument();
+    await waitFor(() => expect(layerList().getByText("Hello")).toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("button", { name: "Build preview" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Build preview" }));
     expect(await screen.findByLabelText("Preview movie", {}, { timeout: 8000 })).toBeInTheDocument();
@@ -78,7 +81,7 @@ describe("Build page with the engine connected", () => {
     await toBuild(user);
     await user.type(await screen.findByLabelText("New text layer"), "Title");
     await user.click(screen.getByRole("button", { name: "Add text layer" }));
-    await user.click(await screen.findByRole("button", { name: /Title/ }));
+    await user.click(await waitFor(() => layerList().getByRole("button", { name: /Title/ })));
     await user.click(screen.getByRole("button", { name: "Approve layer" }));
     expect(await screen.findAllByText(/Approved/)).not.toHaveLength(0);
     expect(screen.getByLabelText("Change the words of the selected layer")).toBeDisabled();
@@ -96,7 +99,7 @@ describe("Build page with the engine connected", () => {
     await toBuild(user);
     await user.type(await screen.findByLabelText("New text layer"), "Alpha");
     await user.click(screen.getByRole("button", { name: "Add text layer" }));
-    await screen.findByText("Alpha");
+    await waitFor(() => expect(layerList().getByText("Alpha")).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Open in EffectCraft" }));
     expect(await screen.findByText(/MotionCraft is read-only until you close it/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add text layer" })).toBeDisabled();
@@ -110,7 +113,7 @@ describe("Build page with the engine connected", () => {
     await toBuild(user);
     await user.type(await screen.findByLabelText("New text layer"), "Alpha");
     await user.click(screen.getByRole("button", { name: "Add text layer" }));
-    await screen.findByText("Alpha");
+    await waitFor(() => expect(layerList().getByText("Alpha")).toBeInTheDocument());
     f.setLayerHash(2, "edited-by-hand");
     await user.click(screen.getByRole("button", { name: "Refresh from file" }));
     const bar = screen.getByRole("navigation", { name: "Stages" });

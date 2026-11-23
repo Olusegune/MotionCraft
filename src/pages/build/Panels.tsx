@@ -113,7 +113,7 @@ export function PrimitivesPanel({ write, selected, locked, playhead, disabled, o
 }
 
 /** Waveform, tempo and beats of a song from your media wall, with beat markers written into the composition. */
-export function AudioPanel({ write, disabled, info, onInfo }: { write: Write; disabled: boolean; info: AudioInfo | null; onInfo: (a: AudioInfo | null) => void }) {
+export function AudioPanel({ write, disabled, info, onInfo, onStructure }: { write: Write; disabled: boolean; info: AudioInfo | null; onInfo: (a: AudioInfo | null) => void; onStructure?: (s: { sections: SongSection[]; downbeats: number[] } | null) => void }) {
   const { project, projectPath, update } = useApp();
   const { enginePath } = useSettings();
   const imp = useImportMedia();
@@ -169,6 +169,9 @@ export function AudioPanel({ write, disabled, info, onInfo }: { write: Write; di
   const duration = sm?.duration ?? info?.duration ?? 0;
   const items = markerItems({ beats: withBeats ? beats : [], sections: withSections ? sections : [], lyrics: withLyrics ? lyrics : [] });
   const plainBeats = withBeats && !(withSections && sections.length) && !(withLyrics && lyrics.length);   // the original beats-only write
+
+  // the timeline shows whichever structure is chosen here
+  useEffect(() => { onStructure?.(sections.length || beats.length ? { sections, downbeats: sm ? sm.downbeats : info?.downbeats ?? [] } : null); }, [source, info, sm]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const writeMarkers = async () => {
     setErr(null); setMsg(null);

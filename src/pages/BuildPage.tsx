@@ -4,13 +4,15 @@ import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Sheet } from "../shell/Sheet";
-import { Player, type Marker } from "../shell/Player";
+import { Player, type Marker, type PlayerHandle } from "../shell/Player";
 import { getApi } from "../lib/api";
 import { useSettings } from "../lib/settings";
 import { approveLayer, bindingFor, isChangedSinceApproval, markBuilt, reconcile, unlockLayer, type EngineLayer, type EngineSnapshot } from "../lib/layers";
 import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write } from "./build/Panels";
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
+import { TimelinePanel, type TLLayer } from "./build/TimelinePanel";
+import type { SongSection } from "./build/SectionsBar";
 import type { FrameProps } from "./common";
 
 export function BuildPage(f: FrameProps) {
@@ -27,6 +29,9 @@ export function BuildPage(f: FrameProps) {
   const [unlocking, setUnlocking] = useState<EngineLayer | null>(null);
   const [audio, setAudio] = useState<AudioInfo | null>(null);
   const [playhead, setPlayhead] = useState(0);
+  const player = useRef<PlayerHandle>(null);
+  const [spans, setSpans] = useState<{ id: number; in: number; out: number }[] | null>(null);
+  const [structure, setStructure] = useState<{ sections: SongSection[]; downbeats: number[] } | null>(null);
   const wasOpen = useRef(false);
   const projectRef = useRef(project);
   projectRef.current = project;
@@ -75,6 +80,19 @@ export function BuildPage(f: FrameProps) {
   };
 
   const layers = snap?.layers ?? [];
+  // The timeline reads every layer's in and out in one engine call whenever the composition changes. Read-only.
+  useEffect(() => {
+    if (!connected || !snap) { setSpans(null); return; }
+    let live = true;
+    call<{ layers: { id: number; in: number; out: number }[] }>("timeline_read").then((r) => { if (live) setSpans(r.layers); }).catch(() => { if (live) setSpans(null); });
+    return () => { live = false; };
+  }, [snap, connected, call]);
+  const tlLayers: TLLayer[] = layers.map((l) => {
+    const sp = spans?.find((x) => x.id === l.id);
+    const b = bindingFor(project, l.id);
+    return { id: l.id, name: l.name, kind: l.kind, index: l.index, in: sp?.in ?? 0, out: sp?.out ?? d.durationSec, approved: b?.lock === "approved" || l.approvedHere,
+      changed: isChangedSinceApproval(project, l), madeBy: b?.provenance.actor === "agent:builder" ? "Builder" : b?.provenance.actor === "agent:qa" ? "QA" : undefined };
+  });
   const sel = layers.find((l) => l.id === selected) ?? null;
   const selLocked = !!sel && (bindingFor(project, sel.id)?.lock === "approved" || sel.approvedHere);
   const writesOff = !connected || guiOpen || !!busy;
@@ -99,8 +117,10 @@ export function BuildPage(f: FrameProps) {
       {guiOpen && <div className="lockbar" role="status"><ExternalLink size={18} aria-hidden="true" /><span>EffectCraft has this project open. MotionCraft is read-only until you close it, then it reloads and logs what you changed.</span></div>}
       {err && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {err}</p>}
       {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
-      <Player src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
+      <Player ref={player} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
+      <TimelinePanel projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
+        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} selected={selected} onSelect={setSelected} />
     </div>
   );
 
@@ -141,7 +161,7 @@ export function BuildPage(f: FrameProps) {
       </Fold>
       <AddLayerPanel write={write} disabled={writesOff} onAdded={(id) => id !== undefined && setSelected(id)} />
       <PrimitivesPanel write={write} selected={sel} locked={selLocked} playhead={playhead} disabled={writesOff} onApplied={() => undefined} />
-      <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} />
+      <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} onStructure={setStructure} />
       <Fold title="Camera">
         <p className="muted">Adds a camera layer. A camera only affects layers that are 3D; turn that on in EffectCraft.</p>
         <button className="btn" disabled={writesOff} onClick={() => write("camera", "add_camera", {})}><Camera size={16} aria-hidden="true" />Add camera</button>

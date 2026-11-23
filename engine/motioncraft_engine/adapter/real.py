@@ -258,6 +258,16 @@ class EffectCraftAdapter(BaseAdapter):
         frames = sum(i.get("frames", 0) for i in (out or {}).get("items", []))
         return RenderResult(output=job.output, frames=frames, bytes=job.output.stat().st_size if job.output.exists() else 0)
 
+    def layer_spans(self, comp: int | str) -> dict[int, dict]:
+        """When each layer is on screen, for the whole composition in ONE call (`comp.info`): {id: {"in", "out", "start"}} in seconds.
+        Measured on EffectCraft 0.24.1: in and out are the layer's own in and out points, `start` is where its source begins."""
+        info = self._run(Command(id="comp.info", params={"comp": comp}))
+        out: dict[int, dict] = {}
+        for l in (info or {}).get("layers", []):
+            if isinstance(l, dict) and isinstance(l.get("id"), int):
+                out[l["id"]] = {"in": float(l.get("in") or 0.0), "out": float(l.get("out") or 0.0), "start": float(l.get("start") or 0.0)}
+        return out
+
     def abort(self) -> None:
         """Stops the engine process now, mid-render if need be (used to cancel). The adapter is not usable afterwards."""
         io = self._io

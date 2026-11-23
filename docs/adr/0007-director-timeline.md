@@ -1,6 +1,6 @@
 # ADR-0007: A director's timeline, not a timeline editor
 
-Status: **proposed**, waiting for Victor's decision · Date: 2026-11-23
+Status: **accepted** (Victor, 2026-11-23: "LOVE YOUR PLAN GO FOR IT"; read as approval of the recommended answers in TIMELINE_PLAN.md: read-only T1 and T2 first, move and trim of unlocked layers (T3) only after a spike, docked on Build, a simpler look than FilmCrafter is fine) · Date: 2026-11-23
 
 ## Context
 `UI_UX.md` says MotionCraft has no timeline (principle, and acceptance criterion 17), because detailed editing belongs to
@@ -8,7 +8,7 @@ EffectCraft (ADR-0001) and the `.ecproj` is the only store of composition data (
 screen and timeline "like FilmCrafter". FilmCrafter3 and Pulseframe have full timelines, but they edit a store those apps own;
 MotionCraft does not own the composition. Evidence and the full plan: [TIMELINE_PLAN.md](../TIMELINE_PLAN.md).
 
-## Decision (proposed)
+## Decision
 Add a **director's timeline**: it shows the whole piece (audio sections and beats, the intent arc, layers as bars, markers, QA
 findings, saved versions) and edits only what MotionCraft owns (the intent arc), plus, in a later step and only after a spike,
 moving and trimming **unlocked** layers through the adapter as a person. Keyframes, effects, properties and the graph editor
