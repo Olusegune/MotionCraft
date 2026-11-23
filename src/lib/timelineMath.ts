@@ -15,7 +15,7 @@ export const snapFrame = (t: number, fps: number): number => (fps > 0 ? Math.rou
 export const clampTime = (t: number, duration: number): number => Math.min(Math.max(0, t), Math.max(0, duration));
 
 /** A zoom that fits the whole piece in `width` pixels (never beyond the limits). */
-export const fitPps = (duration: number, width: number): number => clampPps(duration > 0 ? (width - 8) / duration : 24);
+export const fitPps = (duration: number, width: number): number => clampPps(duration > 0 ? Math.floor((width - 8) / duration) : 24);
 
 export interface Box { left: number; width: number }
 /** A bar for something that lasts from `a` to `b` seconds. Never thinner than 3 px, so a short layer can still be seen and clicked. */
