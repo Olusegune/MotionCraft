@@ -40,6 +40,7 @@ async def check(ws_url: str) -> dict:
                     return m
 
         js = """(async () => {
+          if (!window.__TAURI_INTERNALS__ || document.readyState !== "complete") return JSON.stringify({notReady: true});
           const out = {};
           const inv = window.__TAURI_INTERNALS__.invoke;
           try { out.status = (await inv("engine_status", {overridePath: ""})).state; } catch (e) { out.status = "ERROR " + e; }
@@ -49,8 +50,17 @@ async def check(ws_url: str) -> dict:
           catch (e) { out.primitives = "ERROR " + e; }
           return JSON.stringify(out);
         })()"""
-        r = await call("Runtime.evaluate", {"expression": js, "awaitPromise": True, "returnByValue": True})
-        return json.loads(r["result"]["result"]["value"])
+        last = None
+        for _ in range(40):            # the page can be found before its front end has finished loading: wait for it
+            r = await call("Runtime.evaluate", {"expression": js, "awaitPromise": True, "returnByValue": True})
+            res = (r.get("result") or {}).get("result") or {}
+            last = r
+            if isinstance(res.get("value"), str):
+                out = json.loads(res["value"])
+                if not out.get("notReady"):
+                    return out
+            await asyncio.sleep(0.5)
+        raise RuntimeError(f"the page never became ready: {json.dumps(last)[:400]}")
 
 
 def main(exe: str) -> int:
