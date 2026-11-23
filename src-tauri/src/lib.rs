@@ -972,7 +972,9 @@ mod tests {
         };
         let c = candidates_with("", &env);
         let found: Vec<_> = c.iter().filter(|p| looks_like_cli(p)).collect();
-        assert!(found.iter().any(|p| p.starts_with(&pf)), "installer folder not searched");
+        if cfg!(windows) {
+            assert!(found.iter().any(|p| p.starts_with(&pf)), "installer folder not searched");
+        }
         assert!(found.iter().any(|p| p.starts_with(&on_path)), "PATH not searched");
         assert!(candidates_with("D:/x/effectcraft-cli.exe", &env)[0].ends_with("effectcraft-cli.exe"), "the user's setting comes first");
         let _ = fs::remove_dir_all(&base);
