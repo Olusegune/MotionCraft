@@ -172,8 +172,14 @@ def test_resume_needs_a_fresh_token_a_real_job_and_nothing_running(rig):
     for bad in ("../../x", "zzzzzzzzzzzz", "", "a" * 12):
         with pytest.raises(RenderRefused, match="Unknown render"):
             rig.svc.handle("render_resume", {"job": bad, "spend_token": "tok-" + bad})
-    rig.fail_at, rig.block_at = set(), rig.n + 1                   # block the very next engine call, i.e. the first part of the resume
+    before = rig.n
+    rig.fail_at, rig.block_at = set(), before + 1                  # block the very next engine call, i.e. the first part of the resume
     r = rig.svc.handle("render_resume", {"job": j["id"], "spend_token": "t3"})
+    end = time.time() + 5
+    while rig.n <= before and time.time() < end:                   # wait until the resumed worker is really inside its first part
+        time.sleep(0.01)
+    live = rig.svc.handle("render_poll", {"job": j["id"]})
+    assert live["state"] == "running", f"the resumed render is not running: {live}; engine calls so far {rig.n} (before {before}): {rig.calls}"
     with pytest.raises(RenderRefused, match="still running"):
         rig.svc.handle("render_resume", {"job": j["id"], "spend_token": "t4"})
     with pytest.raises(RenderRefused, match="already running"):
