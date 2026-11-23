@@ -17,7 +17,7 @@ export interface Beat {
   primary: string; secondary?: string; intensity: Scale5; energy: Scale5;
 }
 export interface Deliverable {
-  aspect: "16:9" | "9:16" | "1:1" | "4:5" | "2.39:1";
+  aspect: "16:9" | "9:16" | "1:1" | "4:5" | "2.39:1" | "21:9";
   width: number; height: number; fps: 23.976 | 24 | 25 | 29.97 | 30 | 50 | 60; durationSec: number; alpha: boolean;
 }
 export interface ApprovalRecord {

@@ -6,7 +6,7 @@ import { BrandMark } from "../shell/BrandMark";
 
 const ASPECTS: { aspect: Deliverable["aspect"]; width: number; height: number }[] = [
   { aspect: "16:9", width: 1920, height: 1080 }, { aspect: "9:16", width: 1080, height: 1920 }, { aspect: "1:1", width: 1080, height: 1080 },
-  { aspect: "4:5", width: 1080, height: 1350 }, { aspect: "2.39:1", width: 2048, height: 858 },
+  { aspect: "4:5", width: 1080, height: 1350 }, { aspect: "2.39:1", width: 2048, height: 858 }, { aspect: "21:9", width: 2560, height: 1080 },
 ];
 const FPS: Deliverable["fps"][] = [23.976, 24, 25, 29.97, 30, 50, 60];
 

@@ -911,16 +911,22 @@ fn open_docs(app: tauri::AppHandle) {
     open_docs_now(&app);
 }
 
+/// Menu labels use `&` mnemonics on Windows and Linux; macOS would show the ampersand, so it is dropped there.
+fn lbl(label: &str) -> String {
+    if cfg!(target_os = "macos") { label.replace('&', "") } else { label.to_string() }
+}
+
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
     let it = |id: &str, label: &str, acc: Option<&str>| {
-        let mut b = MenuItemBuilder::with_id(id, label);
+        let mut b = MenuItemBuilder::with_id(id, lbl(label));
         if let Some(a) = acc {
             b = b.accelerator(a);
         }
         b.build(app)
     };
-    let file = SubmenuBuilder::new(app, "&File")
+    let mac = cfg!(target_os = "macos");
+    let mut file = SubmenuBuilder::new(app, lbl("&File"))
         .item(&it("file-new", "&New Project…", Some("CmdOrCtrl+N"))?)
         .item(&it("file-open", "&Open Project…", Some("CmdOrCtrl+O"))?)
         .item(&it("file-open-folder", "Open Project &Folder…", Some("CmdOrCtrl+Shift+O"))?)
@@ -932,9 +938,9 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&it("file-reveal", "Show Projects Fol&der", None)?)
         .item(&it("file-settings", "Se&ttings…", Some("CmdOrCtrl+,"))?)
         .separator()
-        .item(&PredefinedMenuItem::quit(app, Some("E&xit"))?)
+        .item(&PredefinedMenuItem::quit(app, Some(if cfg!(target_os = "macos") { "Quit MotionCraft" } else { "Exit" }))?)
         .build()?;
-    let edit = SubmenuBuilder::new(app, "&Edit")
+    let edit = SubmenuBuilder::new(app, lbl("&Edit"))
         .item(&PredefinedMenuItem::undo(app, None)?)
         .item(&PredefinedMenuItem::redo(app, None)?)
         .separator()
@@ -946,7 +952,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&it("edit-palette", "Command &Palette…", Some("CmdOrCtrl+K"))?)
         .build()?;
     let stage = |n: u8, id: &str, label: &str| it(id, label, Some(&format!("CmdOrCtrl+{n}")));
-    let go = SubmenuBuilder::new(app, "&Go")
+    let go = SubmenuBuilder::new(app, lbl("&Go"))
         .item(&stage(1, "go-brief", "&Brief")?)
         .item(&stage(2, "go-intent", "&Intent")?)
         .item(&stage(3, "go-direction", "&Direction")?)
@@ -955,7 +961,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&stage(6, "go-review", "&Review")?)
         .item(&stage(7, "go-deliver", "De&liver")?)
         .build()?;
-    let view = SubmenuBuilder::new(app, "&View")
+    let view = SubmenuBuilder::new(app, lbl("&View"))
         .item(&it("view-viewer-only", "&Viewer-only Mode", Some("CmdOrCtrl+Shift+V"))?)
         .item(&it("view-inspector", "Show or Hide &Inspector", Some("CmdOrCtrl+\\"))?)
         .separator()
@@ -965,22 +971,39 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .separator()
         .item(&PredefinedMenuItem::fullscreen(app, None)?)
         .build()?;
-    let tools = SubmenuBuilder::new(app, "&Tools")
+    let tools = SubmenuBuilder::new(app, lbl("&Tools"))
         .item(&it("tools-models", "Image and Video &Models…", None)?)
         .item(&it("tools-effectcraft", "Open in &EffectCraft", Some("CmdOrCtrl+E"))?)
         .item(&it("tools-engine", "&Locate EffectCraft…", None)?)
         .build()?;
-    let window = SubmenuBuilder::new(app, "&Window")
+    let window = SubmenuBuilder::new(app, lbl("&Window"))
         .item(&PredefinedMenuItem::minimize(app, None)?)
         .item(&PredefinedMenuItem::maximize(app, None)?)
         .item(&PredefinedMenuItem::close_window(app, None)?)
         .build()?;
-    let help = SubmenuBuilder::new(app, "&Help")
+    let help = SubmenuBuilder::new(app, lbl("&Help"))
         .item(&it("help-docs", "&Documentation", Some("F1"))?)
         .item(&it("help-shortcuts", "&Keyboard Shortcuts", None)?)
         .item(&it("help-manual", "Working &Manually (no AI)", None)?)
         .item(&it("help-about", "&About MotionCraft", None)?)
         .build()?;
+    if mac {
+        // Native macOS layout: the app menu comes first and carries About, Settings (Cmd+,), Hide and Quit (Cmd+Q).
+        let appmenu = SubmenuBuilder::new(app, "MotionCraft")
+            .item(&it("help-about", "About MotionCraft", None)?)
+            .separator()
+            .item(&it("file-settings", "Settings…", Some("CmdOrCtrl+,"))?)
+            .separator()
+            .item(&PredefinedMenuItem::services(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::hide(app, None)?)
+            .item(&PredefinedMenuItem::hide_others(app, None)?)
+            .item(&PredefinedMenuItem::show_all(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::quit(app, Some("Quit MotionCraft"))?)
+            .build()?;
+        return MenuBuilder::new(app).items(&[&appmenu, &file, &edit, &go, &view, &tools, &window, &help]).build();
+    }
     MenuBuilder::new(app).items(&[&file, &edit, &go, &view, &tools, &window, &help]).build()
 }
 

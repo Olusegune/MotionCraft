@@ -1,6 +1,6 @@
 [package]
 name = "motioncraft"
-version = "0.1.0"
+version = "0.1.1"
 description = "MotionCraft: the director layer for motion design"
 authors = ["MotionCraft"]
 license = "UNLICENSED"
