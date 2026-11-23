@@ -12,7 +12,8 @@ import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write 
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
-import { clampDock, readDock, writeDock } from "../lib/timelineMath";
+import { beatAt, clampDock, readDock, sceneStatus, writeDock } from "../lib/timelineMath";
+import { SceneStrip, type SceneCard } from "./build/SceneStrip";
 import { TimelinePanel, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
 import type { SongSection } from "./build/SectionsBar";
 import type { FrameProps } from "./common";
@@ -140,6 +141,28 @@ export function BuildPage(f: FrameProps) {
     const what = c.delta !== undefined ? `Moved ${l?.name ?? "layer"} by ${c.delta > 0 ? "+" : ""}${n(c.delta)} s` : `Trimmed ${l?.name ?? "layer"} ${c.tIn !== undefined ? "start" : "end"} to ${n(c.tIn ?? c.tOut ?? 0)} s`;
     update((p) => logTiming(p, id, what, r.versions));
   };
+  // Scenes: the intent beats as cards, each with a still from the composition at its middle (small engine calls, a few milliseconds each).
+  const beats = project.intent.arc;
+  const beatKey = beats.map((b) => `${b.beatId}:${b.startSec}-${b.endSec}`).join("|");
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!connected || !snap || !beats.length) { setThumbs({}); return; }
+    let live = true;
+    (async () => {
+      const next: Record<string, string> = {};
+      for (const b of beats.slice(0, 16)) {
+        const t = Math.min(Math.max(0, (b.startSec + b.endSec) / 2), Math.max(0, d.durationSec - 1 / d.fps));
+        try { const r = await call<{ png: string }>("preview", { times: [Math.round(t * 1000) / 1000], max_side: 320 }); if (r?.png) next[b.beatId] = `data:image/png;base64,${r.png}`; } catch { break; }
+        if (!live) return;
+      }
+      if (live) setThumbs(next);
+    })();
+    return () => { live = false; };
+  }, [snap, connected, beatKey, call, d.durationSec, d.fps]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const scenes: SceneCard[] = beats.map((b) => ({
+    id: b.beatId, name: b.primary || "Beat", start: b.startSec, end: b.endSec, thumb: thumbs[b.beatId],
+    status: sceneStatus(b.startSec, b.endSec, tlLayers.map((l) => ({ in: l.in, approved: l.approved, changed: l.changed, background: bindingFor(project, l.id)?.role === "background" })), qaPins),
+  }));
   const sel = layers.find((l) => l.id === selected) ?? null;
   const selLocked = !!sel && (bindingFor(project, sel.id)?.lock === "approved" || sel.approvedHere);
   const writesOff = !connected || guiOpen || !!busy;
@@ -166,12 +189,13 @@ export function BuildPage(f: FrameProps) {
       {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
       <Player ref={player} fill src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
+      <SceneStrip scenes={scenes} current={beatAt(beats, playhead)} onSeek={(t) => player.current?.seek(t)} />
       {tlOpen && <div className="studio-divider" role="separator" aria-orientation="horizontal" aria-label="Resize preview and timeline" tabIndex={0}
         aria-valuenow={Math.round(dockNow())} aria-valuemin={120} title="Drag to resize. Up and Down arrows on it also work; double-click to reset."
         onPointerDown={startDividerDrag} onKeyDown={dividerKey} onDoubleClick={() => setDock(null)}><span aria-hidden="true" /></div>}
       <div className="timeline-dock" ref={dockEl} style={tlOpen && dockH !== null ? { height: dockH, maxHeight: "none" } : undefined}>
       <TimelinePanel open={tlOpen} onOpenChange={setTlOpen} projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
-        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
+        sections={structure?.sections} downbeats={structure?.downbeats} peaks={audio?.peaks} audioDuration={audio?.duration} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
       </div>
     </div>
   );

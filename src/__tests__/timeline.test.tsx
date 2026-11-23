@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { setApiForTests, type Api } from "../lib/api";
 import { createProject } from "../lib/project";
-import { barBox, clampDock, clampPps, DOCK_MIN, fitPps, readDock, writeDock, laneCount, packLanes, PPS_MAX, PPS_MIN, readPps, rulerStep, rulerTicks, snapFrame, writePps } from "../lib/timelineMath";
+import { arcAt, arcPath, arcPoints, beatAt, barBox, clampDock, sceneStatus, waveBars, clampPps, DOCK_MIN, fitPps, readDock, writeDock, laneCount, packLanes, PPS_MAX, PPS_MIN, readPps, rulerStep, rulerTicks, snapFrame, writePps } from "../lib/timelineMath";
 import type { MotionProject } from "../types";
 
 describe("timeline maths", () => {
@@ -51,6 +51,40 @@ describe("timeline maths", () => {
     expect(() => writeDock("p", 5, { setItem: () => { throw new Error("blocked"); }, removeItem: () => { throw new Error("blocked"); } })).not.toThrow();
   });
 
+  it("draws the emotional arc as a smooth curve through the beats and reads its value at any time", () => {
+    const beats = [{ startSec: 0, endSec: 6, intensity: 1, energy: 1 }, { startSec: 6, endSec: 20, intensity: 5, energy: 5 }];
+    const pts = arcPoints(beats, 20);
+    expect(pts[0]).toEqual({ t: 0, v: 0 }); expect(pts[pts.length - 1]).toEqual({ t: 20, v: 1 });
+    expect(pts.map((p) => p.t)).toEqual([0, 3, 13, 20]);
+    expect(arcPoints([], 20)).toEqual([]); expect(arcPath([], 20, 100, 40)).toBe("");
+    const d = arcPath(pts, 20, 200, 44);
+    expect(d.startsWith("M0.0 ")).toBe(true); expect(d.match(/C/g)?.length).toBe(3);
+    expect(arcAt(pts, -5)).toBe(0); expect(arcAt(pts, 99)).toBe(1); expect(arcAt(pts, 8)).toBeCloseTo(0.5, 5);   // halfway between the two beat middles
+    const a = arcAt(pts, 5), b = arcAt(pts, 9); expect(a).toBeGreaterThan(0); expect(b).toBeGreaterThan(a); expect(b).toBeLessThan(1);
+    expect(arcPoints([{ startSec: 5, endSec: 5, intensity: 3, energy: 3 }], 10)).toEqual([]);      // an empty beat is ignored
+  });
+
+  it("gives each scene its badge: needs review wins, approved only when every layer of its own is approved", () => {
+    const L = (inT: number, approved: boolean, extra = {}) => ({ in: inT, approved, ...extra });
+    expect(sceneStatus(0, 6, [L(1, true), L(2, true)], [])).toBe("approved");
+    expect(sceneStatus(0, 6, [L(1, true), L(2, false)], [])).toBeNull();
+    expect(sceneStatus(0, 6, [], [])).toBeNull();                                         // a scene with no layers of its own gets no badge
+    expect(sceneStatus(0, 6, [L(0, false, { background: true }), L(2, true)], [])).toBe("approved");     // a background does not count
+    expect(sceneStatus(0, 6, [L(1, true, { changed: true })], [])).toBe("needs-review");                 // changed in EffectCraft after approval
+    expect(sceneStatus(0, 6, [L(1, true)], [{ t: 3, severity: "warn" }])).toBe("needs-review");
+    expect(sceneStatus(0, 6, [L(1, true)], [{ t: 3, severity: "info" }])).toBe("approved");               // a note is not a problem
+    expect(sceneStatus(0, 6, [L(1, true)], [{ t: 6, severity: "error" }])).toBe("approved");              // the end of a scene belongs to the next one
+    expect(sceneStatus(6, 20, [L(1, true)], [])).toBeNull();                                              // a layer starting in another scene is not this scene's
+  });
+
+  it("finds the beat at a time and boils the audio peaks down to a few bars", () => {
+    const beats = [{ startSec: 0, endSec: 6 }, { startSec: 6, endSec: 20 }];
+    expect(beatAt(beats, 0)).toBe(0); expect(beatAt(beats, 5.99)).toBe(0); expect(beatAt(beats, 6)).toBe(1); expect(beatAt(beats, 20)).toBe(1); expect(beatAt(beats, -1)).toBe(-1); expect(beatAt([], 3)).toBe(-1);
+    expect(waveBars([0.2, 0.9, 0.4, 0.1], 2)).toEqual([0.9, 0.4]);
+    expect(waveBars([0.5, 2, -1], 10)).toEqual([0.5, 1, 0]);
+    expect(waveBars([], 5)).toEqual([]); expect(waveBars([1], 0)).toEqual([]);
+  });
+
   it("remembers the zoom per project, and survives storage that is missing, blocked or damaged", () => {
     const mem = new Map<string, string>();
     const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
@@ -89,6 +123,7 @@ function fake(project: MotionProject) {
     async engine(method: string, params: Record<string, unknown>) {
       log.calls.push({ method, params });
       if (method === "llm_status") return { ready: false, reason: "none", config: { provider: null, model: "" }, providers: [] } as never;
+      if (method === "preview") return { width: 320, height: 180, png: "AAAA" } as never;
       if (method === "timeline_read") return { duration: 20, frameRate: 30, layers: SPANS.map((s) => ({ ...s, name: LAYERS.find((l) => l.id === s.id)!.name })) } as never;
       if (method === "audio_analyze") return { duration: 20, bpm: 120, beats: [0.5, 1], downbeats: [0.5, 2.5], peaks: [0.1], silences: [], estimate: true,
         sections: [{ start: 0, end: 8, label: "VERSE", group: "A", energy: 6, mood: "Building" }, { start: 8, end: 20, label: "CHORUS", group: "B", energy: 9, mood: "Driving" }] } as never;
@@ -312,6 +347,44 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(dock.style.height).toBe("");
     await user.keyboard("{Control>}j{/Control}");
     await waitFor(() => expect(screen.queryByRole("separator", { name: "Resize preview and timeline" })).toBeNull());
+  });
+
+  it("scenes: one card per intent beat with a still from the engine, the current one marked, and clicking seeks to its start", async () => {
+    const user = userEvent.setup();
+    const log = fake(project());
+    render(<App />);
+    const tl = await toBuild(user);
+    const list = await screen.findByRole("list", { name: "Scenes" });
+    const cards = within(list).getAllByRole("button");
+    expect(cards.map((c) => c.getAttribute("aria-label"))).toEqual(["Scene curiosity, 0:00 to 0:06", "Scene joy, 0:06 to 0:20"]);
+    expect(cards[0]).toHaveAttribute("aria-current", "true");
+    await waitFor(() => expect(list.querySelectorAll("img").length).toBe(2));
+    expect(log.calls.filter((c) => c.method === "preview").map((c) => c.params.times)).toEqual([[3], [13]]);      // the middle of each beat
+    await user.click(cards[1]);
+    await waitFor(() => expect(within(tl).getByRole("slider", { name: "Playhead" })).toHaveAttribute("aria-valuenow", "6"));
+    await waitFor(() => expect(cards[1]).toHaveAttribute("aria-current", "true"));
+  });
+
+  it("scenes: a QA finding inside a scene marks it Needs review", async () => {
+    const user = userEvent.setup();
+    fake(project());
+    setQaPins([{ id: "f1", t: 7, label: "contrast: low", severity: "warn" }]);
+    render(<App />);
+    await toBuild(user);
+    const list = await screen.findByRole("list", { name: "Scenes" });
+    expect(within(list).getByRole("button", { name: "Scene joy, 0:06 to 0:20, needs review" })).toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: "Scene curiosity, 0:00 to 0:06" })).toBeInTheDocument();
+    setQaPins([]);
+  });
+
+  it("the timeline has an emotional-arc lane with the curve and a dot at the playhead", async () => {
+    const user = userEvent.setup();
+    fake(project());
+    render(<App />);
+    const tl = await toBuild(user);
+    const lane = await within(tl).findByLabelText("Emotional arc curve");
+    expect(lane.querySelector("path.tl-arcline")?.getAttribute("d")).toMatch(/^M/);
+    expect(lane.querySelector("circle.tl-arcdot")).toBeTruthy();
   });
 
   it("has no raw colours: the styles use only tokens", async () => {

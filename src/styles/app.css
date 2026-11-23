@@ -246,6 +246,21 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .chip-toggle:hover { border-color: var(--mc-accent); }
 .chip-toggle.on { border-color: var(--mc-accent); color: var(--mc-accent); }
 
+/* scene strip under the picture */
+.scene-strip { flex: none; list-style: none; margin: 0; padding: 2px 0 6px; display: flex; gap: 12px; overflow-x: auto; }
+.scene-card { display: flex; flex-direction: column; gap: 6px; width: 150px; padding: 4px; background: transparent; border: 2px solid transparent; border-radius: 10px; color: var(--mc-text); cursor: pointer; text-align: left; }
+.scene-card:hover { background: var(--mc-bg-raised); }
+.scene-card.on { border-color: var(--mc-accent); }
+.scene-card:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
+.scene-thumb { display: block; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--mc-bg-app); }
+.scene-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scene-blank { display: block; width: 100%; height: 100%; }
+.scene-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 22px; }
+.scene-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: var(--mc-bg-raised); border: 1px solid var(--mc-divider); white-space: nowrap; }
+.scene-badge.approved { color: var(--mc-text); }
+.scene-badge.needs-review { color: var(--mc-warning); border-color: var(--mc-warning); }
+
 /* studio layout on Build: the picture takes all the height there is, the timeline docks under it (idea from Pulseframe's Studio, own code) */
 .main:has(.studio) { overflow: hidden; display: flex; flex-direction: column; padding: 0 14px 10px; }
 .studio { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -334,4 +349,9 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .tl-grip { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; background: var(--mc-control-border); opacity: 0; }
 .tl-grip.in { left: 0; border-radius: 3px 0 0 3px; } .tl-grip.out { right: 0; border-radius: 0 3px 3px 0; }
 .tl-layer.editable:hover .tl-grip, .tl-layer.editable:focus-visible .tl-grip, .tl-layer.dragging .tl-grip { opacity: 0.7; }
+.tl-wave { position: absolute; left: 0; top: 0; height: 44px; opacity: 0.55; pointer-events: none; }
+.tl-arcsvg { display: block; }
+.tl-arcline { stroke: var(--mc-accent); stroke-width: 2.5; stroke-linecap: round; }
+.tl-arcfill { fill: var(--mc-accent); opacity: 0.1; stroke: none; }
+.tl-arcdot { fill: var(--mc-accent); stroke: var(--mc-bg-app); stroke-width: 2; }
 .tl-playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--mc-accent); pointer-events: none; }

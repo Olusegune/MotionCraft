@@ -62,6 +62,77 @@ export function readPps(project: string, store: Pick<Storage, "getItem"> | null 
 export function writePps(project: string, pps: number, store: Pick<Storage, "setItem"> | null = safeStore()): void {
   try { store?.setItem(KEY(project), JSON.stringify({ pps: clampPps(pps) })); } catch { /* remembering is a convenience only */ }
 }
+/** ---- The emotional arc: one curve through the intent beats (average of intensity and energy, 1 to 5 mapped to 0 to 1). ---- */
+export interface ArcBeat { startSec: number; endSec: number; intensity: number; energy: number }
+export interface ArcPoint { t: number; v: number }
+const norm5 = (n: number): number => (Number.isFinite(n) ? Math.min(1, Math.max(0, (n - 1) / 4)) : 0.5);
+/** One point at the middle of every beat, held flat to the start and end of the piece. Empty when there are no beats. */
+export function arcPoints(beats: ArcBeat[], duration: number): ArcPoint[] {
+  const b = [...beats].filter((x) => x.endSec > x.startSec).sort((x, y) => x.startSec - y.startSec);
+  if (!b.length) return [];
+  const pts = b.map((x) => ({ t: (x.startSec + x.endSec) / 2, v: (norm5(x.intensity) + norm5(x.energy)) / 2 }));
+  return [{ t: 0, v: pts[0].v }, ...pts, { t: Math.max(duration, pts[pts.length - 1].t), v: pts[pts.length - 1].v }];
+}
+/** A smooth SVG path through the points (flat tangents at each point, so the curve never overshoots). */
+export function arcPath(points: ArcPoint[], duration: number, width: number, height: number, pad = 4): string {
+  if (!points.length || duration <= 0) return "";
+  const X = (t: number) => (Math.min(Math.max(t, 0), duration) / duration) * width;
+  const Y = (v: number) => pad + (1 - v) * (height - pad * 2);
+  let d = `M${X(points[0].t).toFixed(1)} ${Y(points[0].v).toFixed(1)}`;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i], mx = (X(a.t) + X(b.t)) / 2;
+    d += ` C${mx.toFixed(1)} ${Y(a.v).toFixed(1)} ${mx.toFixed(1)} ${Y(b.v).toFixed(1)} ${X(b.t).toFixed(1)} ${Y(b.v).toFixed(1)}`;
+  }
+  return d;
+}
+/** The arc's value (0 to 1) at time t, eased between points the same way the curve is drawn. */
+export function arcAt(points: ArcPoint[], t: number): number {
+  if (!points.length) return 0.5;
+  if (t <= points[0].t) return points[0].v;
+  for (let i = 1; i < points.length; i++) {
+    if (t <= points[i].t) {
+      const a = points[i - 1], b = points[i], k = b.t > a.t ? (t - a.t) / (b.t - a.t) : 1;
+      const e = k * k * (3 - 2 * k);
+      return a.v + (b.v - a.v) * e;
+    }
+  }
+  return points[points.length - 1].v;
+}
+
+/** ---- Scenes: the intent beats as cards ---- */
+export type SceneStatus = "approved" | "needs-review" | null;
+export interface SceneLayer { in: number; approved: boolean; changed?: boolean; background?: boolean }
+export interface ScenePin { t: number; severity: "info" | "warn" | "error" }
+/**
+ * The badge on a scene card, from facts the app already has. Needs review: a QA finding (warning or error) falls inside the scene, or a layer that
+ * starts in it was changed in EffectCraft after it was approved. Approved: the scene has layers of its own (background layers do not count) and every
+ * one of them is approved. Otherwise no badge. Needs review wins.
+ */
+export function sceneStatus(start: number, end: number, layers: SceneLayer[], pins: ScenePin[]): SceneStatus {
+  const own = layers.filter((l) => l.in >= start - 1e-6 && l.in < end - 1e-6 && !l.background);
+  if (pins.some((p) => p.severity !== "info" && p.t >= start && p.t < end) || own.some((l) => l.changed)) return "needs-review";
+  return own.length > 0 && own.every((l) => l.approved) ? "approved" : null;
+}
+/** Index of the beat holding time t (the last beat when t is at the very end), or -1. */
+export function beatAt(beats: { startSec: number; endSec: number }[], t: number): number {
+  const i = beats.findIndex((b) => t >= b.startSec && t < b.endSec);
+  if (i >= 0) return i;
+  return beats.length && t >= beats[beats.length - 1].endSec ? beats.length - 1 : -1;
+}
+/** At most `n` evenly spaced bars from the audio peaks, so a long song still draws quickly. */
+export function waveBars(peaks: number[], n: number): number[] {
+  if (!peaks.length || n <= 0) return [];
+  if (peaks.length <= n) return peaks.map((p) => Math.min(1, Math.max(0, p)));
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor((i * peaks.length) / n), b = Math.max(a + 1, Math.floor(((i + 1) * peaks.length) / n));
+    let m = 0;
+    for (let j = a; j < b; j++) m = Math.max(m, peaks[j]);
+    out.push(Math.min(1, Math.max(0, m)));
+  }
+  return out;
+}
+
 /** The height of the timeline dock on Build, chosen by dragging the divider. Always at least DOCK_MIN, and the preview keeps at least PREVIEW_MIN of the page. */
 export const DOCK_MIN = 120;
 export const PREVIEW_MIN = 220;
