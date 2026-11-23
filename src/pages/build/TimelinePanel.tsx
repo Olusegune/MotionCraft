@@ -7,6 +7,7 @@ import { timecode } from "../../lib/time";
 import type { Beat } from "../../types";
 import type { SongSection } from "./SectionsBar";
 
+export interface TLMark { id: string; t: number; label: string; kind: "qa" | "version"; severity?: "info" | "warn" | "error" }
 export interface TLLayer { id: number; name: string; kind: string; index: number; in: number; out: number; approved: boolean; changed?: boolean; madeBy?: string }
 
 /**
@@ -14,9 +15,9 @@ export interface TLLayer { id: number; name: string; kind: string; index: number
  * as a bar from its in point to its out point. Click anywhere to move the playhead; the player follows. Nothing here edits the
  * composition: keyframes, effects and properties stay in EffectCraft.
  */
-export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], selected, onSelect }: {
+export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect }: {
   projectKey: string; duration: number; fps: number; playhead: number; onSeek: (t: number) => void; layers: TLLayer[];
-  sections?: SongSection[]; downbeats?: number[]; arc?: Beat[]; selected?: number | null; onSelect?: (id: number) => void;
+  sections?: SongSection[]; downbeats?: number[]; arc?: Beat[]; marks?: TLMark[]; selected?: number | null; onSelect?: (id: number) => void;
 }) {
   const [pps, setPpsState] = useState(() => readPps(projectKey) ?? 24);
   const scroller = useRef<HTMLDivElement>(null);
@@ -67,6 +68,7 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
             <div className="tl-lab" style={{ height: 24 }} />
             <div className="tl-lab" style={{ height: 44 }}>Audio</div>
             <div className="tl-lab" style={{ height: 28 }}>Intent</div>
+            <div className="tl-lab" style={{ height: 24 }}>QA and versions</div>
             <div className="tl-lab" style={{ height: Math.max(1, nLanes) * LANE_H + 8 }}>Layers</div>
           </div>
           <div className="tl-scroll" ref={scroller} onWheel={onWheel}>
@@ -82,6 +84,13 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
               <div className="tl-lane" style={{ height: 28 }} aria-label="Intent arc">
                 {arc.map((b) => <span key={b.beatId} className="tl-arc" style={{ ...barBox(b.startSec, b.endSec, pps), height: 24 }} title={`${b.primary || "Beat"} · intensity ${b.intensity} · energy ${b.energy}`}><span className="sec-name">{b.primary || "Beat"}</span></span>)}
                 {!arc.length && <span className="tl-empty">No intent beats yet</span>}
+              </div>
+              <div className="tl-lane" style={{ height: 24 }} aria-label="QA findings and saved versions">
+                {marks.map((m) => (
+                  <button key={`${m.kind}:${m.id}`} type="button" className={`tl-mark ${m.kind}${m.severity ? ` ${m.severity}` : ""}`} style={{ left: m.t * pps }}
+                    aria-label={`${m.kind === "qa" ? "QA finding" : "Saved version"} at ${clock(m.t)}: ${m.label}`} title={`${m.label} · ${clock(m.t)}`} onClick={() => onSeek(snapFrame(clampTime(m.t, duration), fps))} />
+                ))}
+                {!marks.length && <span className="tl-empty">No QA findings with a time, no saved versions yet</span>}
               </div>
               <div className="tl-lane" style={{ height: Math.max(1, nLanes) * LANE_H + 8 }} aria-label="Layers">
                 {layers.map((l) => (

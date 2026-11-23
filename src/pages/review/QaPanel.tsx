@@ -1,3 +1,4 @@
+import { setQaPins } from "../../lib/qaPins";
 import { useState } from "react";
 import { CircleAlert, CircleCheck, CircleHelp, Info, Play, TriangleAlert, Wrench } from "lucide-react";
 import { useApp } from "../../ctx";
@@ -34,7 +35,10 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
     await api.engine("open", { settings: { name: "Main", width: d.width, height: d.height, frame_rate: d.fps, duration: d.durationSec }, locked }, projectPath, enginePath);
     const f = facts();
     f.assets = (project.assets ?? []).map((a) => ({ id: a.id, kind: a.kind, path: a.path }));
-    return api.engine<QaReport>("qa_run", { facts: f, contrast: true }, projectPath, enginePath).then((report) => setSt({ busy: false, report, at: Date.now(), done: note }));
+    return api.engine<QaReport>("qa_run", { facts: f, contrast: true }, projectPath, enginePath).then((report) => {
+      setQaPins(report.results.flatMap((r) => r.findings).filter((x) => x.at?.timeSec !== undefined).map((x) => ({ id: x.id, t: x.at!.timeSec!, label: `${x.check}: ${x.evidence.detail}`, severity: x.severity })));
+      setSt({ busy: false, report, at: Date.now(), done: note });
+    });
   };
   const run = async () => {
     setSt({ busy: true });

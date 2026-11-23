@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Camera, ExternalLink, LockKeyhole, RotateCcw, TriangleAlert } from "lucide-react";
 import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
@@ -11,7 +11,8 @@ import { approveLayer, bindingFor, isChangedSinceApproval, markBuilt, reconcile,
 import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write } from "./build/Panels";
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
-import { TimelinePanel, type TLLayer } from "./build/TimelinePanel";
+import { getQaPins, subscribeQaPins } from "../lib/qaPins";
+import { TimelinePanel, type TLLayer, type TLMark } from "./build/TimelinePanel";
 import type { SongSection } from "./build/SectionsBar";
 import type { FrameProps } from "./common";
 
@@ -93,6 +94,11 @@ export function BuildPage(f: FrameProps) {
     return { id: l.id, name: l.name, kind: l.kind, index: l.index, in: sp?.in ?? 0, out: sp?.out ?? d.durationSec, approved: b?.lock === "approved" || l.approvedHere,
       changed: isChangedSinceApproval(project, l), madeBy: b?.provenance.actor === "agent:builder" ? "Builder" : b?.provenance.actor === "agent:qa" ? "QA" : undefined };
   });
+  const qaPins = useSyncExternalStore(subscribeQaPins, getQaPins);
+  const marks: TLMark[] = useMemo(() => [
+    ...qaPins.map((p) => ({ id: p.id, t: p.t, label: p.label, kind: "qa" as const, severity: p.severity })),
+    ...project.revisions.filter((r) => r.snapshot).map((r) => ({ id: r.id, t: Math.min(d.durationSec, Math.min(...(r.layers.length ? r.layers.map((id) => spans?.find((x) => x.id === id)?.in ?? 0) : [0]))), label: r.summary, kind: "version" as const })),
+  ], [qaPins, project.revisions, spans, d.durationSec]);
   const sel = layers.find((l) => l.id === selected) ?? null;
   const selLocked = !!sel && (bindingFor(project, sel.id)?.lock === "approved" || sel.approvedHere);
   const writesOff = !connected || guiOpen || !!busy;
@@ -120,7 +126,7 @@ export function BuildPage(f: FrameProps) {
       <Player ref={player} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
       <TimelinePanel projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
-        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} selected={selected} onSelect={setSelected} />
+        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} />
     </div>
   );
 

@@ -1,3 +1,4 @@
+import { setQaPins } from "../lib/qaPins";
 import { describe, expect, it } from "vitest";
 import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -181,6 +182,18 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     await user.click(await screen.findByRole("button", { name: /Analyse/ }));
     await waitFor(() => expect(within(tl).getByLabelText("Audio structure")).toHaveTextContent("VERSE"));
     expect(within(tl).getByLabelText("Audio structure")).toHaveTextContent("CHORUS");
+  });
+
+  it("pins QA findings that have a time, and clicking a pin moves the playhead there (T2)", async () => {
+    const user = userEvent.setup();
+    fake(project());
+    setQaPins([{ id: "f1", t: 7, label: "contrast: low", severity: "warn" }]);
+    render(<App />);
+    const tl = await toBuild(user);
+    const pin = await within(tl).findByRole("button", { name: /QA finding at 0:07: contrast: low/ });
+    await user.click(pin);
+    await waitFor(() => expect(within(tl).getByRole("slider", { name: "Playhead" })).toHaveAttribute("aria-valuenow", "7"));
+    setQaPins([]);
   });
 
   it("has no raw colours: the styles use only tokens", async () => {
