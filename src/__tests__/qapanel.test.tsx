@@ -86,7 +86,7 @@ describe("QA panel (P4-02)", () => {
     render(<App />);
     await toReview(user, "Offline QA");
     expect(screen.getByRole("button", { name: "Run checks" })).toBeDisabled();
-    expect(screen.getByText(/Needs a connected engine/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Needs a connected engine/).length).toBeGreaterThanOrEqual(1);   // QA and History each say so
     expect(log.calls.some((c) => c.method === "qa_run")).toBe(false);
   });
 });

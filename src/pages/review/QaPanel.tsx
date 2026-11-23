@@ -5,7 +5,7 @@ import { Fold } from "../../shell/Fold";
 import { getApi } from "../../lib/api";
 import { useSettings } from "../../lib/settings";
 import { timecode } from "../../lib/time";
-import { bindingFor, logQaFix, reconcile, relinkAsset, type EngineSnapshot } from "../../lib/layers";
+import { bindingFor, logQaFix, reconcile, relinkAsset, type EngineSnapshot, type Versions } from "../../lib/layers";
 
 export interface QaFinding {
   id: string; check: string; tier: 1; severity: "info" | "warn" | "error"; at?: { timeSec?: number; layerId?: number };
@@ -56,8 +56,8 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
       } else if (f.fix.kind === "move" && f.at?.layerId !== undefined) {
         const api = await getApi();
         const layer = f.at.layerId;
-        const r = await api.engine<EngineSnapshot & { applied: number }>("qa_fix", { check: f.check, layer, facts: facts() }, projectPath, enginePath);
-        update((p) => logQaFix(reconcile(p, r, [layer]), [layer], f.fix!.label));
+        const r = await api.engine<EngineSnapshot & { applied: number; versions?: Versions }>("qa_fix", { check: f.check, layer, facts: facts() }, projectPath, enginePath);
+        update((p) => logQaFix(reconcile(p, r, [layer]), [layer], f.fix!.label, r.versions));
         await check(`Done: ${f.fix.label}. One revision was added to History.`);
       }
     } catch (e) { setSt((s) => ({ ...s, busy: false, error: String(e instanceof Error ? e.message : e) })); }

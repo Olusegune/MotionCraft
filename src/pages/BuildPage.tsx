@@ -146,7 +146,7 @@ export function BuildPage(f: FrameProps) {
         <p className="muted">Adds a camera layer. A camera only affects layers that are 3D; turn that on in EffectCraft.</p>
         <button className="btn" disabled={writesOff} onClick={() => write("camera", "add_camera", {})}><Camera size={16} aria-hidden="true" />Add camera</button>
       </Fold>
-      <BuilderPanel write={write} disabled={writesOff} onBuilt={(created) => update((p) => markBuilt(p, created))} />
+      <BuilderPanel write={write} disabled={writesOff} onBuilt={(created, versions) => update((p) => markBuilt(p, created, versions))} />
       {unlocking && (
         <Sheet title="Unlock approved layer" onClose={() => setUnlocking(null)}
           footer={<><button className="btn" onClick={() => setUnlocking(null)}>Keep it approved</button>

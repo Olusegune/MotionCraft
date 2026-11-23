@@ -55,7 +55,9 @@ export function reconcile(p: MotionProject, snap: EngineSnapshot, ownWrites: num
 }
 
 /** Layers the Builder agent just made: bind them to it (role, provenance, first motion) and log one agent revision. Approvals stay the user's. */
-export function markBuilt(p: MotionProject, created: { layer: number; role: string; primitives: string[]; name: string }[]): MotionProject {
+export interface Versions { before?: string | null; after?: string | null }
+
+export function markBuilt(p: MotionProject, created: { layer: number; role: string; primitives: string[]; name: string }[], versions?: Versions): MotionProject {
   if (!created.length) return p;
   const ids = new Set(created.map((c) => c.layer));
   const roles = ["title", "body-text", "logo", "background", "texture", "camera", "audio-driver", "other"];
@@ -63,13 +65,15 @@ export function markBuilt(p: MotionProject, created: { layer: number; role: stri
     const c = created.find((x) => x.layer === b.engineLayerId);
     return c ? { ...b, role: (roles.includes(c.role) ? c.role : "other") as LayerBinding["role"], primitiveId: c.primitives[0], provenance: { ...b.provenance, actor: "agent:builder" as const } } : b;
   });
-  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "agent:builder", kind: "agent_edit", layers: [...ids], summary: `Builder made ${created.length} layers: ${created.map((c) => c.name).join(", ")}` };
+  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "agent:builder", kind: "agent_edit", layers: [...ids], summary: `Builder made ${created.length} layers: ${created.map((c) => c.name).join(", ")}`,
+    ...(versions?.after ? { snapshot: versions.after } : {}), ...(versions?.before ? { before: versions.before } : {}) };
   return { ...p, layerMap: map, revisions: [...p.revisions, rev], updatedAt: nowIso() };
 }
 
 /** A QA fix the user applied with one click: one revision, so it can be seen in History and undone by hand. Approvals are untouched. */
-export function logQaFix(p: MotionProject, layers: number[], summary: string): MotionProject {
-  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "agent:qa", kind: "qa_fix", layers, summary };
+export function logQaFix(p: MotionProject, layers: number[], summary: string, versions?: Versions): MotionProject {
+  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "agent:qa", kind: "qa_fix", layers, summary,
+    ...(versions?.after ? { snapshot: versions.after } : {}), ...(versions?.before ? { before: versions.before } : {}) };
   return { ...p, revisions: [...p.revisions, rev], updatedAt: nowIso() };
 }
 
@@ -77,6 +81,42 @@ export function logQaFix(p: MotionProject, layers: number[], summary: string): M
 export function relinkAsset(p: MotionProject, assetId: string, to: string): MotionProject {
   if (!(p.assets ?? []).some((a) => a.id === assetId)) return p;
   return { ...p, assets: (p.assets ?? []).map((a) => (a.id === assetId ? { ...a, path: to } : a)), updatedAt: nowIso() };
+}
+
+/** The user saved a version of the composition by hand (Review, History). */
+export function logVersion(p: MotionProject, id: string, label: string): MotionProject {
+  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "user", kind: "manual_edit", layers: [], summary: label.trim() || "Saved a version", snapshot: id };
+  return { ...p, revisions: [...p.revisions, rev], updatedAt: nowIso() };
+}
+
+/**
+ * After the engine restored an earlier version: which layer approvals still hold. An approval holds only if the layer is still there and
+ * its content is exactly what was approved (same hash). Everything else loses its approval, with a note, and nothing is silently kept.
+ */
+export function restoreOutcome(p: MotionProject, snap: EngineSnapshot): { keep: number[]; revoke: number[] } {
+  const keep: number[] = [], revoke: number[] = [];
+  for (const b of p.layerMap ?? []) {
+    if (b.lock !== "approved") continue;
+    const l = snap.layers.find((x) => x.id === b.engineLayerId);
+    (l && l.hash && l.hash === b.approvedHash ? keep : revoke).push(b.engineLayerId);
+  }
+  return { keep, revoke };
+}
+
+export function applyRestore(p: MotionProject, snap: EngineSnapshot, o: { label: string; restored: string; before: string }): MotionProject {
+  const { keep, revoke } = restoreOutcome(p, snap);
+  const compId = String(snap.activeComp ?? 0);
+  const map: LayerBinding[] = [];
+  for (const l of snap.layers) {
+    if (!l.hash) continue;
+    const b = (p.layerMap ?? []).find((x) => x.engineLayerId === l.id);
+    if (!b) { map.push({ engineLayerId: l.id, compId, role: "other", provenance: { actor: "user", at: nowIso(), costReported: false }, lock: "none", lastKnownHash: l.hash }); continue; }
+    const kept = keep.includes(l.id);
+    map.push({ ...b, lastKnownHash: l.hash, lock: kept ? "approved" : "none", approvedHash: kept ? b.approvedHash : undefined });
+  }
+  const approvals = [...p.approvals, ...revoke.map((id) => ({ gate: "layer" as const, target: `${id}`, by: "user" as const, at: nowIso(), state: "revoked" as const, note: "restored an earlier version" }))];
+  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "user", kind: "manual_edit", layers: revoke, summary: `Restored: ${o.label}`, snapshot: o.restored, before: o.before };
+  return { ...p, layerMap: map, approvals, revisions: [...p.revisions, rev], updatedAt: nowIso() };
 }
 
 /** A layer shows "Changed in EffectCraft" while its latest layer approval says so and its hash still differs from the approved one. */

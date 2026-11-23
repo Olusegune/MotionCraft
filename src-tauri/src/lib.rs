@@ -433,9 +433,10 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 22] = [
+const ENGINE_METHODS: [&str; 26] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
     "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
+    "snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore",
 ];
 const MODEL_METHODS: [&str; 11] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
@@ -446,7 +447,7 @@ const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthr
 const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
 /// Credential-store accounts: the generation providers plus the two language-model-only ones.
 const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
-const WRITE_METHODS: [&str; 12] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix"];
+const WRITE_METHODS: [&str; 14] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
 const PAID_ENGINE_METHODS: [&str; 1] = ["render_start"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
@@ -687,7 +688,7 @@ fn sidecar_request(st: &EngineState, cli: Option<&Path>, data_dir: Option<&Path>
     sc.next_id += 1;
     let line = serde_json::json!({"id": id, "method": method, "params": params}).to_string();
     let io_ok = writeln!(sc.stdin, "{line}").and_then(|_| sc.stdin.flush()).is_ok();
-    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || method == "builder_execute" || method == "qa_run" || LLM_CALL_METHODS.contains(&method) { 180 } else { 60 });
+    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || method == "builder_execute" || method == "qa_run" || method.starts_with("snapshot_") || LLM_CALL_METHODS.contains(&method) { 180 } else { 60 });
     let reply: Result<Value, String> = if io_ok {
         loop {
             match sc.rx.recv_timeout(timeout) {
@@ -1450,6 +1451,11 @@ mod tests {
         assert!(ENGINE_METHODS.contains(&"builder_execute") && WRITE_METHODS.contains(&"builder_execute"), "building writes the project, so it is refused while EffectCraft has it open");
         assert!(ENGINE_METHODS.contains(&"qa_run") && !WRITE_METHODS.contains(&"qa_run") && !PAID_ENGINE_METHODS.contains(&"qa_run"), "QA reads the composition and writes nothing");
         assert!(ENGINE_METHODS.contains(&"qa_fix") && WRITE_METHODS.contains(&"qa_fix") && !PAID_ENGINE_METHODS.contains(&"qa_fix"), "a QA fix writes the composition, so it is refused while EffectCraft has it open");
+        for m in ["snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore"] {
+            assert!(ENGINE_METHODS.contains(&m) && !PAID_ENGINE_METHODS.contains(&m), "{m} needs the engine and costs nothing");
+        }
+        assert!(WRITE_METHODS.contains(&"snapshot_save") && WRITE_METHODS.contains(&"snapshot_restore"), "saving and restoring a version write the project");
+        assert!(!WRITE_METHODS.contains(&"snapshot_diff") && !WRITE_METHODS.contains(&"snapshot_preview"), "comparing and previewing only read");
         assert!(!PAID_ENGINE_METHODS.contains(&"builder_execute"), "a plan costs a known $0 today; a paid plan would need its own token path");
         assert!(LLM_CALL_METHODS.contains(&"director_intent"), "the Director calls a model, so it goes through the same gate");
         for (p, account) in LLM_CLOUD {

@@ -1,13 +1,13 @@
 import { useRef, useState } from "react";
-import { CircleSlash, MessageSquarePlus, Trash2 } from "lucide-react";
+import { MessageSquarePlus, Trash2 } from "lucide-react";
 import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
-import { Fold } from "../shell/Fold";
 import { Player, type Marker, type PlayerHandle } from "../shell/Player";
 import { gateState, newId, nowIso } from "../lib/project";
 import { timecode } from "../lib/time";
 import type { FrameProps } from "./common";
 import { QaPanel } from "./review/QaPanel";
+import { HistoryPanel } from "./review/HistoryPanel";
 import { usePreviewMovie } from "./build/usePreview";
 
 export function ReviewPage(f: FrameProps) {
@@ -49,11 +49,7 @@ export function ReviewPage(f: FrameProps) {
   const inspector = (
     <>
       <QaPanel disabledReason={qaOff} />
-      <Fold title="Compare"><p className="muted"><CircleSlash size={16} aria-hidden="true" /> Needs two revision snapshots. Revision snapshots cost milliseconds (P0-15); the compare view is not built yet.</p></Fold>
-      <Fold title="History" meta={<span className="count">{project.revisions.length}</span>}>
-        {project.revisions.length === 0 ? <p className="muted">No revisions yet.</p> : (
-          <ol className="plain">{[...project.revisions].reverse().map((r) => <li key={r.id}><span className="mono">{new Date(r.at).toLocaleString()}</span> {r.summary}</li>)}</ol>)}
-      </Fold>
+      <HistoryPanel disabledReason={qaOff} />
     </>
   );
   return (

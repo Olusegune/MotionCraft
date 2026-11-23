@@ -8,6 +8,7 @@ import { useSettings } from "../../lib/settings";
 import { hasAnyProvider } from "../../lib/project";
 import { firedRules } from "../../lib/rules";
 import type { Write } from "./Panels";
+import type { Versions } from "../../lib/layers";
 
 export interface PlanLayer { key: string; kind: "text" | "solid" | "shape"; name: string; role: string; text?: string; size?: number; shape?: string; color?: number[]; animations: { primitive: string; params: Record<string, unknown> }[] }
 export interface BuilderPlan { summary: string; layers: PlanLayer[] }
@@ -16,7 +17,7 @@ type PlanResult = { plan: BuilderPlan; warnings: string[]; cost: { usd: number; 
 type LlmStatus = { ready: boolean; reason: string; config: { provider: string | null; model: string }; providers: { id: string; label: string; local: boolean }[] };
 
 /** The Builder agent: plan the layers and motion from the approved intent, show them with their cost, build only when you confirm. */
-export function BuilderPanel({ write, disabled, onBuilt }: { write: Write; disabled: boolean; onBuilt: (created: Created[]) => void }) {
+export function BuilderPanel({ write, disabled, onBuilt }: { write: Write; disabled: boolean; onBuilt: (created: Created[], versions?: Versions) => void }) {
   const { project } = useApp();
   const { offline, enginePath } = useSettings();
   const [st, setSt] = useState<{ busy: boolean; error?: string; result?: PlanResult; ask?: { provider: string; model: string; label: string }; built?: { n: number; warnings: string[] } }>({ busy: false });
@@ -46,8 +47,8 @@ export function BuilderPanel({ write, disabled, onBuilt }: { write: Write; disab
   const build = async () => {
     const r = st.result; if (!r) return;
     setSt((s) => ({ ...s, busy: true, error: undefined }));
-    const res = await write("build plan", "builder_execute", { plan: r.plan }) as unknown as { created?: Created[]; warnings?: string[] } | undefined;
-    if (res?.created) { onBuilt(res.created); setSt({ busy: false, built: { n: res.created.length, warnings: res.warnings ?? [] } }); }
+    const res = await write("build plan", "builder_execute", { plan: r.plan }) as unknown as { created?: Created[]; warnings?: string[]; versions?: Versions } | undefined;
+    if (res?.created) { onBuilt(res.created, res.versions); setSt({ busy: false, built: { n: res.created.length, warnings: res.warnings ?? [] } }); }
     else setSt((s) => ({ ...s, busy: false, error: "The build did not finish. See the message above; layers made before the problem are kept." }));
   };
 

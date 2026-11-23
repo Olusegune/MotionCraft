@@ -28,6 +28,8 @@ export interface RevisionRecord {
   id: string; at: string; actor: "user" | "agent:director" | "agent:builder" | "agent:qa";
   kind: "agent_edit" | "manual_edit" | "qa_fix" | "unlock" | "intent_change" | "style_change";
   layers: number[]; summary: string;
+  /** Saved versions of the composition kept around this change (P4-05): the state after it, and the state before it. */
+  snapshot?: string; before?: string;
 }
 export interface RenderRecord { id: string; preset: "h264" | "prores4444"; rel: string; frames: number | null; bytes: number | null; at: string }
 export interface ReviewComment { id: string; atSec: number; text: string; at: string }

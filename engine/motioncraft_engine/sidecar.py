@@ -30,6 +30,7 @@ from .providers.registry import Registry
 from .llm import Llm
 from .agents import builder, director
 from .qa import checks as qa_checks
+from .snapshots import Snapshots
 
 ECPROJ = "comp.ecproj"
 
@@ -42,6 +43,7 @@ class Service:
         self.llm = Llm(base_dir / "llm.json")
         self.jobs = jobs or Jobs(self.reg, Net())
         self.renders = RenderJobs(adapter_factory)
+        self.snaps = Snapshots(adapter_factory)
         self.a: BaseAdapter | None = None
         self.pkg: Path | None = None
 
@@ -200,6 +202,7 @@ class Service:
             raise AdapterError("This plan costs money and needs a spend confirmation.")
         created: list[dict] = []
         warnings = list(checked["warnings"])
+        before = self._try_snapshot(warnings)         # so the build can be undone: restoring this version is the undo
         try:
             for L in checked["plan"]["layers"]:
                 if L["kind"] == "text":
@@ -223,7 +226,48 @@ class Service:
             a.save()
             raise AdapterError(f"The build stopped after {len(created)} of {len(checked['plan']['layers'])} layers: {e}") from None
         a.save()
-        return {"created": created, "warnings": warnings, "cost": checked["cost"], **self._snapshot()}
+        after = self._try_snapshot(warnings)
+        return {"created": created, "warnings": warnings, "cost": checked["cost"], "versions": {"before": before, "after": after}, **self._snapshot()}
+
+    # ------------------------------------------------------------ saved versions: compare and restore (P4-05)
+    def _try_snapshot(self, notes: list[str]) -> str | None:
+        """A version kept around an automatic change. If it cannot be saved the change still goes ahead, and the notes say there is no undo."""
+        try:
+            return self.snaps.save(self._pkg(), self._need())["id"]
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"A version to undo this could not be saved: {e}")
+            return None
+
+    def snapshot_save(self) -> dict:
+        """Keeps a copy of the composition as it is now. The page records it as a revision."""
+        return self.snaps.save(self._pkg(), self._need())
+
+    def snapshot_diff(self, id: str) -> dict:
+        return self.snaps.diff(self._pkg(), id, self._need())
+
+    def snapshot_preview(self, id: str, time: float = 1.0, max_side: int = 640) -> dict:
+        """A picture of a saved version (or of the live composition when id is "current"), at one time."""
+        if id == "current":
+            a = self._need()
+            comp = a.inspect().comp(None)
+            t = max(0.0, min(float(time), max(comp.duration - 1.0 / max(comp.frame_rate, 1), 0.0)))
+            p = a.preview(comp.id, [t], max_side=max(64, min(int(max_side), 1920)))
+            return {"width": p.width, "height": p.height, "time": round(t, 3), "png": base64.b64encode(p.png).decode("ascii")}
+        return self.snaps.preview(self._pkg(), id, time, max_side)
+
+    def snapshot_restore(self, id: str) -> dict:
+        """Puts a saved version back as the live composition. The current state is saved first (the returned `before`), so this can be undone.
+        Engine-side approvals are cleared: the page re-applies the ones whose layer still matches what was approved."""
+        pkg = self._pkg()
+        a = self._need()
+        self.snaps.path(pkg, id)                       # refuse a bad id before anything is touched
+        before = self.snaps.save(pkg, a)["id"]
+        a.close()
+        self.a = None
+        self.snaps.restore_file(pkg, id)
+        self.a = self._factory(pkg)
+        self.a.open(pkg / ECPROJ)
+        return {"before": before, "restored": id, **self._snapshot()}
 
     # ------------------------------------------------------------ QA (P4-01, P4-02)
     def qa_run(self, facts: dict | None = None, contrast: bool = True) -> dict:
@@ -251,9 +295,12 @@ class Service:
         if not cmds:
             raise AdapterError("There is nothing to fix here any more.")
         a = self._need()
+        notes: list[str] = []
+        before = self._try_snapshot(notes)
         a.execute([Command(id=c["id"], params=c["params"]) for c in cmds], actor=QA)
         a.save()
-        return {"applied": len(cmds), "fixed": sorted({int(c["params"]["layer"]) for c in cmds}), **self._snapshot()}
+        after = self._try_snapshot(notes)
+        return {"applied": len(cmds), "fixed": sorted({int(c["params"]["layer"]) for c in cmds}), "versions": {"before": before, "after": after}, **self._snapshot()}
 
     def _qa_scene(self, facts: dict | None, contrast: bool) -> "qa_checks.Scene":
         a = self._need()
