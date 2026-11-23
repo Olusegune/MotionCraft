@@ -43,6 +43,8 @@ export interface Api {
   /** The system file/folder picker. Returns null when cancelled. */
   pickPath(kind: "folder" | "engine", startIn?: string): Promise<string | null>;
   appReady(): Promise<void>;
+  startupStep(step: "ui" | "projects" | "engine"): Promise<void>;
+  openDocs(): Promise<void>;
   pickMedia(): Promise<string[]>;
   /** A playable URL for a file under previews/, renders/ or assets/ of the project (the shell checks the path). */
   fileUrl(path: string, rel: string): Promise<string>;
@@ -84,6 +86,8 @@ async function tauriApi(): Promise<Api> {
       return typeof r === "string" ? r : null;
     },
     appReady: () => invoke("app_ready"),
+    startupStep: (step) => invoke("startup_step", { step }),
+    openDocs: () => invoke("open_docs"),
     async pickMedia() {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const r = await open({ multiple: true, directory: false, title: "Add pictures, video or audio",
@@ -143,6 +147,8 @@ function webApi(): Api {
     async onMenu() { return () => undefined; },
     async pickPath() { return null; },
     async appReady() { /* no splash in the browser */ },
+    async startupStep() { /* no splash in the browser */ },
+    async openDocs() { window.open("https://github.com/Olusegune/MotionCraft/tree/main/docs", "_blank", "noopener"); },
     async pickMedia() { return []; },
     async importAsset() { throw new Error("Adding media needs the desktop app."); },
     async fileUrl() { throw new Error("Playback needs the desktop app."); },

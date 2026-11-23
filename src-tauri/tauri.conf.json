@@ -22,20 +22,6 @@
         "theme": "Dark",
         "backgroundColor": "#181A1C",
         "visible": false
-      },
-      {
-        "label": "splashscreen",
-        "title": "MotionCraft",
-        "url": "splash.html",
-        "width": 960,
-        "height": 540,
-        "resizable": false,
-        "decorations": false,
-        "center": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "shadow": true,
-        "backgroundColor": "#181A1C"
       }
     ],
     "security": {
@@ -71,7 +57,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../THIRD_PARTY_NOTICES/*": "THIRD_PARTY_NOTICES/"
+      "../THIRD_PARTY_NOTICES/*": "THIRD_PARTY_NOTICES/",
+      "../docs/*.md": "docs/"
     },
     "category": "Video",
     "shortDescription": "Direct motion design: brief to delivery.",

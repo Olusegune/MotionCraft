@@ -3,14 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <title>MotionCraft</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #181A1C; overflow: hidden; }
-      img { display: block; width: 100%; height: 100%; object-fit: cover; animation: in 400ms ease-out both; }
-      @keyframes in { from { opacity: 0; } to { opacity: 1; } }
-      @media (prefers-reduced-motion: reduce) { img { animation: none; } }
-    </style>
+    <link rel="stylesheet" href="splash.css" />
   </head>
   <body>
-    <img src="splash.jpg" alt="MotionCraft is starting" />
+    <main class="splash" aria-label="MotionCraft is starting">
+      <img class="art" src="splash.jpg" alt="" />
+      <div class="progress" role="progressbar" aria-label="Starting MotionCraft" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="track"><div class="fill" id="fill"></div></div>
+        <p class="status" id="status">Starting…</p>
+      </div>
+      <footer class="foot">
+        <a class="docs" href="mc-open://docs">Documentation</a>
+        <span class="version" id="version"></span>
+      </footer>
+    </main>
+    <script src="splash.js"></script>
   </body>
 </html>
