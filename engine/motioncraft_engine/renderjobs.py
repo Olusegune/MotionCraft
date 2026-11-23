@@ -205,8 +205,8 @@ class RenderJobs:
             self._joiner(files, out, ext)
             total = sum(s["frames"] for s in job["segments"])
             self._verify_joined(out, total)
+            shutil.rmtree(parts_dir, ignore_errors=True)               # clean up first, so nobody sees "done" with the parts still there
             job.update(state="done", detail="done", output=job["out_rel"], frames=total, bytes=out.stat().st_size)
-            shutil.rmtree(parts_dir, ignore_errors=True)
         except _Interrupted:
             self._interrupted(job, pkg, "Cancelled.")
         except Exception as e:  # noqa: BLE001 - a worker never dies silently
@@ -244,11 +244,12 @@ class RenderJobs:
             self._write_job(pkg, job)                              # the last good part is on disk before the next one starts
 
     def _interrupted(self, job: dict, pkg: Path, why: str) -> None:
-        job.update(state="interrupted", error=why, detail="interrupted")
+        # the job file is written BEFORE the state is announced: anyone who sees "interrupted" can already read it from disk and resume
         try:
-            self._write_job(pkg, job)
+            self._write_job(pkg, {**job, "state": "interrupted", "error": why, "detail": "interrupted"})
         except OSError:
             pass
+        job.update(state="interrupted", error=why, detail="interrupted")
 
     # ------------------------------------------------------------------ cancel, discard, list, poll
     def cancel(self, jid: str, package: Path) -> dict:

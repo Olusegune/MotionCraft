@@ -237,3 +237,12 @@ html.narrow .stagebar { flex-wrap: wrap; }
 
 .proposal-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 8px; }
 .proposal-card { display: flex; flex-direction: column; gap: 8px; background: var(--mc-bg-raised); border-radius: var(--mc-r-card); padding: 12px; }
+
+/* Song structure bar (P3-01): the brighter the section, the higher its energy. Names are always shown, so colour is only a hint. */
+.sections-bar { display: flex; gap: 2px; min-height: 44px; border-radius: var(--mc-r-ctl); overflow: hidden; }
+.sections-bar .sec { display: flex; flex-direction: column; justify-content: center; min-width: 36px; padding: 4px 6px; background: var(--mc-bg-raised); border-bottom: 3px solid var(--mc-control-border); color: var(--mc-text); font-size: 12px; overflow: hidden; }
+.sections-bar .sec-name { font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.sections-bar .sec-time { color: var(--mc-text-2); font-family: var(--mc-font-mono); }
+.sections-bar .e4, .sections-bar .e5, .sections-bar .e6 { border-bottom-color: var(--mc-text-3); }
+.sections-bar .e7, .sections-bar .e8 { border-bottom-color: var(--mc-warning); }
+.sections-bar .e9, .sections-bar .e10 { border-bottom-color: var(--mc-accent); }

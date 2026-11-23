@@ -31,6 +31,7 @@ from .llm import Llm
 from .agents import builder, director
 from .qa import checks as qa_checks
 from .snapshots import Snapshots
+from . import songmap
 
 ECPROJ = "comp.ecproj"
 
@@ -473,15 +474,44 @@ class Service:
         ts = sorted({round(float(t), 3) for t in times if 0 <= float(t) < 36000})[:2000]
         if not ts:
             raise AdapterError("There are no marker times to write.")
+        self._write_markers([{"time": t, "comment": comment[:80]} for t in ts], replace)
+        return {"markers": len(ts), "replaced": replace}
+
+    def sync_labelled_markers(self, items: list, replace: bool = False) -> dict:
+        """Beat, section and lyric markers in one write (P3-01). Only MotionCraft's own kinds are accepted. `replace` clears the composition's
+        other markers first: EffectCraft can only delete them all, and the real engine cannot report which are ours."""
+        try:
+            checked = songmap.check_marker_items(items)
+        except songmap.SongMapError as e:
+            raise AdapterError(str(e)) from None
+        self._write_markers(checked, replace)
+        kinds = {"beat": 0, "section": 0, "lyric": 0}
+        for m in checked:
+            kinds[m["comment"].split(":")[1].split(" ")[0]] += 1
+        return {"markers": len(checked), "replaced": replace, "kinds": kinds}
+
+    def _write_markers(self, items: list[dict], replace: bool) -> None:
+        a = self._need()
         if replace:
             try:
                 a.execute([Command(id="comp.deleteAllMarkers", params={})], actor=USER)
             except CommandFailed as e:
                 if "no markers" not in str(e):          # nothing to delete is fine
                     raise
-        a.execute([Command(id="comp.addMarker", params={"time": t, "comment": comment[:80]}) for t in ts], actor=USER)
+        a.execute([Command(id="comp.addMarker", params={"time": m["time"], "comment": m["comment"]}) for m in items], actor=USER)
         a.save()
-        return {"markers": len(ts), "replaced": replace}
+
+    def songmap_import(self, rel: str) -> dict:
+        """Reads a Pulseframe SongMap kept in the project (assets/audio/<name>.songmap.json): sections, beats and timed lyric lines, checked and clamped."""
+        if not str(rel).endswith(".songmap.json"):
+            raise AdapterError("That is not a SongMap file.")
+        f = self._asset(rel, ("audio",))
+        if f.stat().st_size > 5 * 1024 * 1024:
+            raise AdapterError("That SongMap is larger than 5 MB.")
+        try:
+            return songmap.from_pulseframe(json.loads(f.read_text(encoding="utf-8")))
+        except (OSError, ValueError, songmap.SongMapError) as e:
+            raise AdapterError(f"That SongMap could not be read: {e}") from None
 
     def preview_movie_start(self) -> dict:
         if self.a is not None:

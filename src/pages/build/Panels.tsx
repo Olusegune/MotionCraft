@@ -1,17 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import { AudioLines, Circle, Plus, Square, Wand2 } from "lucide-react";
+import { AudioLines, Circle, FileMusic, Plus, Square, Wand2 } from "lucide-react";
 import { useApp } from "../../ctx";
 import { Fold } from "../../shell/Fold";
 import { assetLabel, useImportMedia } from "../../shell/Media";
 import { getApi } from "../../lib/api";
 import { useSettings } from "../../lib/settings";
 import type { EngineLayer, EngineSnapshot } from "../../lib/layers";
+import { markerItems, clock, type LyricLine } from "../../lib/songmap";
+import { SectionsBar, type SongSection } from "./SectionsBar";
 
 export interface Prim {
   id: string; name: string; category: string; appliesTo: string[]; description: string; tags: string[];
   params: Record<string, { label: string; kind: "float" | "int" | "choice"; default: number | string; min: number | null; max: number | null; choices: string[]; unit: string }>;
 }
-export interface AudioInfo { duration: number; bpm: number | null; beats: number[]; downbeats: number[]; peaks: number[]; silences: number[][]; estimate: boolean }
+export interface AudioInfo {
+  duration: number; bpm: number | null; beats: number[]; downbeats: number[]; peaks: number[]; silences: number[][]; estimate: boolean;
+  /** P3-01: structure and attacks estimated from the audio itself. Absent in answers from older helpers. */
+  sections?: SongSection[]; transients?: { t: number; strength: number }[]; energyCurve?: number[][];
+}
+/** A Pulseframe SongMap, read and checked by the helper. */
+export interface SongMapInfo { source: "pulseframe"; analyzer: string; duration: number; bpm: number | null; beats: number[]; downbeats: number[]; sections: SongSection[]; lyrics: LyricLine[]; lyricMatch: number | null; warnings: string[] }
 export type Write = (label: string, method: string, params: Record<string, unknown>, targets?: number[]) => Promise<(EngineSnapshot & { layer?: number }) | undefined>;
 
 const CATEGORY_LABEL: Record<string, string> = { entrance: "Entrances", exit: "Exits", emphasis: "Emphasis", motion: "Motion", text: "Text" };
@@ -106,7 +114,7 @@ export function PrimitivesPanel({ write, selected, locked, playhead, disabled, o
 
 /** Waveform, tempo and beats of a song from your media wall, with beat markers written into the composition. */
 export function AudioPanel({ write, disabled, info, onInfo }: { write: Write; disabled: boolean; info: AudioInfo | null; onInfo: (a: AudioInfo | null) => void }) {
-  const { project, projectPath } = useApp();
+  const { project, projectPath, update } = useApp();
   const { enginePath } = useSettings();
   const imp = useImportMedia();
   const tracks = (project.assets ?? []).filter((a) => a.kind === "audio");
@@ -115,7 +123,21 @@ export function AudioPanel({ write, disabled, info, onInfo }: { write: Write; di
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [source, setSource] = useState("estimate");                       // "estimate" or the path of an imported SongMap
+  const [maps, setMaps] = useState<Record<string, SongMapInfo>>({});
+  const [withBeats, setWithBeats] = useState(true);
+  const [withSections, setWithSections] = useState(true);
+  const [withLyrics, setWithLyrics] = useState(false);
   const chosen = tracks.find((t) => t.path === rel) ?? tracks[0];
+  const songmaps = project.songmaps ?? [];
+  const sm = source !== "estimate" ? maps[source] : undefined;
+
+  const loadMap = async (path: string) => {
+    if (maps[path]) return;
+    try { const m = await (await getApi()).engine<SongMapInfo>("songmap_import", { rel: path }, projectPath, enginePath); setMaps((x) => ({ ...x, [path]: m })); }
+    catch (e) { setErr(String(e instanceof Error ? e.message : e)); setSource("estimate"); }
+  };
+  useEffect(() => { if (source !== "estimate") void loadMap(source); }, [source]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const analyze = async () => {
     if (!chosen) return;
@@ -124,28 +146,73 @@ export function AudioPanel({ write, disabled, info, onInfo }: { write: Write; di
     catch (e) { setErr(String(e instanceof Error ? e.message : e)); onInfo(null); }
     setBusy(false);
   };
-  const times = info ? (mode === "beats" ? info.beats : info.downbeats) : [];
+  const importMap = async () => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const api = await getApi();
+      const src = await api.pickSongMap();
+      if (!src) { setBusy(false); return; }
+      const r = await api.importSongMap(projectPath, src);
+      const m = await api.engine<SongMapInfo>("songmap_import", { rel: r.path }, projectPath, enginePath);
+      setMaps((x) => ({ ...x, [r.path]: m }));
+      update((p) => ({ ...p, songmaps: [...(p.songmaps ?? []), { id: r.path, path: r.path, name: r.name, at: new Date().toISOString() }], updatedAt: new Date().toISOString() }));
+      setSource(r.path);
+      setWithLyrics(m.lyrics.length > 0);
+      setMsg(`SongMap ${r.name} read: ${m.sections.length} sections${m.lyrics.length ? `, ${m.lyrics.length} lyric lines` : ""}.${m.warnings.length ? ` ${m.warnings.length} things were dropped or changed.` : ""}`);
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    setBusy(false);
+  };
+
+  const beats = sm ? (mode === "beats" ? sm.beats : sm.downbeats) : info ? (mode === "beats" ? info.beats : info.downbeats) : [];
+  const sections = (sm ? sm.sections : info?.sections) ?? [];
+  const lyrics = sm?.lyrics ?? [];
+  const duration = sm?.duration ?? info?.duration ?? 0;
+  const items = markerItems({ beats: withBeats ? beats : [], sections: withSections ? sections : [], lyrics: withLyrics ? lyrics : [] });
+  const plainBeats = withBeats && !(withSections && sections.length) && !(withLyrics && lyrics.length);   // the original beats-only write
+
+  const writeMarkers = async () => {
+    setErr(null); setMsg(null);
+    const r = plainBeats ? await write("sync markers", "sync_markers", { times: beats, replace: true })
+      : await write("sync markers", "sync_labelled_markers", { items, replace: true });
+    if (r) setMsg(`${plainBeats ? beats.length : items.length} markers written. This replaced the composition's other markers.`);
+  };
 
   return (
-    <Fold title="Audio" defaultOpen={false} meta={info?.bpm ? <span className="count">{info.bpm} BPM</span> : undefined}>
-      <p className="muted">Waveform, tempo and beat grid are estimates from the audio itself. WAV works directly; other formats need ffmpeg.</p>
+    <Fold title="Audio" defaultOpen={false} meta={sections.length ? <span className="count">{sections.length} sections</span> : info?.bpm ? <span className="count">{info.bpm} BPM</span> : undefined}>
+      <p className="muted">Waveform, tempo, beat grid and song structure are estimates from the audio itself. WAV works directly; other formats need ffmpeg. For real music, a SongMap from Pulseframe is more accurate.</p>
       <label className="field"><span className="field-label">Song or narration</span>
         <select value={chosen?.path ?? ""} disabled={!tracks.length} onChange={(e) => { setRel(e.target.value); onInfo(null); }}>
           {tracks.length === 0 ? <option value="">No audio yet</option> : tracks.map((t) => <option key={t.id} value={t.path}>{assetLabel(t)}</option>)}</select></label>
       <div className="row-actions">
         <button className="btn" disabled={imp.busy} onClick={() => void imp.run()}>Import audio…</button>
         <button className="btn" disabled={!chosen || busy} onClick={() => void analyze()}><AudioLines size={16} aria-hidden="true" />Analyse</button>
+        <button className="btn" disabled={busy} onClick={() => void importMap()}><FileMusic size={16} aria-hidden="true" />Import SongMap…</button>
       </div>
-      {info && <p role="status">{info.bpm ? <><strong>{info.bpm} BPM</strong> (estimate) · {info.beats.length} beats · {info.duration.toFixed(1)} s</> : <>No steady beat found · {info.duration.toFixed(1)} s</>}{info.silences.length ? ` · ${info.silences.length} silent gaps` : ""}</p>}
-      {info && info.beats.length > 0 && (
+      {(songmaps.length > 0 || info) && (
+        <label className="field"><span className="field-label">Structure from</span>
+          <select value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="estimate">Estimate from the audio{info?.sections?.length ? "" : " (analyse first)"}</option>
+            {songmaps.map((m) => <option key={m.id} value={m.path}>Pulseframe SongMap: {m.name}</option>)}</select></label>
+      )}
+      {info && !sm && <p role="status">{info.bpm ? <><strong>{info.bpm} BPM</strong> (estimate) · {info.beats.length} beats · {info.duration.toFixed(1)} s</> : <>No steady beat found · {info.duration.toFixed(1)} s</>}{info.silences.length ? ` · ${info.silences.length} silent gaps` : ""}{info.transients?.length ? ` · ${info.transients.length} sharp attacks` : ""}</p>}
+      {sm && <p role="status"><strong>{sm.bpm ?? "?"} BPM</strong> · {sm.beats.length} beats · {clock(sm.duration)} · {sm.analyzer || "Pulseframe"}{sm.lyricMatch !== null ? ` · ${Math.round(sm.lyricMatch * 100)}% of the lyric words heard` : ""}</p>}
+      {sections.length > 0 && (
+        <section aria-label="Song structure">
+          <SectionsBar sections={sections} duration={duration} />
+          <ul className="plain">{sections.map((s, i) => <li key={i}><span className="mono">{clock(s.start)}</span> <strong>{s.label}</strong> <span className="muted">{s.group} · energy {s.energy} of 10 · {s.mood}</span></li>)}</ul>
+          {!sm && <p className="hint">Estimated from loudness and how busy and bright each bar is. Quiet changes can be missed, and a short bridge may be called a pre-chorus.</p>}
+        </section>
+      )}
+      {info && !sm && !info.sections?.length && info.duration >= 20 && info.bpm !== null && <p className="muted">No clear sections found. Import a SongMap from Pulseframe for this song.</p>}
+      {(beats.length > 0 || sections.length > 0 || lyrics.length > 0) && (
         <>
-          <label className="field"><span className="field-label">Markers to write</span>
-            <select value={mode} onChange={(e) => setMode(e.target.value as "beats" | "downbeats")}><option value="beats">Every beat ({info.beats.length})</option><option value="downbeats">Downbeats only ({info.downbeats.length})</option></select></label>
-          <button className="btn" disabled={disabled || busy} onClick={async () => {
-            setErr(null); setMsg(null);
-            const r = await write("sync markers", "sync_markers", { times, replace: true });
-            if (r) setMsg(`${times.length} markers written. This replaced the composition's other markers.`);
-          }}>Write markers to composition</button>
+          <fieldset className="grp"><legend className="field-label">Markers to write</legend>
+            <label className="check"><input type="checkbox" checked={withBeats} disabled={!beats.length} onChange={(e) => setWithBeats(e.target.checked)} /> Beats
+              <select aria-label="Which beats" value={mode} disabled={!withBeats} onChange={(e) => setMode(e.target.value as "beats" | "downbeats")}><option value="beats">Every beat ({sm ? sm.beats.length : info?.beats.length ?? 0})</option><option value="downbeats">Downbeats only ({sm ? sm.downbeats.length : info?.downbeats.length ?? 0})</option></select></label>
+            <label className="check"><input type="checkbox" checked={withSections} disabled={!sections.length} onChange={(e) => setWithSections(e.target.checked)} /> Section starts ({sections.length})</label>
+            <label className="check"><input type="checkbox" checked={withLyrics} disabled={!lyrics.length} onChange={(e) => setWithLyrics(e.target.checked)} /> Lyric lines ({lyrics.length})</label>
+          </fieldset>
+          <button className="btn" disabled={disabled || busy || !items.length} onClick={() => void writeMarkers()}>Write markers to composition</button>
         </>
       )}
       <button className="btn" disabled={disabled || !chosen || busy} onClick={async () => { if (chosen) { const r = await write("add audio", "add_media", { rel: chosen.path }); if (r) setMsg("Audio added to the composition, so renders include it."); } }}>Add audio to composition</button>

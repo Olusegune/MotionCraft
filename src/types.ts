@@ -68,6 +68,7 @@ export interface MotionProject {
   review: { comments: ReviewComment[]; preview?: { rel: string; at: string } };
   renders?: RenderRecord[];
   controlModes: Record<ModeKey, ControlMode>;
+  songmaps?: { id: string; path: string; name: string; at: string }[];   // Pulseframe SongMaps brought into the project (P3-01)
   rules?: RuleSpec[];   // the user's edited rule table; absent = the defaults
   engine: { kind: "effectcraft"; version: string; commit: string; projectPath: string };
   assets?: AssetReference[];

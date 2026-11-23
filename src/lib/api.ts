@@ -56,6 +56,9 @@ export interface Api {
   sessionBegin(path: string): Promise<void>;
   sessionEnd(): Promise<void>;
   pickMedia(): Promise<string[]>;
+  /** Pulseframe's SongMap (.json): the file picker, and copying a checked one into the project (the shell validates it). */
+  pickSongMap(): Promise<string | null>;
+  importSongMap(path: string, source: string): Promise<{ path: string; name: string }>;
   /** A playable URL for a file under previews/, renders/ or assets/ of the project (the shell checks the path). */
   fileUrl(path: string, rel: string): Promise<string>;
   exportPackage(path: string, destParent: string): Promise<string>;
@@ -103,6 +106,12 @@ async function tauriApi(): Promise<Api> {
     uncleanSession: () => invoke("unclean_session"),
     sessionBegin: (path) => invoke("session_begin", { path }),
     sessionEnd: () => invoke("session_end"),
+    async pickSongMap() {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const r = await open({ multiple: false, directory: false, title: "Choose a Pulseframe SongMap", filters: [{ name: "SongMap", extensions: ["json"] }] });
+      return typeof r === "string" ? r : null;
+    },
+    importSongMap: (path, source) => invoke("import_songmap", { path, source }),
     async pickMedia() {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const r = await open({ multiple: true, directory: false, title: "Add pictures, video or audio",
@@ -170,6 +179,8 @@ function webApi(): Api {
     async sessionEnd() { /* desktop only */ },
     async openDocs() { window.open("https://github.com/Olusegune/MotionCraft/tree/main/docs", "_blank", "noopener"); },
     async pickMedia() { return []; },
+    async pickSongMap() { return null; },
+    async importSongMap() { throw new Error("Importing a SongMap needs the desktop app."); },
     async importAsset() { throw new Error("Adding media needs the desktop app."); },
     async fileUrl() { throw new Error("Playback needs the desktop app."); },
     async exportPackage() { throw new Error("Exporting needs the desktop app."); },

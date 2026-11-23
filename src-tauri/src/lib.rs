@@ -433,11 +433,11 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 30] = [
+const ENGINE_METHODS: [&str; 32] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
     "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
     "snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore",
-    "render_resume", "render_cancel", "render_discard", "render_jobs",
+    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers",
 ];
 const MODEL_METHODS: [&str; 11] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
@@ -448,7 +448,7 @@ const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthr
 const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
 /// Credential-store accounts: the generation providers plus the two language-model-only ones.
 const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
-const WRITE_METHODS: [&str; 14] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore"];
+const WRITE_METHODS: [&str; 15] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore", "sync_labelled_markers"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
 const PAID_ENGINE_METHODS: [&str; 2] = ["render_start", "render_resume"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
@@ -888,6 +888,48 @@ fn import_asset(app: tauri::AppHandle, path: String, source: String) -> Result<I
     Ok(ImportedAsset { kind, path: format!("assets/{sub}/{name}"), name: stem })
 }
 
+/// A Pulseframe SongMap is plain JSON. Before it is copied into the project it must really be one: valid JSON, an object, schema version 1,
+/// a duration and a list of sections. (The engine helper checks and clamps every field again when it reads it.)
+pub fn validate_songmap(text: &str) -> Result<(), String> {
+    let v: Value = serde_json::from_str(text).map_err(|_| "That is not a SongMap file (it is not valid JSON).".to_string())?;
+    let o = v.as_object().ok_or("That is not a SongMap file.")?;
+    if o.get("schema_version").and_then(Value::as_i64) != Some(1) {
+        return Err("This SongMap is not schema version 1, which is the version MotionCraft reads.".into());
+    }
+    if !o.get("duration").map(|d| d.is_number()).unwrap_or(false) || !o.get("sections").map(Value::is_array).unwrap_or(false) {
+        return Err("That SongMap has no duration or no sections.".into());
+    }
+    Ok(())
+}
+
+/// Brings a SongMap made by Pulseframe into the project as assets/audio/imp-<id>-<name>.songmap.json. It is not an audio track and is not
+/// listed as one: the page records it separately.
+#[tauri::command(async)]
+fn import_songmap(app: tauri::AppHandle, path: String, source: String) -> Result<ImportedAsset, String> {
+    use std::io::Read;
+    let dir = check_package(&projects_root(&app)?, &path)?;
+    let src = PathBuf::from(&source).canonicalize().map_err(|_| "That file does not exist.".to_string())?;
+    if !src.is_file() {
+        return Err("Choose a file, not a folder.".into());
+    }
+    const CAP: u64 = 5 * 1024 * 1024;
+    if src.metadata().map_err(|e| e.to_string())?.len() > CAP {
+        return Err("That SongMap is larger than 5 MB.".into());
+    }
+    let mut text = String::new();
+    fs::File::open(&src)
+        .and_then(|f| f.take(CAP + 1).read_to_string(&mut text))
+        .map_err(|_| "That file could not be read as text.".to_string())?;
+    validate_songmap(&text)?;
+    let stem = safe_name(src.file_stem().and_then(|s| s.to_str()).unwrap_or("songmap").trim_end_matches(".songmap")).unwrap_or_else(|_| "songmap".into());
+    let folder = dir.join("assets").join("audio");
+    fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let id = random_token()?;
+    let name = format!("imp-{}-{}.songmap.json", &id[..8], stem.replace(' ', "-"));
+    fs::write(folder.join(&name), text.as_bytes()).map_err(|e| format!("Could not copy the file: {e}"))?;
+    Ok(ImportedAsset { kind: "songmap", path: format!("assets/audio/{name}"), name: stem })
+}
+
 fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<(), String> {
     if depth > 8 {
         return Err("The project folder is nested too deeply to copy.".into());
@@ -1254,6 +1296,7 @@ pub fn run() {
             import_project,
             duplicate_project,
             import_asset,
+            import_songmap,
             package_file,
             export_package,
             app_ready,
@@ -1348,6 +1391,31 @@ mod tests {
         clear_marker(&base);
         assert_eq!(read_marker(&base), None, "a normal exit or close removes it");
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_songmap_must_be_a_real_one_before_it_is_copied_in() {
+        let good = r#"{"schema_version": 1, "duration": 88.0, "bpm": 120, "sections": [], "beats": []}"#;
+        assert!(validate_songmap(good).is_ok());
+        for (bad, why) in [
+            ("not json at all", "valid JSON"),
+            ("[1, 2, 3]", "not a SongMap"),
+            (r#"{"schema_version": 2, "duration": 1, "sections": []}"#, "schema version 1"),
+            (r#"{"duration": 1, "sections": []}"#, "schema version 1"),
+            (r#"{"schema_version": 1, "sections": []}"#, "no duration"),
+            (r#"{"schema_version": 1, "duration": 5}"#, "no sections"),
+            (r#"{"schema_version": 1, "duration": "5", "sections": []}"#, "no duration"),
+        ] {
+            let e = validate_songmap(bad).expect_err(bad);
+            assert!(e.contains(why), "{bad}: {e}");
+        }
+    }
+
+    #[test]
+    fn songmap_import_and_marker_writes_are_in_the_closed_method_list() {
+        assert!(ENGINE_METHODS.contains(&"songmap_import") && !WRITE_METHODS.contains(&"songmap_import"), "reading a SongMap writes nothing");
+        assert!(ENGINE_METHODS.contains(&"sync_labelled_markers") && WRITE_METHODS.contains(&"sync_labelled_markers"), "markers write the composition");
+        assert!(!PAID_ENGINE_METHODS.contains(&"sync_labelled_markers") && !PAID_ENGINE_METHODS.contains(&"songmap_import"), "neither costs anything");
     }
 
     #[test]
