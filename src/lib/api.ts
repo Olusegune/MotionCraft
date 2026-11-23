@@ -34,6 +34,15 @@ export interface Api {
   /** The spend gate: call only from the click on the confirmation sheet. Returns a single-use token. */
   confirmSpend(provider: ProviderId, model: string): Promise<string>;
   assetDataUrl(path: string, rel: string): Promise<string>;
+  projectsFolder(): Promise<string>;
+  revealProjectsFolder(): Promise<void>;
+  importProject(source: string): Promise<ProjectSummary>;
+  duplicateProject(path: string, project: MotionProject): Promise<ProjectSummary>;
+  /** Native menu clicks (File, Edit, ...) arrive here as ids. Returns an unsubscribe function. */
+  onMenu(cb: (id: string) => void): Promise<() => void>;
+  /** The system file/folder picker. Returns null when cancelled. */
+  pickPath(kind: "folder" | "engine", startIn?: string): Promise<string | null>;
+  appReady(): Promise<void>;
 }
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -54,6 +63,22 @@ async function tauriApi(): Promise<Api> {
     deleteKey: (provider) => invoke("delete_provider_key", { provider }),
     confirmSpend: (provider, model) => invoke("confirm_spend", { provider, model }),
     assetDataUrl: (path, rel) => invoke("asset_data_url", { path, rel }),
+    projectsFolder: () => invoke("projects_folder"),
+    revealProjectsFolder: () => invoke("reveal_projects_folder"),
+    importProject: (source) => invoke("import_project", { source }),
+    duplicateProject: (path, project) => invoke("duplicate_project", { path, project }),
+    async onMenu(cb) {
+      const { listen } = await import("@tauri-apps/api/event");
+      return listen<string>("menu", (e) => cb(e.payload));
+    },
+    async pickPath(kind, startIn) {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const r = await open(kind === "folder"
+        ? { directory: true, multiple: false, defaultPath: startIn, title: "Choose a .motioncraft project folder" }
+        : { directory: false, multiple: false, defaultPath: startIn, title: "Locate effectcraft-cli", filters: [{ name: "EffectCraft CLI", extensions: ["exe", "*"] }] });
+      return typeof r === "string" ? r : null;
+    },
+    appReady: () => invoke("app_ready"),
   };
 }
 
@@ -89,6 +114,17 @@ function webApi(): Api {
     async deleteKey() { /* nothing stored */ },
     async confirmSpend() { throw new Error("Spending needs the desktop app."); },
     async assetDataUrl() { throw new Error("Needs the desktop app."); },
+    async projectsFolder() { return "(browser storage)"; },
+    async revealProjectsFolder() { throw new Error("Needs the desktop app."); },
+    async importProject() { throw new Error("Needs the desktop app."); },
+    async duplicateProject(_path: string, p: MotionProject) {
+      localStorage.setItem(`motioncraft.web.${p.id}`, JSON.stringify(p));
+      localStorage.setItem(idx, JSON.stringify([...readIdx().filter((x) => x.id !== p.id), summary(p)]));
+      return summary(p);
+    },
+    async onMenu() { return () => undefined; },
+    async pickPath() { return null; },
+    async appReady() { /* no splash in the browser */ },
   };
 }
 

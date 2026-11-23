@@ -3,13 +3,13 @@ import type { ControlMode, Deliverable, GateId, MotionProject, ProjectSummary, R
 import { STAGES } from "./types";
 import { Ctx, type AppCtx } from "./ctx";
 import { getApi, type EngineStatus } from "./lib/api";
-import { useSettings } from "./lib/settings";
-import { approve, createProject, GATE_AFTER, reviseApproved, setMode, STAGE_LABEL, STAGE_MODE } from "./lib/project";
+import { updateSettings, useSettings } from "./lib/settings";
+import { approve, createProject, GATE_AFTER, newId, nowIso, reviseApproved, setMode, STAGE_LABEL, STAGE_MODE } from "./lib/project";
 import { matches } from "./lib/shortcuts";
 import { Header, type SaveState } from "./shell/Header";
 import { StageBar } from "./shell/StageBar";
 import { Palette, type PaletteItem } from "./shell/Palette";
-import { ImpactSheet, GateSheet, SettingsSheet } from "./shell/Sheets";
+import { ImpactSheet, GateSheet, SettingsSheet, SaveCopySheet, ManualSheet, AboutSheet } from "./shell/Sheets";
 import { ModelsSheet } from "./shell/ModelsSheet";
 import { useInspectorState } from "./shell/PageFrame";
 import { BriefPage } from "./pages/BriefPage";
@@ -24,7 +24,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 const AUTOSAVE_MS = 30_000; // PRD target: at most 30 s of work lost
 const DEBOUNCE_MS = 1_000;
 
-type Overlay = null | { kind: "palette" } | { kind: "settings" } | { kind: "models" } | { kind: "gate"; gate: GateId } | { kind: "impact"; gate: GateId; revKind: RevisionRecord["kind"] };
+type Overlay = null | { kind: "palette" } | { kind: "settings" } | { kind: "models" } | { kind: "copy" } | { kind: "manual" } | { kind: "about" } | { kind: "gate"; gate: GateId } | { kind: "impact"; gate: GateId; revKind: RevisionRecord["kind"] };
 
 export default function App() {
   const settings = useSettings();
@@ -42,6 +42,9 @@ export default function App() {
   const [viewerOnly, setViewerOnly] = useState(false);
   const [inspectorOpen, toggleInspector] = useInspectorState();
   const [engine, setEngine] = useState<EngineStatus | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   useEffect(() => { document.documentElement.style.setProperty("--mc-scale", String(settings.uiScale / 100)); }, [settings.uiScale]);
 
@@ -59,6 +62,12 @@ export default function App() {
       .catch((e) => setEngine({ state: "error", pinned: "0.24.1", detail: String(e) }));
   }, [settings.enginePath]);
   useEffect(() => { refreshEngine(); }, [refreshEngine]);
+  // The engine may be installed or started after MotionCraft: look again whenever the window regains focus while it is missing.
+  useEffect(() => {
+    const onFocus = () => { if (engine && engine.state !== "connected") refreshEngine(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [engine, refreshEngine]);
 
   const flush = useCallback(async () => {
     const p = latest.current;
@@ -105,6 +114,28 @@ export default function App() {
     pathRef.current = s.path; latest.current = p; dirty.current = false; setProject(p); setStage("brief"); setSave({ kind: "saved", at: Date.now() });
   };
   const home = async () => { await flush(); setProject(null); latest.current = null; setViewerOnly(false); void refreshProjects(); };
+  const say = (m: string) => { setNotice(m); window.setTimeout(() => setNotice((n) => (n === m ? null : n)), 4000); };
+  const openFolder = async () => {
+    try {
+      const api = await getApi();
+      const picked = await api.pickPath("folder", await api.projectsFolder());
+      if (!picked) return;
+      await flush();
+      await open(await api.importProject(picked));
+    } catch (e) { say(e instanceof Error ? e.message : String(e)); }
+  };
+  const saveNow = async () => {
+    if (!project) { say("No project is open."); return; }
+    dirty.current = true; await flush(); say("Saved.");
+  };
+  const saveCopy = async (name: string) => {
+    if (!project) return;
+    await flush();
+    const copy: MotionProject = { ...project, id: newId(), name, createdAt: nowIso(), updatedAt: nowIso() };
+    const s = await (await getApi()).duplicateProject(pathRef.current, copy);
+    await open(s);
+    say(`Saved a copy as ${name}.`);
+  };
 
   const ctx: AppCtx | null = useMemo(() => !project ? null : ({
     project, projectPath: pathRef.current, stage, engine, update, go: setStage, refreshEngine,
@@ -128,7 +159,40 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
 
+  // Native menu (File, Edit, Go, View, Tools, Window, Help). The handler is kept in a ref so it always sees current state.
+  const menuRef = useRef<(id: string) => void>(() => undefined);
+  menuRef.current = (id: string) => {
+    const needProject = () => { if (!project) { say("Open or create a project first."); return false; } return true; };
+    if (id.startsWith("go-")) { if (needProject()) setStage(id.slice(3) as Stage); return; }
+    switch (id) {
+      case "file-new": void (async () => { if (project) await home(); setNewOpen(true); })(); break;
+      case "file-open": case "file-close": void home(); break;
+      case "file-open-folder": void openFolder(); break;
+      case "file-save": void saveNow(); break;
+      case "file-save-copy": if (needProject()) setOverlay({ kind: "copy" }); break;
+      case "file-reveal": getApi().then((a) => a.revealProjectsFolder()).catch((e) => say(String(e instanceof Error ? e.message : e))); break;
+      case "file-settings": case "tools-engine": case "help-shortcuts": setOverlay({ kind: "settings" }); break;
+      case "edit-palette": setOverlay((o) => (o?.kind === "palette" ? null : { kind: "palette" })); break;
+      case "view-viewer-only": if (needProject()) setViewerOnly((v) => !v); break;
+      case "view-inspector": if (needProject()) toggleInspector(); break;
+      case "view-zoom-in": updateSettings({ uiScale: settings.uiScale + 10 }); break;
+      case "view-zoom-out": updateSettings({ uiScale: settings.uiScale - 10 }); break;
+      case "view-zoom-reset": updateSettings({ uiScale: 100 }); break;
+      case "tools-models": setOverlay({ kind: "models" }); break;
+      case "tools-effectcraft": if (needProject()) getApi().then((a) => a.openEffectCraft(pathRef.current, settings.enginePath)).catch((e) => say(String(e instanceof Error ? e.message : e))); break;
+      case "help-manual": setOverlay({ kind: "manual" }); break;
+      case "help-about": setOverlay({ kind: "about" }); break;
+    }
+  };
   useEffect(() => {
+    let off: () => void = () => undefined;
+    let dead = false;
+    getApi().then((a) => a.onMenu((id) => menuRef.current(id))).then((f) => { if (dead) f(); else off = f; }).catch(() => undefined);
+    return () => { dead = true; off(); };
+  }, []);
+
+  useEffect(() => {
+    if (inTauri) return; // in the desktop app the menu accelerators do this
     const onKey = (e: KeyboardEvent) => {
       if (matches(e, "palette")) { e.preventDefault(); setOverlay((o) => (o?.kind === "palette" ? null : { kind: "palette" })); }
       else if (matches(e, "settings")) { e.preventDefault(); setOverlay({ kind: "settings" }); }
@@ -138,7 +202,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [project, viewerOnly, overlay, toggleInspector]);
+  }, [project, viewerOnly, overlay, toggleInspector, inTauri]);
 
   const frame = { viewerOnly, inspectorOpen, onToggleInspector: toggleInspector };
   const key = STAGE_MODE[stage];
@@ -147,9 +211,11 @@ export default function App() {
   return (
     <div className="app">
       <Header project={project} stage={stage} save={save} now={now} engine={engine} onSetMode={setStageMode} onHome={() => void home()}
-        onPalette={() => setOverlay({ kind: "palette" })} onSettings={() => setOverlay({ kind: "settings" })} onEngine={() => setOverlay({ kind: "settings" })} />
+        onPalette={() => setOverlay({ kind: "palette" })} onSettings={() => setOverlay({ kind: "settings" })} onEngine={() => setOverlay({ kind: "settings" })} onManual={() => setOverlay({ kind: "manual" })} />
+      {notice && <div className="notice" role="status">{notice}<button className="icon-btn" aria-label="Dismiss" onClick={() => setNotice(null)}>×</button></div>}
       {!project || !ctx ? (
-        <ProjectsPage projects={projects} loading={listing} error={listError} onOpen={(p) => void open(p)} onCreate={create} />
+        <ProjectsPage projects={projects} loading={listing} error={listError} onOpen={(p) => void open(p)} onCreate={create} newOpen={newOpen} setNewOpen={setNewOpen} onOpenFolder={() => void openFolder()}
+          onReveal={() => getApi().then((a) => a.revealProjectsFolder()).catch((e) => say(String(e instanceof Error ? e.message : e)))} />
       ) : (
         <Ctx.Provider value={ctx}>
           <div className="page" key={stage}>
@@ -168,6 +234,9 @@ export default function App() {
       {overlay?.kind === "palette" && <Palette items={palette} onClose={() => setOverlay(null)} />}
       {overlay?.kind === "settings" && <SettingsSheet engine={engine} onClose={() => setOverlay(null)} onRecheck={refreshEngine} onModels={() => setOverlay({ kind: "models" })} />}
       {overlay?.kind === "models" && <ModelsSheet onClose={() => setOverlay(null)} />}
+      {overlay?.kind === "copy" && project && <SaveCopySheet defaultName={`${project.name} copy`} onClose={() => setOverlay(null)} onSave={async (n) => { setOverlay(null); try { await saveCopy(n); } catch (e) { say(e instanceof Error ? e.message : String(e)); } }} />}
+      {overlay?.kind === "manual" && <ManualSheet onClose={() => setOverlay(null)} onSettings={() => setOverlay({ kind: "settings" })} />}
+      {overlay?.kind === "about" && <AboutSheet engine={engine} onClose={() => setOverlay(null)} />}
       {overlay?.kind === "gate" && project && <GateSheet project={project} gate={overlay.gate} onClose={() => setOverlay(null)} onApprove={() => update((p) => approve(p, (overlay as { gate: GateId }).gate))} />}
       {overlay?.kind === "impact" && project && (
         <ImpactSheet project={project} gate={overlay.gate} onCancel={() => setOverlay(null)}

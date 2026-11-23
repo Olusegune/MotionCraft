@@ -5,6 +5,7 @@
   --mc-divider: #3A3D40;           /* decorative only */
   --mc-control-border: #7A8086;    /* inputs, segmented controls, gate outlines */
   --mc-text: #F2F3F4;  --mc-text-2: #B8BDC2;  --mc-text-3: #92999F;
+  --mc-brand-gold: #E3C48F;   /* brand mark only; never a UI state colour */
   --mc-accent: #48DCE5;  --mc-on-accent: #181A1C;
   --mc-success: #83C5A0; --mc-warning: #E5BB72; --mc-error: #E68C88;
   --mc-r-ctl: 6px; --mc-r-panel: 8px; --mc-r-card: 10px;

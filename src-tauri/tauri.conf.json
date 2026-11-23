@@ -20,6 +20,21 @@
         "minHeight": 660,
         "center": true,
         "theme": "Dark",
+        "backgroundColor": "#181A1C",
+        "visible": false
+      },
+      {
+        "label": "splashscreen",
+        "title": "MotionCraft",
+        "url": "splash.html",
+        "width": 960,
+        "height": 540,
+        "resizable": false,
+        "decorations": false,
+        "center": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": true,
         "backgroundColor": "#181A1C"
       }
     ],

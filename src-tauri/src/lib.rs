@@ -187,26 +187,45 @@ fn gui_name() -> &'static str {
 }
 
 fn candidates(override_path: &str) -> Vec<PathBuf> {
+    candidates_with(override_path, &|k| std::env::var(k).ok())
+}
+
+/// Where effectcraft-cli may be: the user's setting, EFFECTCRAFT_CLI, the installer folders (the Windows MSI installs to
+/// `Program Files\EffectCraft`, found on a real machine; older notes said `ArtCraft\EffectCraft`), and every PATH entry.
+fn candidates_with(override_path: &str, env: &dyn Fn(&str) -> Option<String>) -> Vec<PathBuf> {
     let mut v = vec![];
     if !override_path.trim().is_empty() {
         v.push(PathBuf::from(override_path.trim()));
     }
-    if let Ok(p) = std::env::var("EFFECTCRAFT_CLI") {
+    if let Some(p) = env("EFFECTCRAFT_CLI") {
         v.push(PathBuf::from(p));
     }
     if cfg!(windows) {
-        for var in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
-            if let Ok(base) = std::env::var(var) {
+        for var in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
+            if let Some(base) = env(var) {
                 let b = PathBuf::from(base);
-                v.push(if var == "LOCALAPPDATA" { b.join("Programs") } else { b }.join("ArtCraft").join("EffectCraft").join(cli_name()));
+                v.push(b.join("EffectCraft").join(cli_name()));
+                v.push(b.join("ArtCraft").join("EffectCraft").join(cli_name()));
             }
         }
+        if let Some(base) = env("LOCALAPPDATA") {
+            let b = PathBuf::from(base);
+            v.push(b.join("Programs").join("EffectCraft").join(cli_name()));
+            v.push(b.join("Programs").join("ArtCraft").join("EffectCraft").join(cli_name()));
+        }
     } else {
-        for p in ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"] {
+        for p in ["/Applications/EffectCraft.app/Contents/MacOS", "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"] {
             v.push(Path::new(p).join(cli_name()));
         }
-        if let Ok(home) = std::env::var("HOME") {
-            v.push(Path::new(&home).join(".cargo").join("bin").join(cli_name()));
+        if let Some(home) = env("HOME") {
+            let h = PathBuf::from(home);
+            v.push(h.join("Applications").join("EffectCraft.app").join("Contents").join("MacOS").join(cli_name()));
+            v.push(h.join(".cargo").join("bin").join(cli_name()));
+        }
+    }
+    if let Some(path) = env("PATH").or_else(|| env("Path")) {
+        for dir in std::env::split_paths(&path) {
+            v.push(dir.join(cli_name()));
         }
     }
     v
@@ -618,10 +637,203 @@ fn effectcraft_window_open(st: State<EngineState>) -> bool {
     gui_running(&st)
 }
 
+fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<(), String> {
+    if depth > 8 {
+        return Err("The project folder is nested too deeply to copy.".into());
+    }
+    fs::create_dir_all(dst).map_err(|e| format!("Could not create {}: {e}", dst.display()))?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_symlink() {
+            continue; // links are never followed or copied
+        } else if kind.is_dir() {
+            copy_dir(&from, &to, depth + 1)?;
+        } else if kind.is_file() {
+            fs::copy(&from, &to).map_err(|e| format!("Could not copy {}: {e}", from.display()))?;
+        }
+    }
+    Ok(())
+}
+
+fn unique_package(root: &Path, base: &str) -> PathBuf {
+    let mut dir = root.join(format!("{base}.{PACKAGE_EXT}"));
+    let mut n = 2;
+    while dir.exists() {
+        dir = root.join(format!("{base} {n}.{PACKAGE_EXT}"));
+        n += 1;
+    }
+    dir
+}
+
+#[tauri::command]
+fn projects_folder(app: tauri::AppHandle) -> Result<String, String> {
+    Ok(projects_root(&app)?.to_string_lossy().into_owned())
+}
+
+/// Shows the projects folder in the system file browser. Fixed program, the folder is our own canonical root.
+#[tauri::command]
+fn reveal_projects_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let root = projects_root(&app)?;
+    let prog = if cfg!(windows) { "explorer.exe" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    Command::new(prog).arg(root).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| format!("Could not open the folder: {e}"))?;
+    Ok(())
+}
+
+/// Brings a `.motioncraft` folder from anywhere into the projects folder (a copy) so it can be opened. Used by File > Open Project Folder.
+#[tauri::command]
+fn import_project(app: tauri::AppHandle, source: String) -> Result<ProjectSummary, String> {
+    let root = projects_root(&app)?;
+    let src = PathBuf::from(&source).canonicalize().map_err(|_| "That folder does not exist.".to_string())?;
+    if src.extension().and_then(|e| e.to_str()) != Some(PACKAGE_EXT) || !src.is_dir() {
+        return Err("Choose a folder whose name ends in .motioncraft.".into());
+    }
+    let text = fs::read_to_string(src.join("project.json")).map_err(|_| "That folder has no project.json, so it is not a MotionCraft project.".to_string())?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("project.json is damaged: {e}"))?;
+    if v.get("schemaVersion").and_then(Value::as_str) != Some("1.0") {
+        return Err("This project was made by a different MotionCraft version and cannot be opened yet.".into());
+    }
+    if src.parent() == Some(root.as_path()) {
+        return Ok(summary(&src, &v)); // already in the projects folder: open it where it is
+    }
+    if root.starts_with(&src) {
+        return Err("Choose a project folder, not a folder that contains the projects folder.".into());
+    }
+    let base = safe_name(v.get("name").and_then(Value::as_str).unwrap_or("Imported project"))?;
+    let dst = unique_package(&root, &base);
+    copy_dir(&src, &dst, 0).inspect_err(|_| {
+        let _ = fs::remove_dir_all(&dst);
+    })?;
+    Ok(summary(&dst.canonicalize().unwrap_or(dst), &v))
+}
+
+/// File > Save a Copy: copies the whole package (assets and composition) under a new name; the page supplies the new project.json
+/// (new id and name). The original is not touched.
+#[tauri::command]
+fn duplicate_project(app: tauri::AppHandle, path: String, project: Value) -> Result<ProjectSummary, String> {
+    let root = projects_root(&app)?;
+    let src = check_package(&root, &path)?;
+    let bytes = serialise(&project)?;
+    let base = safe_name(project.get("name").and_then(Value::as_str).unwrap_or_default())?;
+    let dst = unique_package(&root, &base);
+    copy_dir(&src, &dst, 0).inspect_err(|_| {
+        let _ = fs::remove_dir_all(&dst);
+    })?;
+    atomic_write(&dst.join("project.json"), &bytes)?;
+    Ok(summary(&dst.canonicalize().unwrap_or(dst), &project))
+}
+
+/// Closes the splash and shows the main window (idempotent). The page calls it when it has drawn; a timer calls it too, so a
+/// page that never loads cannot leave the user looking at the splash forever.
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(sp) = app.get_webview_window("splashscreen") {
+        let _ = sp.close();
+    }
+    if let Some(m) = app.get_webview_window("main") {
+        let _ = m.show();
+        let _ = m.set_focus();
+    }
+}
+
+#[tauri::command]
+fn app_ready(app: tauri::AppHandle) {
+    show_main(&app);
+}
+
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+    let it = |id: &str, label: &str, acc: Option<&str>| {
+        let mut b = MenuItemBuilder::with_id(id, label);
+        if let Some(a) = acc {
+            b = b.accelerator(a);
+        }
+        b.build(app)
+    };
+    let file = SubmenuBuilder::new(app, "&File")
+        .item(&it("file-new", "&New Project…", Some("CmdOrCtrl+N"))?)
+        .item(&it("file-open", "&Open Project…", Some("CmdOrCtrl+O"))?)
+        .item(&it("file-open-folder", "Open Project &Folder…", Some("CmdOrCtrl+Shift+O"))?)
+        .separator()
+        .item(&it("file-save", "&Save", Some("CmdOrCtrl+S"))?)
+        .item(&it("file-save-copy", "Save a &Copy…", Some("CmdOrCtrl+Shift+S"))?)
+        .item(&it("file-close", "C&lose Project", Some("CmdOrCtrl+W"))?)
+        .separator()
+        .item(&it("file-reveal", "Show Projects Fol&der", None)?)
+        .item(&it("file-settings", "Se&ttings…", Some("CmdOrCtrl+,"))?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, Some("E&xit"))?)
+        .build()?;
+    let edit = SubmenuBuilder::new(app, "&Edit")
+        .item(&PredefinedMenuItem::undo(app, None)?)
+        .item(&PredefinedMenuItem::redo(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, None)?)
+        .item(&PredefinedMenuItem::copy(app, None)?)
+        .item(&PredefinedMenuItem::paste(app, None)?)
+        .item(&PredefinedMenuItem::select_all(app, None)?)
+        .separator()
+        .item(&it("edit-palette", "Command &Palette…", Some("CmdOrCtrl+K"))?)
+        .build()?;
+    let stage = |n: u8, id: &str, label: &str| it(id, label, Some(&format!("CmdOrCtrl+{n}")));
+    let go = SubmenuBuilder::new(app, "&Go")
+        .item(&stage(1, "go-brief", "&Brief")?)
+        .item(&stage(2, "go-intent", "&Intent")?)
+        .item(&stage(3, "go-direction", "&Direction")?)
+        .item(&stage(4, "go-treatment", "&Treatment")?)
+        .item(&stage(5, "go-build", "B&uild")?)
+        .item(&stage(6, "go-review", "&Review")?)
+        .item(&stage(7, "go-deliver", "De&liver")?)
+        .build()?;
+    let view = SubmenuBuilder::new(app, "&View")
+        .item(&it("view-viewer-only", "&Viewer-only Mode", Some("CmdOrCtrl+Shift+V"))?)
+        .item(&it("view-inspector", "Show or Hide &Inspector", Some("CmdOrCtrl+\\"))?)
+        .separator()
+        .item(&it("view-zoom-in", "Zoom &In", Some("CmdOrCtrl+="))?)
+        .item(&it("view-zoom-out", "Zoom &Out", Some("CmdOrCtrl+-"))?)
+        .item(&it("view-zoom-reset", "&Actual Size", Some("CmdOrCtrl+0"))?)
+        .separator()
+        .item(&PredefinedMenuItem::fullscreen(app, None)?)
+        .build()?;
+    let tools = SubmenuBuilder::new(app, "&Tools")
+        .item(&it("tools-models", "Image and Video &Models…", None)?)
+        .item(&it("tools-effectcraft", "Open in &EffectCraft", Some("CmdOrCtrl+E"))?)
+        .item(&it("tools-engine", "&Locate EffectCraft…", None)?)
+        .build()?;
+    let window = SubmenuBuilder::new(app, "&Window")
+        .item(&PredefinedMenuItem::minimize(app, None)?)
+        .item(&PredefinedMenuItem::maximize(app, None)?)
+        .item(&PredefinedMenuItem::close_window(app, None)?)
+        .build()?;
+    let help = SubmenuBuilder::new(app, "&Help")
+        .item(&it("help-shortcuts", "&Keyboard Shortcuts", None)?)
+        .item(&it("help-manual", "Working &Manually (no AI)", None)?)
+        .item(&it("help-about", "&About MotionCraft", None)?)
+        .build()?;
+    MenuBuilder::new(app).items(&[&file, &edit, &go, &view, &tools, &window, &help]).build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use tauri::Emitter;
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(EngineState::default())
+        .setup(|app| {
+            // The menu belongs to the main window only; the splash window must not get a menu bar.
+            if let Some(main) = app.get_webview_window("main") {
+                main.set_menu(build_menu(app.handle())?)?;
+            }
+            let h = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(12));
+                show_main(&h);
+            });
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            let _ = app.emit("menu", event.id().0.clone());
+        })
         .invoke_handler(tauri::generate_handler![
             list_projects,
             create_project,
@@ -635,7 +847,12 @@ pub fn run() {
             delete_provider_key,
             provider_key_status,
             confirm_spend,
-            asset_data_url
+            asset_data_url,
+            projects_folder,
+            reveal_projects_folder,
+            import_project,
+            duplicate_project,
+            app_ready
         ])
         .run(tauri::generate_context!())
         .expect("error while running MotionCraft");
@@ -735,6 +952,55 @@ mod tests {
         assert!(provider_ok("kie").is_ok() && provider_ok("fal").is_ok() && provider_ok("byteplus").is_ok());
         assert!(provider_ok("suno").is_err() && provider_ok("../x").is_err());
         assert!(!WRITE_METHODS.contains(&"generate_start"));
+    }
+
+    #[test]
+    fn finds_the_installer_folder_and_path_entries() {
+        let base = std::env::temp_dir().join(format!("mc-find-{}", std::process::id()));
+        let pf = base.join("pf");
+        fs::create_dir_all(pf.join("EffectCraft")).unwrap();
+        fs::write(pf.join("EffectCraft").join(cli_name()), b"x").unwrap();
+        let on_path = base.join("bin");
+        fs::create_dir_all(&on_path).unwrap();
+        fs::write(on_path.join(cli_name()), b"x").unwrap();
+        let pf_s = pf.to_string_lossy().into_owned();
+        let path_s = std::env::join_paths([&on_path]).unwrap().to_string_lossy().into_owned();
+        let env = |k: &str| match k {
+            "ProgramFiles" => Some(pf_s.clone()),
+            "PATH" => Some(path_s.clone()),
+            _ => None,
+        };
+        let c = candidates_with("", &env);
+        let found: Vec<_> = c.iter().filter(|p| looks_like_cli(p)).collect();
+        if cfg!(windows) {
+            assert!(found.iter().any(|p| p.starts_with(&pf)), "installer folder not searched");
+        }
+        assert!(found.iter().any(|p| p.starts_with(&on_path)), "PATH not searched");
+        assert!(candidates_with("D:/x/effectcraft-cli.exe", &env)[0].ends_with("effectcraft-cli.exe"), "the user's setting comes first");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Run on a machine that has EffectCraft installed: cargo test detects_a_real_install -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn detects_a_real_install() {
+        let st = engine_status(String::new());
+        println!("state={} found={:?} version={:?}", st.state, st.found, st.version);
+        assert_eq!(st.state, "connected");
+    }
+
+    #[test]
+    fn package_copies_skip_links_and_keep_files() {
+        let base = std::env::temp_dir().join(format!("mc-copy-{}", std::process::id()));
+        let src = base.join("a.motioncraft");
+        fs::create_dir_all(src.join("assets").join("images")).unwrap();
+        fs::write(src.join("project.json"), b"{}").unwrap();
+        fs::write(src.join("assets").join("images").join("x.png"), b"png").unwrap();
+        let dst = base.join("b.motioncraft");
+        copy_dir(&src, &dst, 0).unwrap();
+        assert_eq!(fs::read(dst.join("assets").join("images").join("x.png")).unwrap(), b"png");
+        assert_eq!(unique_package(&base, "a").file_name().unwrap(), "a 2.motioncraft");
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
