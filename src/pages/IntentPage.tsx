@@ -12,6 +12,8 @@ import { useState } from "react";
 import { getApi } from "../lib/api";
 import { useSettings } from "../lib/settings";
 import { Sheet } from "../shell/Sheet";
+import { RuleEditor } from "./RuleEditor";
+import type { RuleSpec } from "../types";
 
 const PURPOSES: Purpose[] = ["inform", "teach", "persuade", "sell", "announce", "celebrate", "entertain", "memorialize"];
 const TONES: Tone[] = ["authoritative", "trustworthy", "playful", "elegant", "instructional", "provocative", "restrained"];
@@ -62,6 +64,11 @@ export function IntentPage(f: FrameProps) {
       setDir({ busy: false, notes: r.warnings });
     } catch (e) { setDir({ busy: false, notes: [], error: String(e instanceof Error ? e.message : e) }); }
   };
+  const setRules = (rules: RuleSpec[] | undefined) => update((p) => {
+    const next = { ...p, rules, updatedAt: new Date().toISOString() };
+    if (rules === undefined) delete next.rules;
+    return { ...next, intent: { ...next.intent, firedRules: firedRules(next).map((r) => r.id) } };
+  });
   const fired = firedRules(project);
   const complete = stageComplete(project, "A");
   const state = gateState(project, "A");
@@ -139,12 +146,7 @@ export function IntentPage(f: FrameProps) {
           : <p className="muted">The brief is empty. Evidence from it will be quoted here.</p>}
       </Fold>
       <Fold title="Rule table" defaultOpen meta={<span className="count">{fired.length} fired</span>}>
-        {fired.length === 0 ? <p className="muted">No rules fired yet. Rules fire from tone and beat energy.</p> : (
-          <ul className="rules">{fired.map((r) => (
-            <li key={r.id}><strong>{r.label}</strong>
-              <dl><dt>Timing</dt><dd>{r.timing}</dd><dt>Easing</dt><dd>{r.easing}</dd><dt>Typography</dt><dd>{r.typography}</dd><dt>Layout</dt><dd>{r.layout}</dd><dt>Transitions</dt><dd>{r.transitions}</dd></dl></li>))}</ul>
-        )}
-        <p className="hint">Default rules from the PRD. Editing the table arrives in ticket P1-09.</p>
+        <RuleEditor project={project} locked={locked} onChange={setRules} />
       </Fold>
     </>
   );

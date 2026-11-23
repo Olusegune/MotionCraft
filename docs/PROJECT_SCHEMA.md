@@ -64,6 +64,11 @@ type CreativeIntent = {
   source: 'agent' | 'user';
 };
 
+// P1-09: the user's edited intent-to-parameter rule table (optional; absent = the defaults in src/lib/rules.ts, not a rules_default.yaml).
+type RuleSpec = { id: string; label: string; enabled: boolean;
+  when: { tones?: Tone[]; purposes?: Purpose[]; energyAtLeast?: number; energyAtMost?: number };   // all present conditions must hold
+  timing: string; easing: string; typography: string; layout: string; transitions: string };
+
 type StyleProfile = {
   dimensions: Partial<Record<'typography' | 'motion' | 'color' | 'texture' | 'camera' | 'transitions' | 'composition',
                { familyId: string; intensity: 'subtle' | 'moderate' | 'strong' }>>;

@@ -47,6 +47,13 @@ export interface AssetReference {
                 costReported: boolean; costValue: number | null; costUnit: string | null };
 }
 
+/** One row of the intent-to-parameter rule table (P1-09). Every condition present must hold; tones and purposes match on any. */
+export interface RuleSpec {
+  id: string; label: string; enabled: boolean;
+  when: { tones?: Tone[]; purposes?: Purpose[]; energyAtLeast?: number; energyAtMost?: number };
+  timing: string; easing: string; typography: string; layout: string; transitions: string;
+}
+
 export interface MotionProject {
   id: string; schemaVersion: "1.0"; name: string;
   brief: { text: string; script?: string; audio: string[]; references: string[]; brandDocs: string[]; storyboards: string[];
@@ -59,6 +66,7 @@ export interface MotionProject {
   review: { comments: ReviewComment[]; preview?: { rel: string; at: string } };
   renders?: RenderRecord[];
   controlModes: Record<ModeKey, ControlMode>;
+  rules?: RuleSpec[];   // the user's edited rule table; absent = the defaults
   engine: { kind: "effectcraft"; version: string; commit: string; projectPath: string };
   assets?: AssetReference[];
   layerMap?: LayerBinding[];   // optional so projects made before P1-11 still open
