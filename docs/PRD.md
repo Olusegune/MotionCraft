@@ -17,7 +17,7 @@ motion — instead of every motion-design genre at once. MotionCraft is an inter
 | Tier | Use cases |
 | --- | --- |
 | v1 | Kinetic typography; title and credit sequences; logo animation; lyric videos; music-driven 2D/2.5D sequences; social-media motion; simple 2D explainers |
-| v1.x | Documentary and broadcast packages; lower thirds; data-visualization templates; Lottie export |
+| v1.x | Documentary and broadcast packages; lower thirds; data-visualization templates; Lottie export; hand-off to After Effects and DaVinci Resolve (Fusion) (proposed: [INTEROP_PLAN.md](INTEROP_PLAN.md)) |
 | Later | 3D product animation; scientific and architectural visualization; projection mapping; cel and frame-by-frame animation; game and interactive graphics |
 
 **v1 inputs:** brief text, script, music or narration audio, reference images and mood boards, brand documents
