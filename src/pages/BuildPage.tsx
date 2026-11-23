@@ -7,10 +7,10 @@ import { Sheet } from "../shell/Sheet";
 import { Player, type Marker } from "../shell/Player";
 import { getApi } from "../lib/api";
 import { useSettings } from "../lib/settings";
-import { approveLayer, bindingFor, isChangedSinceApproval, reconcile, unlockLayer, type EngineLayer, type EngineSnapshot } from "../lib/layers";
-import { hasAnyProvider } from "../lib/project";
+import { approveLayer, bindingFor, isChangedSinceApproval, markBuilt, reconcile, unlockLayer, type EngineLayer, type EngineSnapshot } from "../lib/layers";
 import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write } from "./build/Panels";
 import { usePreviewMovie } from "./build/usePreview";
+import { BuilderPanel } from "./build/BuilderPanel";
 import type { FrameProps } from "./common";
 
 export function BuildPage(f: FrameProps) {
@@ -66,8 +66,8 @@ export function BuildPage(f: FrameProps) {
   const write: Write = async (label, method, params, targets = []) => {
     setBusy(label); setErr(null);
     try {
-      const r = await call<EngineSnapshot & { layer?: number }>(method, params);
-      const own = r.layer !== undefined ? [r.layer, ...targets] : targets;
+      const r = await call<EngineSnapshot & { layer?: number; created?: { layer: number }[] }>(method, params);
+      const own = [...(r.layer !== undefined ? [r.layer] : []), ...targets, ...(r.created ?? []).map((c) => c.layer)];
       setSnap(r); update((p) => reconcile(p, r, own));
       return r;
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)); return undefined; }
@@ -146,7 +146,7 @@ export function BuildPage(f: FrameProps) {
         <p className="muted">Adds a camera layer. A camera only affects layers that are 3D; turn that on in EffectCraft.</p>
         <button className="btn" disabled={writesOff} onClick={() => write("camera", "add_camera", {})}><Camera size={16} aria-hidden="true" />Add camera</button>
       </Fold>
-      <Fold title="Agent"><p className="muted">{hasAnyProvider() ? "Plan, cost and progress appear here." : "No AI provider is configured, so no agent runs. Everything here is manual."}</p></Fold>
+      <BuilderPanel write={write} disabled={writesOff} onBuilt={(created) => update((p) => markBuilt(p, created))} />
       {unlocking && (
         <Sheet title="Unlock approved layer" onClose={() => setUnlocking(null)}
           footer={<><button className="btn" onClick={() => setUnlocking(null)}>Keep it approved</button>

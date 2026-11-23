@@ -17,9 +17,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .adapter import USER, Command, CompSettings, MockAdapter, UserAction
+from .adapter import BUILDER, USER, Command, CompSettings, MockAdapter, UserAction
 from .adapter.base import BaseAdapter
-from .adapter.errors import AdapterError, CommandFailed, LockedLayerError
+from .adapter.errors import AdapterContractError, AdapterError, CommandFailed, LockedLayerError
 from .adapter.real import EffectCraftAdapter
 from . import audio as audio_mod
 from .primitives import library as prim
@@ -28,7 +28,7 @@ from .providers.jobs import JobRefused, Jobs
 from .providers.net import Net
 from .providers.registry import Registry
 from .llm import Llm
-from .agents import director
+from .agents import builder, director
 
 ECPROJ = "comp.ecproj"
 
@@ -157,6 +157,43 @@ class Service:
         return director.draft_intent(self.llm, provider=provider, model=model, brief=brief, script=script, duration_sec=duration_sec,
                                      api_key=api_key, spend_token=spend_token, offline=offline)
 
+    def builder_plan(self, provider: str, model: str, context: dict, api_key: str = "", spend_token: str = "", offline: bool = False) -> dict:
+        """The Builder proposes layers and motion. Nothing is created: the page shows the plan and the user confirms builder_execute."""
+        return builder.draft_plan(self.llm, provider=provider, model=model, context=context, api_key=api_key, spend_token=spend_token, offline=offline)
+
+    def builder_execute(self, plan: dict) -> dict:
+        """Builds a plan as the Builder actor. The plan is validated again here: the page is never trusted. Only layers created by this
+        call are touched, and the adapter's lock policy applies to every command. Cost is a known $0 (no generation)."""
+        a = self._need()
+        comp = a.inspect().comp(None)
+        checked = builder.validate(plan if isinstance(plan, dict) else {}, duration_sec=comp.duration, fps=comp.frame_rate)
+        if checked["cost"]["usd"] > 0:      # cannot happen today; a paid plan would need a spend token from a click
+            raise AdapterError("This plan costs money and needs a spend confirmation.")
+        created: list[dict] = []
+        warnings = list(checked["warnings"])
+        try:
+            for L in checked["plan"]["layers"]:
+                if L["kind"] == "text":
+                    cmd = Command(id="layer.newText", params={"text": L["text"], "size": L["size"], "name": L["name"]})
+                elif L["kind"] == "shape":
+                    cmd = Command(id="layer.newShape", params={"kind": L["shape"], "name": L["name"], "size": [320, 320] if L["shape"] != "rect" else [480, 270]})
+                else:
+                    cmd = Command(id="layer.newSolid", params={"name": L["name"], "color": L["color"]})
+                lid = int(a.execute([cmd], actor=BUILDER).results[0].result["layer"])
+                applied: list[str] = []
+                for an in L["animations"]:
+                    try:
+                        self._apply(lid, an["primitive"], an["params"], BUILDER)
+                        applied.append(an["primitive"])
+                    except (prim.PrimitiveError, CommandFailed, AdapterContractError) as e:   # one motion failing does not stop the build
+                        warnings.append(f"{L['name']}: {an['primitive']} was not applied. {e}")
+                created.append({"key": L["key"], "layer": lid, "kind": L["kind"], "role": L["role"], "name": L["name"], "primitives": applied})
+        except Exception as e:
+            a.save()
+            raise AdapterError(f"The build stopped after {len(created)} of {len(checked['plan']['layers'])} layers: {e}") from None
+        a.save()
+        return {"created": created, "warnings": warnings, "cost": checked["cost"], **self._snapshot()}
+
     def generate_poll(self, job: str) -> dict:
         return self.jobs.poll(job)
 
@@ -210,6 +247,12 @@ class Service:
         return {"primitives": prim.describe()}
 
     def apply_primitive(self, layer: int, primitive: str, params: dict | None = None) -> dict:
+        n = self._apply(layer, primitive, params, USER)
+        self._need().save()
+        return {"applied": primitive, "commands": n, **self._snapshot()}
+
+    def _apply(self, layer: int, primitive: str, params: dict | None, actor) -> int:
+        """Builds a primitive's commands for one layer and runs them as `actor`. Returns the command count. Does not save."""
         a = self._need()
         snap = a.inspect()
         comp = snap.comp(None)
@@ -230,9 +273,8 @@ class Service:
                        has_animators=any(k.startswith("text/animators/") for k in props))
         cmds = prim.build(primitive, ctx, params)
         # Keyframe recipes replace nothing: an existing key at the same time is overwritten by the engine. Stop at the first error.
-        a.execute(cmds, actor=USER)
-        a.save()
-        return {"applied": primitive, "commands": len(cmds), **self._snapshot()}
+        a.execute(cmds, actor=actor)
+        return len(cmds)
 
     def audio_analyze(self, rel: str) -> dict:
         f = self._asset(rel, ("audio",))

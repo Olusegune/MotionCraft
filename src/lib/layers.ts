@@ -54,6 +54,19 @@ export function reconcile(p: MotionProject, snap: EngineSnapshot, ownWrites: num
   return changed ? { ...p, layerMap: map, revisions, approvals, updatedAt: nowIso() } : p;
 }
 
+/** Layers the Builder agent just made: bind them to it (role, provenance, first motion) and log one agent revision. Approvals stay the user's. */
+export function markBuilt(p: MotionProject, created: { layer: number; role: string; primitives: string[]; name: string }[]): MotionProject {
+  if (!created.length) return p;
+  const ids = new Set(created.map((c) => c.layer));
+  const roles = ["title", "body-text", "logo", "background", "texture", "camera", "audio-driver", "other"];
+  const map = (p.layerMap ?? []).map((b) => {
+    const c = created.find((x) => x.layer === b.engineLayerId);
+    return c ? { ...b, role: (roles.includes(c.role) ? c.role : "other") as LayerBinding["role"], primitiveId: c.primitives[0], provenance: { ...b.provenance, actor: "agent:builder" as const } } : b;
+  });
+  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "agent:builder", kind: "agent_edit", layers: [...ids], summary: `Builder made ${created.length} layers: ${created.map((c) => c.name).join(", ")}` };
+  return { ...p, layerMap: map, revisions: [...p.revisions, rev], updatedAt: nowIso() };
+}
+
 /** A layer shows "Changed in EffectCraft" while its latest layer approval says so and its hash still differs from the approved one. */
 export function isChangedSinceApproval(p: MotionProject, l: EngineLayer): boolean {
   const b = bindingFor(p, l.id);

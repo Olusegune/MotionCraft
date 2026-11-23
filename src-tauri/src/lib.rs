@@ -430,20 +430,20 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 19] = [
+const ENGINE_METHODS: [&str; 20] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
-    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll",
+    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute",
 ];
-const MODEL_METHODS: [&str; 10] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent"];
+const MODEL_METHODS: [&str; 11] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
-const LLM_CALL_METHODS: [&str; 2] = ["llm_complete", "director_intent"];
+const LLM_CALL_METHODS: [&str; 3] = ["llm_complete", "director_intent", "builder_plan"];
 /// Language-model providers that run in the cloud: a call needs a key and a spend token. Local ones (ollama, lmstudio, inkling) need neither,
 /// and the helper only lets them reach a loopback address. Value = the credential-store account the key is kept under.
 const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthropic"), ("gemini", "google"), ("openrouter", "openrouter")];
 const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
 /// Credential-store accounts: the generation providers plus the two language-model-only ones.
 const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
-const WRITE_METHODS: [&str; 10] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers"];
+const WRITE_METHODS: [&str; 11] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
 const PAID_ENGINE_METHODS: [&str; 1] = ["render_start"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
@@ -684,7 +684,7 @@ fn sidecar_request(st: &EngineState, cli: Option<&Path>, data_dir: Option<&Path>
     sc.next_id += 1;
     let line = serde_json::json!({"id": id, "method": method, "params": params}).to_string();
     let io_ok = writeln!(sc.stdin, "{line}").and_then(|_| sc.stdin.flush()).is_ok();
-    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || LLM_CALL_METHODS.contains(&method) { 180 } else { 60 });
+    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || method == "builder_execute" || LLM_CALL_METHODS.contains(&method) { 180 } else { 60 });
     let reply: Result<Value, String> = if io_ok {
         loop {
             match sc.rx.recv_timeout(timeout) {
@@ -1404,6 +1404,9 @@ mod tests {
         for m in LLM_CALL_METHODS {
             assert!(MODEL_METHODS.contains(&m) && !WRITE_METHODS.contains(&m), "{m} must be allowed, gated and not write the project");
         }
+        assert!(LLM_CALL_METHODS.contains(&"builder_plan"), "the Builder's planning call goes through the same gate");
+        assert!(ENGINE_METHODS.contains(&"builder_execute") && WRITE_METHODS.contains(&"builder_execute"), "building writes the project, so it is refused while EffectCraft has it open");
+        assert!(!PAID_ENGINE_METHODS.contains(&"builder_execute"), "a plan costs a known $0 today; a paid plan would need its own token path");
         assert!(LLM_CALL_METHODS.contains(&"director_intent"), "the Director calls a model, so it goes through the same gate");
         for (p, account) in LLM_CLOUD {
             assert!(!LLM_LOCAL.contains(&p), "{p} cannot be both cloud and local");
