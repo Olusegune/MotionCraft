@@ -164,3 +164,34 @@ is silently lost: MotionCraft is read-only while an EffectCraft window it launch
 One ticket per branch and PR using `.github/pull_request_template.md`. Report test counts honestly; a skipped test is "not
 checked", never "passed". If the PRD, AGENTS.md and the code disagree, stop and say so in the PR. On Windows, write multi-line
 files with Python or an editor (shell here-documents with quotes broke repeatedly) and keep commit messages free of double quotes.
+
+## 10. Open decisions and my recommendation (2026-11-23)
+
+Victor asked what I think about the After Effects and Fusion question and asked for it to be recorded here. This is opinion, not
+fact; the facts are in [INTEROP_PLAN.md](INTEROP_PLAN.md).
+
+**After Effects and Fusion: make them hand-off targets, not second engines.**
+- EffectCraft already writes and reads `.aep` files, so After Effects hand-off is the cheapest big feature on the list: days if the
+  files open cleanly, not weeks. Making After Effects or Fusion a full editor would mean a second adapter, a second contract test
+  suite, and giving up the rule that the `.ecproj` is the only home of composition data. That is a different product.
+- The honest cost of hand-off: once work is in After Effects, MotionCraft cannot enforce approvals or locks there. Only an `.aep`
+  import brings edits back, and it should be treated as a new revision. Resolve and Fusion give back rendered media only.
+- **Do the 1-day check first (P6-01):** open the `.aep` that `file.exportAep` writes in your After Effects 2025. It has not been
+  opened yet, and EffectCraft's notes say After Effects 2026 opens it. If it opens cleanly, build "Open in After Effects"; if it
+  does not, the plan changes before any UI is written.
+- **Fusion:** start with rendered ProRes 4444 clips with alpha on the Fusion page, which works in any Resolve edition. Do not
+  promise generated Fusion comps or live control until you know whether your Resolve is the free or Studio edition (Studio only
+  can be scripted from outside) and whether you mean the Fusion page or Fusion Studio.
+
+**Sequence.** Keep the order: (1) install and run the installers on a clean PC and watch the draft movie play, (2) the
+language-model router and the agents, which are what make this a director tool and not a form-filler, (3) After Effects hand-off
+(P6-01 to P6-03), (4) Resolve and Fusion. Reason: the editors you can hand to are only useful once the thing that produces the
+work is solid, and the biggest unverified risk today is that the installed app has never been run end to end by a person.
+
+**Decisions still waiting for Victor**
+1. Hand-off targets (recommended) or full alternative editors for After Effects and Fusion (ADR-0006 is proposed, not accepted).
+2. Fusion page inside Resolve, or Fusion Studio?
+3. Resolve edition: free or Studio (Help, About).
+4. Phase 0 sign-off items in section 7 (hand-edit test, a Mac build, the Arabic and Hebrew pictures).
+5. Templates page deferral and the stage-mode defaults marked "proposed" in `docs/UI_UX.md`.
+
