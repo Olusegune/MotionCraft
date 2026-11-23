@@ -23,6 +23,7 @@ NO_LAYER = {
     "layer.tree", "prop.get", "text.fonts", "text.fontFeatures",
     "renderQueue.add", "renderQueue.render",
     "layer.newText", "layer.newShape", "layer.newSolid", "layer.newNull", "layer.newCamera",
+    "file.import", "layer.addItem",          # bring media into the project and put it in the comp as a NEW layer
 }
 # Commands that take one layer in `layer`.
 SINGLE = {"prop.set", "prop.addKey", "layer.setText", "layer.rename", "text.animatorFontAxes", "layer.addTextAnimator",

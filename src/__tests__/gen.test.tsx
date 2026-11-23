@@ -146,3 +146,34 @@ describe("image and video generation", () => {
     expect(await screen.findByText(/Aggregator · Price unknown/)).toBeInTheDocument();
   });
 });
+
+describe("direction proposals", () => {
+  it("make three stills after one confirmation, then use one as the direction", async () => {
+    const f = fake();
+    f.keys.byteplus = true;
+    setApiForTests(f.api);
+    updateSettings({ generative: true });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click((await screen.findAllByRole("button", { name: "New project" }))[0]);
+    await user.type(screen.getByLabelText("Name"), "Props");
+    await user.click(screen.getByRole("button", { name: "Create project" }));
+    await screen.findByRole("heading", { name: "Brief" });
+    const bar = screen.getByRole("navigation", { name: "Stages" });
+    await user.click(Array.from(bar.querySelectorAll("button")).find((b) => b.textContent === "Direction")!);
+    const make = await screen.findByRole("button", { name: "Make 3 stills…" });
+    await waitFor(() => expect(make).toBeEnabled());
+    await user.click(make);
+    const dlg = await screen.findByRole("dialog", { name: "Confirm spending" });
+    expect(within(dlg).getByText(/Estimate \$0\.120 for 3/)).toBeInTheDocument();
+    expect(f.spend()).toBe(0);
+    await user.click(within(dlg).getByRole("button", { name: "Confirm and make 3 stills" }));
+    await waitFor(() => expect(f.log.filter((c) => c.method === "generate_start")).toHaveLength(3));
+    expect(f.spend()).toBe(3);
+    const prompts = f.log.filter((c) => c.method === "generate_start").map((c) => String(c.params.prompt));
+    expect(new Set(prompts).size).toBe(3);                         // three different starting points
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Use this direction" })[0]).toBeEnabled(), { timeout: 8000 });
+    await user.click(screen.getAllByRole("button", { name: "Use this direction" })[0]);
+    expect((screen.getByLabelText("Typography") as HTMLSelectElement).value).toBe("editorial-minimal");
+  }, 20000);
+});

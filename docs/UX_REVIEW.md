@@ -27,15 +27,19 @@ different product and was not ported; only its shell patterns, spend gate and mo
 | 9 | Old project files (before assets, layerMap, moodboard) | Medium | Tested: open and every page renders |
 | 10 | Settings is one long sheet | Low | Open: split into tabs |
 
-## Still not what the mockups show (open, in priority order)
+## Second round: items 1 to 5 from the open list (this branch)
 
-1. **No playback or timeline.** The viewer shows one still preview from the engine; there is no scrubbing or animatic.
-2. **Build can only add text and a camera.** No shapes, pictures, footage or primitives as layers; no motion presets. This is
-   the biggest gap for "motion graphics": Phase 2 (primitive library and Builder) is what fills it.
-3. **No audio**: no waveform, beats or emotional-arc drawing in the strip (Phase 3).
-4. **No style frames or AI direction proposals** (needs an image provider and keys, or imported frames).
-5. **Review** has notes but no frame-accurate player or compare; **Deliver** cannot render yet (needs the spend sheet and render queue).
-6. Language-model modes (Assisted, Agent-led) are disabled: no LLM router yet.
+| # | Open item | Status |
+| --- | --- | --- |
+| 1 | Playback and timeline | **Built.** A draft movie (half-resolution H.264, rendered by EffectCraft on its own engine process so editing is never blocked) plays in the app. Player: play and pause, frame step (arrow keys), second step (Shift), scrub bar, frame number, timecode in IBM Plex Mono, ruler with beat marks, beat-section marks and notes. Space, Home and End work. Checked in tests; **playback inside the packaged WebView was not watched by a person** |
+| 2 | Build only had text and a camera | **Built.** Shapes (5), solid background, your own pictures, video and audio as layers; a motion library of 10 tested primitives (fade in and out, slide, rise, pop, pulse, drift, spin, per-letter reveal and rise) that write ordinary keyframes at the playhead. Each primitive is rendered on the real engine and its frames must differ over time (10 of 10 pass on both the installed release and the pinned build). Camera moves are not included: a camera only affects 3D layers |
+| 3 | No audio | **Built, scoped.** WAV waveform, tempo and beat grid (estimates; on click tracks tempo is within 1 BPM and beats within 20 ms), silences, beat markers written into the composition, audio added to the composition. Other formats need ffmpeg. Not Pulseframe's analysis: no sections, word timings or stems (P3-01) |
+| 4 | No AI direction proposals | **Built.** Three contrasting editable starting points, one confirmation, three stills from the image provider you chose, and Use this direction sets the style families and adds the still to the moodboard. Tested against a fake provider only; no live provider call was made |
+| 5 | No final render, no frame-accurate review | **Built.** Render final (H.264 or ProRes 4444 with alpha) goes through a single-use confirmation, runs on its own engine process, and is recorded in the project; verified through Rust, helper and the real engine (180 frames at 30 fps, correct size by ffprobe). Collected editable project exports the package to a folder you pick. Review plays the draft and pins notes to exact frames |
+
+Still open: the compare view, the tier-1 QA checks, a language-model router (Assisted and Agent-led), camera moves and 3D, sections
+and word timings from audio, an animatic over audio, and a proper timeline with layers and keyframes (EffectCraft remains the editor).
+The renders include audio only if the audio file was added to the composition; that was not verified by listening.
 
 ## QA run (what was executed and the result)
 

@@ -229,9 +229,22 @@ class EffectCraftAdapter(BaseAdapter):
         return PreviewResult(comp=meta.get("comp", 0), times=list(times), width=meta.get("width", 0), height=meta.get("height", 0),
                              png=png, contact_sheet=len(times) > 1)
 
+    def preview_movie(self, comp: int | str, output: Path) -> RenderResult:
+        """A DRAFT H.264 at half resolution for playback in the app. Not a final render: it is never delivered and needs no spend token."""
+        if not self._under(output, self.write_roots):
+            raise ValueError("preview output is outside the write roots")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        self._run(Command(id="renderQueue.add", params={"comp": comp, "format": "h264", "output": str(output), "resolution": "half"}))
+        out = self._run(Command(id="renderQueue.render", params={"wait": True}))
+        if isinstance(out, dict) and out.get("failed"):
+            raise RuntimeError(f"preview render failed: {out}")
+        frames = sum(i.get("frames", 0) for i in (out or {}).get("items", []))
+        return RenderResult(output=output, frames=frames, bytes=output.stat().st_size if output.exists() else 0)
+
     def _render(self, job: FinalRenderJob) -> RenderResult:
         if not self._under(job.output, self.write_roots):
             raise ValueError("render output is outside the write roots")
+        job.output.parent.mkdir(parents=True, exist_ok=True)
         self._run(Command(id="file.checkOutput", params={"path": str(job.output)}))
         params: dict[str, Any] = {"comp": job.comp, "output": str(job.output)}
         params.update({"format": "prores", "proresProfile": "4444", "channels": "rgba"} if job.preset == "prores4444" else {"format": "h264"})

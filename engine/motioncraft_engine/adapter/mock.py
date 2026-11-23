@@ -35,6 +35,8 @@ ACCEPT: dict[str, set[str]] = {
     "edit.duplicate": {"layers"}, "layer.style.dropShadow": {"layers"},
     "renderQueue.add": {"comp", "format", "output", "proresProfile", "channels"}, "renderQueue.render": {"wait"},
     "text.fonts": {"query"}, "text.fontFeatures": {"font"},
+    "file.import": {"paths", "sequence", "alphabetical", "frameRate"},
+    "layer.addItem": {"item", "time", "index", "position", "duration", "in", "out", "anchor"},
 }
 
 
@@ -204,6 +206,21 @@ class MockAdapter(BaseAdapter):
             kind = {"layer.newText": "Text", "layer.newShape": "Shape", "layer.newSolid": "Solid", "layer.newNull": "Null", "layer.newCamera": "Camera"}[cid]
             props = {"text/sourceText": {"value": p.get("text", ""), "keys": []}} if kind == "Text" else {}
             return {"layer": self._add_layer(kind, p.get("name") or p.get("text") or f"{kind} Layer", props)}
+        if cid == "file.import":
+            ids = []
+            for src in p["paths"]:
+                if not Path(src).is_file():
+                    raise AdapterContractError(f"cannot import {src}: file not found")
+                self._items = getattr(self, "_items", {})
+                i = self._alloc()
+                self._items[i] = Path(src).name
+                ids.append(i)
+            return {"items": ids, "comps": [], "errors": [], "warnings": []}
+        if cid == "layer.addItem":
+            name = getattr(self, "_items", {}).get(p["item"])
+            if name is None:
+                raise AdapterContractError(f"no project item {p['item']}")
+            return {"layer": self._add_layer("Footage", name, {})}
         if cid == "layer.tree":
             l = self._layer(c, int(p["layer"])); return {"id": l["id"], "name": l["name"], "properties": {"children": [
                 {"path": k, "value": v["value"]} for k, v in sorted(l["props"].items())]}}
@@ -289,8 +306,15 @@ class MockAdapter(BaseAdapter):
         return PreviewResult(comp=c["id"], times=list(times), width=w, height=h, png=_png(w, h, len(c["layers"])),
                              contact_sheet=len(times) > 1)
 
+    def preview_movie(self, comp: int | str, output: Path) -> RenderResult:
+        c = self._comp(comp)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"MOCKPREVIEW" + str(len(c["layers"])).encode())
+        return RenderResult(output=output, frames=int(round(c["dur"] * c["fps"])), bytes=output.stat().st_size)
+
     def _render(self, job: FinalRenderJob) -> RenderResult:
         c = self._comp(job.comp)
+        job.output.parent.mkdir(parents=True, exist_ok=True)
         job.output.write_bytes(b"MOCKRENDER" + str(len(c["layers"])).encode())
         return RenderResult(output=job.output, frames=int(round(c["dur"] * c["fps"])), bytes=job.output.stat().st_size)
 

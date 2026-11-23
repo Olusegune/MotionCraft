@@ -29,6 +29,7 @@ export interface RevisionRecord {
   kind: "agent_edit" | "manual_edit" | "qa_fix" | "unlock" | "intent_change" | "style_change";
   layers: number[]; summary: string;
 }
+export interface RenderRecord { id: string; preset: "h264" | "prores4444"; rel: string; frames: number | null; bytes: number | null; at: string }
 export interface ReviewComment { id: string; atSec: number; text: string; at: string }
 
 export interface LayerBinding {
@@ -55,7 +56,8 @@ export interface MotionProject {
            dimensions: Partial<Record<Dimension, { familyId: string; intensity: Intensity }>>;
            conflicts: { a: string; b: string; reason: string; overridden: boolean }[] };
   treatment: Record<string, { plan: string; motion: string; frameAssetId?: string }>;   // keyed by beatId (added in P1-01; see PR)
-  review: { comments: ReviewComment[] };
+  review: { comments: ReviewComment[]; preview?: { rel: string; at: string } };
+  renders?: RenderRecord[];
   controlModes: Record<ModeKey, ControlMode>;
   engine: { kind: "effectcraft"; version: string; commit: string; projectPath: string };
   assets?: AssetReference[];

@@ -40,7 +40,7 @@ export function createProject(name: string, deliverable: Deliverable = DEFAULT_D
     style: { dimensions: {}, conflicts: [] }, treatment: {}, review: { comments: [] },
     controlModes: { ...DEFAULT_MODES },
     engine: { kind: "effectcraft", version: PINNED_VERSION, commit: PINNED_COMMIT, projectPath: "comp.ecproj" },
-    layerMap: [], assets: [], approvals: [], revisions: [], budget: { capUsd: 10, approvalThresholdUsd: 1 }, createdAt: t, updatedAt: t,
+    layerMap: [], assets: [], renders: [], approvals: [], revisions: [], budget: { capUsd: 10, approvalThresholdUsd: 1 }, createdAt: t, updatedAt: t,
   };
 }
 
