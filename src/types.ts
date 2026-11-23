@@ -39,6 +39,12 @@ export interface LayerBinding {
   lock: "none" | "approved"; approvedHash?: string; lastKnownHash: string;
 }
 
+export interface AssetReference {
+  id: string; kind: "image" | "video"; path: string;          // path is relative to the package folder
+  provenance: { actor: string; prompt?: string; provider: string; model: string; at: string; licence: string;
+                costReported: boolean; costValue: number | null; costUnit: string | null };
+}
+
 export interface MotionProject {
   id: string; schemaVersion: "1.0"; name: string;
   brief: { text: string; script?: string; audio: string[]; references: string[]; brandDocs: string[]; storyboards: string[];
@@ -50,6 +56,7 @@ export interface MotionProject {
   review: { comments: ReviewComment[] };
   controlModes: Record<ModeKey, ControlMode>;
   engine: { kind: "effectcraft"; version: string; commit: string; projectPath: string };
+  assets?: AssetReference[];
   layerMap?: LayerBinding[];   // optional so projects made before P1-11 still open
   approvals: ApprovalRecord[];
   revisions: RevisionRecord[];

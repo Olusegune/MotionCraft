@@ -4,6 +4,7 @@ import { Sheet } from "./Sheet";
 import { Segmented } from "./Segmented";
 import { updateSettings, useSettings } from "../lib/settings";
 import { approvedGatesAffectedBy, GATE_NAME, gateLabel, gateState, stageComplete } from "../lib/project";
+import { ProvidersSection } from "./ProvidersSection";
 import { SHORTCUTS } from "../lib/shortcuts";
 import type { EngineStatus } from "../lib/api";
 
@@ -36,7 +37,7 @@ export function GateSheet({ project, gate, onClose, onApprove }: { project: Moti
   );
 }
 
-export function SettingsSheet({ engine, onClose, onRecheck }: { engine: EngineStatus | null; onClose: () => void; onRecheck: () => void }) {
+export function SettingsSheet({ engine, onClose, onRecheck, onModels }: { engine: EngineStatus | null; onClose: () => void; onRecheck: () => void; onModels: () => void }) {
   const s = useSettings();
   const [path, setPath] = useState(s.enginePath);
   return (
@@ -47,13 +48,13 @@ export function SettingsSheet({ engine, onClose, onRecheck }: { engine: EngineSt
             <input type="range" min={90} max={250} step={5} value={s.uiScale} onChange={(e) => updateSettings({ uiScale: Number(e.target.value) })} /></label></section>
         <section><h3>Offline mode</h3>
           <Segmented label="Offline mode" value={s.offline ? "on" : "off"} onChange={(v) => updateSettings({ offline: v === "on" })} options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} />
-          <p className="muted">When on, cloud providers are disabled. There are no providers yet, so nothing changes today.</p></section>
+          <p className="muted">When on, cloud providers are disabled: no model lists are refreshed and nothing is generated.</p></section>
         <section><h3>Engine</h3>
           <p>{engine ? engine.detail : "Checking…"}</p>
           <label className="field"><span className="field-label">Path to effectcraft-cli (optional)</span><input value={path} onChange={(e) => setPath(e.target.value)} placeholder="Leave empty to search the usual install folders" /></label>
           <div className="row-actions"><button className="btn" onClick={() => { updateSettings({ enginePath: path.trim() }); onRecheck(); }}>Save and recheck</button></div>
           <p className="muted">Pinned: EffectCraft 0.24.1, commit 7e2d025.</p></section>
-        <section><h3>Providers</h3><p className="muted">None configured. Keys will live only in the operating system credential store (ticket P1-04).</p></section>
+        <ProvidersSection onModels={onModels} />
         <section><h3>Shortcuts</h3><ul className="plain">{SHORTCUTS.map((x) => <li key={x.id}><span className="kbd">{x.keys}</span> {x.label}</li>)}</ul></section>
       </div>
     </Sheet>

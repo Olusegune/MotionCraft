@@ -21,13 +21,18 @@ from .adapter import USER, Command, CompSettings, MockAdapter, UserAction
 from .adapter.base import BaseAdapter
 from .adapter.errors import AdapterError
 from .adapter.real import EffectCraftAdapter
+from .providers.jobs import JobRefused, Jobs
+from .providers.net import Net
+from .providers.registry import Registry
 
 ECPROJ = "comp.ecproj"
 
 
 class Service:
-    def __init__(self, adapter_factory):
+    def __init__(self, adapter_factory, data_dir: Path | None = None, jobs: Jobs | None = None):
         self._factory = adapter_factory
+        self.reg = Registry((data_dir or Path.home() / ".motioncraft") / "registry.json")
+        self.jobs = jobs or Jobs(self.reg, Net())
         self.a: BaseAdapter | None = None
         self.pkg: Path | None = None
 
@@ -108,6 +113,27 @@ class Service:
         p = a.preview(None, [float(t) for t in (times or [0.0])], max_side=side)
         return {"width": p.width, "height": p.height, "png": base64.b64encode(p.png).decode("ascii")}
 
+    # ------------------------------------------------------------ models and generation (ADR-0005)
+    def models(self) -> dict:
+        return {"models": self.reg.all(), "status": self.reg.status()}
+
+    def models_refresh(self, keys: dict | None = None, offline: bool = False) -> dict:
+        if offline:
+            raise JobRefused("Offline mode is on, so cloud providers are disabled.")
+        res = self.reg.refresh(self.jobs.net, {k: str(v) for k, v in (keys or {}).items()})
+        return {"results": res, **self.models()}
+
+    def generate_start(self, package: str, provider: str, model: str, prompt: str, api_key: str = "", params: dict | None = None,
+                       spend_token: str = "", generative_enabled: bool = False, offline: bool = False) -> dict:
+        return self.jobs.start(provider=provider, model=model, prompt=prompt, params=params, api_key=api_key, package=Path(package),
+                               spend_token=spend_token, generative_enabled=generative_enabled, offline=offline)
+
+    def generate_poll(self, job: str) -> dict:
+        return self.jobs.poll(job)
+
+    def generate_cancel(self, job: str) -> dict:
+        return self.jobs.cancel(job)
+
     def close(self) -> dict:
         if self.a is not None:
             self.a.close()
@@ -141,6 +167,7 @@ def serve(service: Service, rin=sys.stdin, rout=sys.stdout) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--effectcraft-cli", help="path to effectcraft-cli (the pinned version)")
+    ap.add_argument("--data-dir", help="where the model registry cache lives (the app data folder)")
     ap.add_argument("--mock", action="store_true", help="in-memory engine for tests; never used by the app")
     a = ap.parse_args(argv)
     if a.mock:
@@ -149,8 +176,9 @@ def main(argv: list[str] | None = None) -> int:
         cli = Path(a.effectcraft_cli)
         factory = lambda pkg: EffectCraftAdapter(cli, read_roots=[pkg], write_roots=[pkg])  # noqa: E731
     else:
-        ap.error("--effectcraft-cli is required (or --mock for tests)")
-    serve(Service(factory))
+        def factory(pkg):  # model listing and generation work without EffectCraft; engine methods say why they cannot
+            raise AdapterError("EffectCraft was not found. Set its path in Settings.")
+    serve(Service(factory, Path(a.data_dir) if a.data_dir else None))
     return 0
 
 

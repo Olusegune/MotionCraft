@@ -2,6 +2,17 @@ import type { MotionProject, ProjectSummary } from "../types";
 import type { EngineSnapshot } from "./layers";
 
 export interface PreviewImage { width: number; height: number; png: string }
+export type ProviderId = "byteplus" | "google" | "openai" | "kie" | "fal";
+export interface ModelEntry {
+  provider: ProviderId; model: string; name: string; media: "image" | "video"; official: boolean; listed: boolean; source: string;
+  price: { known: boolean; unit: string | null; value: number | null; note: string };
+}
+export interface ModelList { models: ModelEntry[]; status: Record<string, { refreshed: number | null; stale: boolean }> }
+export interface GenJob {
+  id: string; state: "queued" | "running" | "done" | "failed" | "cancelled"; detail: string; provider: ProviderId; model: string; kind: "image" | "video";
+  estimate: { value: number | null; unit: string | null; label: "Estimate" | "Unknown" }; elapsed: number; error: string | null;
+  asset: null | { path: string; kind: "image" | "video"; provenance: import("../types").AssetReference["provenance"] };
+}
 
 export interface EngineStatus {
   state: "connected" | "missing" | "version-mismatch" | "error";
@@ -17,6 +28,12 @@ export interface Api {
   /** Calls the Python engine helper (only a closed list of methods; the shell validates the package path). */
   engine<T = EngineSnapshot>(method: string, params: Record<string, unknown>, path: string, overridePath: string): Promise<T>;
   effectcraftWindowOpen(): Promise<boolean>;
+  keyStatus(): Promise<Record<ProviderId, boolean>>;
+  setKey(provider: ProviderId, key: string): Promise<void>;
+  deleteKey(provider: ProviderId): Promise<void>;
+  /** The spend gate: call only from the click on the confirmation sheet. Returns a single-use token. */
+  confirmSpend(provider: ProviderId, model: string): Promise<string>;
+  assetDataUrl(path: string, rel: string): Promise<string>;
 }
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -32,6 +49,11 @@ async function tauriApi(): Promise<Api> {
     openEffectCraft: (path, overridePath) => invoke("open_in_effectcraft", { path, overridePath }),
     engine: (method, params, path, overridePath) => invoke("engine_call", { method, params, overridePath, package: path }),
     effectcraftWindowOpen: () => invoke("effectcraft_window_open"),
+    keyStatus: () => invoke("provider_key_status"),
+    setKey: (provider, key) => invoke("set_provider_key", { provider, key }),
+    deleteKey: (provider) => invoke("delete_provider_key", { provider }),
+    confirmSpend: (provider, model) => invoke("confirm_spend", { provider, model }),
+    assetDataUrl: (path, rel) => invoke("asset_data_url", { path, rel }),
   };
 }
 
@@ -62,6 +84,11 @@ function webApi(): Api {
     async openEffectCraft() { throw new Error("Open in EffectCraft needs the desktop app."); },
     async engine() { throw new Error("The engine runs in the desktop app. This browser preview cannot reach it."); },
     async effectcraftWindowOpen() { return false; },
+    async keyStatus() { return { byteplus: false, google: false, openai: false, kie: false, fal: false }; },
+    async setKey() { throw new Error("Keys are stored in the operating system credential store, which needs the desktop app."); },
+    async deleteKey() { /* nothing stored */ },
+    async confirmSpend() { throw new Error("Spending needs the desktop app."); },
+    async assetDataUrl() { throw new Error("Needs the desktop app."); },
   };
 }
 

@@ -4,6 +4,7 @@ import { Fold } from "../shell/Fold";
 import { PageFrame } from "../shell/PageFrame";
 import { Field, type FrameProps } from "./common";
 import { hasAnyProvider } from "../lib/project";
+import { GeneratePanel } from "./GeneratePanel";
 
 const ATTACHMENTS = ["Script", "Music or narration audio", "Reference images", "Brand documents (PDF)", "Storyboard images"];
 
@@ -19,7 +20,7 @@ export function BriefPage(f: FrameProps) {
         </ul>
         <p className="why">Importing files arrives in ticket P1-07. Until then, paste the script into the box on the left.</p>
       </Fold>
-      <Fold title="Media"><p className="muted">No media yet. Imported and generated assets will list their provenance, licence note and availability here.</p></Fold>
+      <Fold title="Media" meta={<span className="count">{project.assets?.length ?? 0}</span>}><GeneratePanel /></Fold>
       <Fold title="Audio"><p className="muted">No audio yet. Analysis, sync modes and the restraint slider are in Build, Audio (Phase 3).</p></Fold>
     </>
   );

@@ -17,12 +17,17 @@ function fakeApi() {
   let guiOpen = false;
   const api: Api = {
     async list() { return [...store.values()].map((p) => ({ id: p.id, name: p.name, path: `mem:${p.id}`, updatedAt: p.updatedAt })); },
-    async create(p) { store.set(p.id, p); return { id: p.id, name: p.name, path: `mem:${p.id}`, updatedAt: p.updatedAt } as ProjectSummary; },
-    async load(path) { return store.get(path.replace("mem:", ""))!; },
-    async save(_path, p) { store.set(p.id, p); },
+    async create(p: MotionProject) { store.set(p.id, p); return { id: p.id, name: p.name, path: `mem:${p.id}`, updatedAt: p.updatedAt } as ProjectSummary; },
+    async load(path: string) { return store.get(path.replace("mem:", ""))!; },
+    async save(_path: string, p: MotionProject) { store.set(p.id, p); },
     async engineStatus() { return { state: "connected", version: "0.24.1", pinned: "0.24.1", detail: "ok" }; },
     async openEffectCraft() { guiOpen = true; },
     async effectcraftWindowOpen() { return guiOpen; },
+    async keyStatus() { return { byteplus: false, google: false, openai: false, kie: false, fal: false }; },
+    async setKey() { /* none */ },
+    async deleteKey() { /* none */ },
+    async confirmSpend() { return "t"; },
+    async assetDataUrl() { return "data:image/png;base64,AA=="; },
     async engine(method: string, params: Record<string, unknown>) {
       calls.push(method);
       if (guiOpen && ["add_text", "set_text", "lock", "unlock"].includes(method)) throw new Error("EffectCraft has this project open.");
@@ -31,7 +36,7 @@ function fakeApi() {
       if (method === "preview") return { width: 640, height: 360, png: PNG } as never;
       return snap() as never;
     },
-  } as Api;
+  } as unknown as Api;
   return { api, calls, setLayerHash: (id: number, h: string) => { layers = layers.map((l) => (l.id === id ? { ...l, hash: h } : l)); } };
 }
 
