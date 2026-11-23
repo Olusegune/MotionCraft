@@ -19,3 +19,4 @@ engine/**/__pycache__/
 spike/results/*.log
 /build/
 *.spec
+/portable/
