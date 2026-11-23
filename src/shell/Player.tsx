@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ChevronsLeft, ChevronsRight, Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { timecode } from "../lib/time";
 
 export interface Marker { t: number; label: string; kind: "beat" | "note" | "section" }
@@ -13,7 +13,11 @@ export interface PlayerHandle { seek(sec: number): void; time(): number; frame()
 export const Player = forwardRef<PlayerHandle, {
   src: string | null; fps: number; duration: number; markers?: Marker[]; peaks?: number[]; aspect?: string; stale?: boolean;
   emptyText?: string; onTime?: (t: number) => void; onMarkerClick?: (m: Marker) => void;
-}>(function Player({ src, fps, duration, markers = [], peaks, aspect = "16 / 9", stale, emptyText, onTime, onMarkerClick }, ref) {
+  /** Studio layout: the picture takes all the height it is given (never cropped), with a frosted transport bar and a full-screen view (key F). */
+  fill?: boolean;
+}>(function Player({ src, fps, duration, markers = [], peaks, aspect = "16 / 9", stale, emptyText, onTime, onMarkerClick, fill = false }, ref) {
+  const [theatre, setTheatre] = useState(false);
+  const ar = (() => { const [w, h] = aspect.split("/").map((x) => Number(x.trim())); return w > 0 && h > 0 ? w / h : 16 / 9; })();
   const video = useRef<HTMLVideoElement>(null);
   const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -49,13 +53,15 @@ export const Player = forwardRef<PlayerHandle, {
     else if (e.key === "ArrowLeft") { e.preventDefault(); video.current?.pause(); seek((frame(t) - step) / fps); }
     else if (e.key === "Home") { e.preventDefault(); seek(0); }
     else if (e.key === "End") { e.preventDefault(); seek(len); }
+    else if (fill && (e.key === "f" || e.key === "F") && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); setTheatre((v) => !v); }
+    else if (e.key === "Escape" && theatre) { e.preventDefault(); setTheatre(false); }
   };
   const total = len || duration || 1;
 
   return (
-    <div className="player" role="group" aria-label="Preview player" tabIndex={0} onKeyDown={key}>
-      <div className="viewer-surround">
-        <div className="viewer player-screen" style={{ aspectRatio: aspect }}>
+    <div className={`player${fill ? " fill" : ""}${theatre ? " theatre" : ""}`} role="group" aria-label="Preview player" tabIndex={0} onKeyDown={key}>
+      <div className={fill ? "stage" : "viewer-surround"}>
+        <div className="viewer player-screen" style={{ aspectRatio: aspect, ["--ar" as string]: ar }}>
           {src ? (
             <video ref={video} src={src} preload="auto" playsInline muted={false} aria-label="Preview movie"
               onLoadedMetadata={(e) => setLen(e.currentTarget.duration || duration)} onPlay={() => setPlaying(true)}
@@ -63,12 +69,13 @@ export const Player = forwardRef<PlayerHandle, {
               onEnded={() => setPlaying(false)} onSeeked={() => video.current && setT(video.current.currentTime)} />
           ) : <div className="viewer-empty"><p className="strong">No preview movie yet</p><p>{emptyText ?? "Press Build preview to render a draft you can play and scrub."}</p></div>}
         </div>
-        <p className="viewer-meta" role="status">{src ? <>Draft at half resolution{stale ? " · Out of date: the project changed since" : ""}</> : "No render yet. Targets: first preview 60 s, small edit 10 s."}</p>
+        {fill && <button className="icon-btn stage-full" aria-label={theatre ? "Leave full screen" : "Full screen preview"} aria-pressed={theatre} title={theatre ? "Leave full screen (F or Esc)" : "Full screen: just the picture (F)"} onClick={() => setTheatre((v) => !v)}>{theatre ? <Minimize2 size={18} strokeWidth={1.75} /> : <Maximize2 size={18} strokeWidth={1.75} />}</button>}
+        <p className={`viewer-meta${fill ? " stage-meta" : ""}`} role="status">{src ? <>Draft at half resolution{stale ? " · Out of date: the project changed since" : ""}</> : "No render yet. Targets: first preview 60 s, small edit 10 s."}</p>
       </div>
-      <div className="transport" aria-label="Transport">
+      <div className={`transport${fill ? " glass" : ""}`} aria-label="Transport">
         <button className="icon-btn" aria-label="Go to start" disabled={!src} onClick={() => seek(0)}><SkipBack size={18} strokeWidth={1.75} /></button>
         <button className="icon-btn" aria-label="Back one frame" disabled={!src} onClick={() => { video.current?.pause(); seek((frame(t) - 1) / fps); }}><ChevronsLeft size={18} strokeWidth={1.75} /></button>
-        <button className="btn" disabled={!src} onClick={toggle} aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause size={18} strokeWidth={1.75} aria-hidden="true" /> : <Play size={18} strokeWidth={1.75} aria-hidden="true" />}{playing ? "Pause" : "Play"}</button>
+        <button className={fill ? "btn play-round" : "btn"} disabled={!src} onClick={toggle} aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause size={18} strokeWidth={1.75} aria-hidden="true" /> : <Play size={18} strokeWidth={1.75} aria-hidden="true" />}{!fill && (playing ? "Pause" : "Play")}</button>
         <button className="icon-btn" aria-label="Forward one frame" disabled={!src} onClick={() => { video.current?.pause(); seek((frame(t) + 1) / fps); }}><ChevronsRight size={18} strokeWidth={1.75} /></button>
         <button className="icon-btn" aria-label="Go to end" disabled={!src} onClick={() => seek(total)}><SkipForward size={18} strokeWidth={1.75} /></button>
         <span className="mono timecode" aria-live="off" aria-label="Timecode">{timecode(t, fps)} / {timecode(total, fps)}</span>

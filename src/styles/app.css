@@ -91,6 +91,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .fold-head .chev { margin-left: auto; transition: transform var(--mc-t-panel); }
 .fold.open .chev { transform: rotate(180deg); }
 .fold-body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.fold-body[hidden] { display: none; }      /* a collapsed fold really hides its content (display:flex above would otherwise win over the hidden attribute) */
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .split-main { display: flex; flex-direction: column; gap: 16px; }
 .row { display: flex; gap: 16px; flex-wrap: wrap; } .row > * { flex: 1 1 220px; }
@@ -214,6 +215,26 @@ html.narrow .rail { width: auto; }
 html.narrow .header { flex-wrap: wrap; height: auto; min-height: 48px; row-gap: 4px; padding-top: 4px; padding-bottom: 4px; }
 html.narrow .app { grid-template-rows: auto minmax(0, 1fr) auto; }
 html.narrow .stagebar { flex-wrap: wrap; }
+
+/* studio layout on Build: the picture takes all the height there is, the timeline docks under it (idea from Pulseframe's Studio, own code) */
+.main:has(.studio) { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 12px; }
+.studio { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.studio > .player.fill { flex: 1; min-height: 0; }
+.studio > .timeline-dock { flex: none; max-height: 34%; overflow: auto; }
+.center:has(.studio) .page-head .intro { display: none; }
+.center:has(.studio) .page-head { padding-bottom: 0; }
+.player.fill { gap: 8px; min-height: 0; }
+.player.fill .stage { flex: 1; min-height: 0; width: 100%; container-type: size; display: grid; place-items: center; position: relative; background: var(--mc-bg-viewer); border-radius: var(--mc-r-panel); padding: 0; }
+.player.fill .player-screen { width: min(100cqw, calc(100cqh * var(--ar, 1.7778))); max-width: none; border-radius: 8px; box-shadow: 0 8px 28px color-mix(in srgb, var(--mc-bg-app) 70%, transparent); }
+.player.fill .stage-meta { position: absolute; left: 14px; bottom: 10px; margin: 0; font-size: 12px; opacity: 0.85; pointer-events: none; }
+.player.fill .stage-full { position: absolute; right: 12px; top: 12px; z-index: 2; }
+.transport.glass { flex-wrap: nowrap; justify-content: center; gap: 10px; padding: 6px 14px; border: 1px solid var(--mc-divider); border-radius: 14px; background: color-mix(in srgb, var(--mc-bg-raised) 72%, transparent); backdrop-filter: blur(12px); }
+.transport.glass .timecode { margin-left: 4px; min-width: 150px; text-align: center; }
+.play-round { width: 46px; height: 46px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--mc-accent); color: var(--mc-on-accent); border: 0; }
+.play-round:disabled { background: var(--mc-bg-raised); color: var(--mc-text-3); }
+.player.fill .ruler { height: 48px; }
+.player.theatre { position: fixed; inset: 0; z-index: 100; padding: 16px; background: var(--mc-bg-app); }
+.player.theatre .stage { background: var(--mc-bg-app); }
 
 /* player, transport, ruler */
 .player { display: flex; flex-direction: column; gap: 8px; outline: none; }

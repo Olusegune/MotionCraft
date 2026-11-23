@@ -30,6 +30,11 @@ export function BuildPage(f: FrameProps) {
   const [unlocking, setUnlocking] = useState<EngineLayer | null>(null);
   const [audio, setAudio] = useState<AudioInfo | null>(null);
   const [playhead, setPlayhead] = useState(0);
+  const [tlOpen, setTlOpen] = useState(true);
+  useEffect(() => {      // Ctrl and J hide or show the timeline, giving the preview the whole height
+    const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "j" || e.key === "J")) { e.preventDefault(); setTlOpen((v) => !v); } };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, []);
   const player = useRef<PlayerHandle>(null);
   const [spans, setSpans] = useState<{ id: number; in: number; out: number }[] | null>(null);
   const [structure, setStructure] = useState<{ sections: SongSection[]; downbeats: number[] } | null>(null);
@@ -132,14 +137,16 @@ export function BuildPage(f: FrameProps) {
       <div className="row-actions"><button className="btn" onClick={refreshEngine}><RotateCcw size={16} aria-hidden="true" />Reconnect</button><button className="btn" onClick={showSettings}>Locate EffectCraft</button></div>
     </div>
   ) : (
-    <div className="stack">
+    <div className="studio">
       {guiOpen && <div className="lockbar" role="status"><ExternalLink size={18} aria-hidden="true" /><span>EffectCraft has this project open. MotionCraft is read-only until you close it, then it reloads and logs what you changed.</span></div>}
       {err && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {err}</p>}
       {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
-      <Player ref={player} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
+      <Player ref={player} fill src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
-      <TimelinePanel projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
+      <div className="timeline-dock">
+      <TimelinePanel open={tlOpen} onOpenChange={setTlOpen} projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
         sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
+      </div>
     </div>
   );
 

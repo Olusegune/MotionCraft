@@ -17,13 +17,15 @@ export interface TLLayer { id: number; name: string; kind: string; index: number
  * as a bar from its in point to its out point. Click anywhere to move the playhead; the player follows. Nothing here edits the
  * composition: keyframes, effects and properties stay in EffectCraft.
  */
-export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect, editable = false, onTiming, message = null }: {
+export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect, editable = false, onTiming, message = null, open, onOpenChange }: {
   projectKey: string; duration: number; fps: number; playhead: number; onSeek: (t: number) => void; layers: TLLayer[];
   sections?: SongSection[]; downbeats?: number[]; arc?: Beat[]; marks?: TLMark[]; selected?: number | null; onSelect?: (id: number) => void;
   /** T3: layers can be moved and trimmed when true (never an approved layer). `onTiming` is the only way a change leaves this component. */
   editable?: boolean; onTiming?: (id: number, change: TimingChange) => void;
   /** The engine's reason when a move or trim was refused, shown here where the person is looking. */
   message?: string | null;
+  /** Optional: the page can hide the timeline (Ctrl and J) to give the preview the whole height. */
+  open?: boolean; onOpenChange?: (open: boolean) => void;
 }) {
   const [pps, setPpsState] = useState(() => readPps(projectKey) ?? 24);
   const scroller = useRef<HTMLDivElement>(null);
@@ -93,7 +95,7 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
   const label = (l: TLLayer) => `Layer ${l.name}, ${l.kind}, ${clock(l.in)} to ${clock(l.out)}${l.approved ? ", approved" : ""}${l.changed ? ", changed in EffectCraft" : ""}${l.madeBy ? `, made by ${l.madeBy}` : ""}`;
 
   return (
-    <Fold title="Timeline" defaultOpen meta={<span className="count">{layers.length} layers</span>}>
+    <Fold title="Timeline" defaultOpen open={open} onOpenChange={onOpenChange} meta={<span className="count">{layers.length} layers</span>}>
       <div className="timeline" role="group" aria-label="Timeline" tabIndex={0} onKeyDown={key}>
         <div className="row-actions tl-bar-tools">
           <button className="icon-btn" aria-label="Zoom out" onClick={() => setPps(pps * 0.8)}><ZoomOut size={18} strokeWidth={1.75} /></button>

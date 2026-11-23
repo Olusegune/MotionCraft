@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { setQaPins } from "../lib/qaPins";
 import { describe, expect, it } from "vitest";
 import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
@@ -253,8 +254,36 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(await within(tl).findByRole("alert")).toHaveTextContent("already at that edge");
   });
 
+  it("studio layout: the preview fills the page, Ctrl and J hide the timeline, and F gives a full-screen picture", async () => {
+    const user = userEvent.setup();
+    fake(project());
+    render(<App />);
+    const tl = await toBuild(user);
+    const player = screen.getByRole("group", { name: "Preview player" });
+    expect(player).toHaveClass("fill");
+    expect(document.querySelector(".studio")).toBeTruthy();
+    const head = within(tl).queryByRole("button", { name: /^Timeline/ }) ?? screen.getAllByRole("button", { name: /^Timeline/ })[0];
+    expect(head).toHaveAttribute("aria-expanded", "true");
+    await user.keyboard("{Control>}j{/Control}");
+    await waitFor(() => expect(head).toHaveAttribute("aria-expanded", "false"));
+    await user.keyboard("{Control>}j{/Control}");
+    await waitFor(() => expect(head).toHaveAttribute("aria-expanded", "true"));
+    player.focus();
+    await user.keyboard("f");
+    expect(player).toHaveClass("theatre");
+    expect(screen.getByRole("button", { name: "Leave full screen" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(player).not.toHaveClass("theatre");
+  });
+
+  it("a collapsed fold really hides its content (the hidden attribute is not overridden by display)", async () => {
+    const css = readFileSync("src/styles/app.css", "utf-8");
+    expect(css).toMatch(/\.fold-body\[hidden\]\s*\{\s*display:\s*none/);
+  });
+
   it("has no raw colours: the styles use only tokens", async () => {
-    const css = (await import("../styles/app.css?raw")).default as string;
+    const css = readFileSync("src/styles/app.css", "utf-8");
+    expect(css.length).toBeGreaterThan(1000);
     const block = css.slice(css.indexOf("/* Director's timeline"));
     expect(block).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(block).not.toMatch(/\brgb\(|\bhsl\(/);

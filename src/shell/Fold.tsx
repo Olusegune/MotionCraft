@@ -2,8 +2,10 @@ import { useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
 /** Disclosure. Collapsing keeps content mounted so no work is lost (UI_UX criterion 4). */
-export function Fold({ title, children, defaultOpen = false, meta }: { title: string; children: ReactNode; defaultOpen?: boolean; meta?: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
+export function Fold({ title, children, defaultOpen = false, meta, open: controlled, onOpenChange }: { title: string; children: ReactNode; defaultOpen?: boolean; meta?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [inner, setInner] = useState(defaultOpen);
+  const open = controlled ?? inner;
+  const setOpen = (o: boolean) => { if (controlled === undefined) setInner(o); onOpenChange?.(o); };
   const id = useId();
   return (
     <section className={`fold${open ? " open" : ""}`}>
