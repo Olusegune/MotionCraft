@@ -25,8 +25,12 @@ Your first work is [docs/PHASE0_SPIKE.md](docs/PHASE0_SPIKE.md), then [docs/BACK
 - **Money:** any provider call that costs money and every final render needs a confirmation token obtained from a
   user click (port FilmCrafter3's `confirm_spend` pattern, S-01). No code path may queue paid work without one.
   Register every new paid path in the spend-gate test list.
-- **Official APIs or file import only.** No unofficial wrappers or resellers (no Suno via Kie.ai, no scraping).
-  Topaz = the local Topaz Video AI CLI or Topaz's own API — not via Kie or fal.
+- **Official APIs or file import only, with one amendment (ADR-0005, Victor, 2026-11-22).** Image and video generation may
+  also go through the aggregators FilmCrafter3 already uses (Kie.ai, fal) as opt-in providers, next to the official ones
+  (BytePlus Seedream, Google, OpenAI) and local ComfyUI. Still banned: scraping, unofficial wrappers, Suno or any music or
+  voice model via Kie.ai, and Topaz via Kie or fal (Topaz = the local Topaz Video AI CLI or Topaz's own API). Every
+  aggregator is off until the user adds its key and enables generative models, is blocked in offline mode, is allow-listed
+  by host, and every paid call needs the spend token below.
 - **Manual mode works with no AI provider configured.** Never make an AI call a prerequisite for a screen.
 - **Keys live only in the OS credential store** (`keyring` crate, as FilmCrafter3). Pass the narrowest set of keys
   to a child process. Never log or write keys.
