@@ -17,5 +17,5 @@ spike/out/
 engine/**/__pycache__/
 *.log
 spike/results/*.log
-build/
+/build/
 *.spec
