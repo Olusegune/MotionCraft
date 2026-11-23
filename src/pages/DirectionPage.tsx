@@ -4,7 +4,7 @@ import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Segmented } from "../shell/Segmented";
-import { applyLook, currentLook, DIMENSIONS, detectConflicts, FAMILIES, familyLabel } from "../lib/styles";
+import { applyLook, currentLook, DIMENSIONS, detectConflicts, FAMILIES, familyLabel, samePair } from "../lib/styles";
 import { StyleCard } from "../shell/StyleArt";
 import { gateState } from "../lib/project";
 import { LockBar, useLocked, type FrameProps } from "./common";
@@ -34,7 +34,7 @@ export function DirectionPage(f: FrameProps) {
       return { ...p, style: { ...p.style, dimensions: dims }, updatedAt: new Date().toISOString() };
     });
   const override = (a: string, b: string, reason: string, on: boolean) =>
-    update((p) => ({ ...p, style: { ...p.style, conflicts: [...p.style.conflicts.filter((c) => !(c.a === a && c.b === b)), { a, b, reason, overridden: on }] } }));
+    update((p) => ({ ...p, style: { ...p.style, conflicts: [...p.style.conflicts.filter((c) => !samePair(c, a, b)), { a, b, reason, overridden: on }] } }));
 
   const main = (
     <div className="stack">

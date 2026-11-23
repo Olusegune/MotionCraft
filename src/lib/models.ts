@@ -8,9 +8,10 @@ export function rankModels(list: ModelEntry[]): ModelEntry[] {
   return [...list].sort((a, b) => Number(isCurated(b)) - Number(isCurated(a)) || a.name.localeCompare(b.name));
 }
 
-/** Providers in the order to offer them: the ones that have a key first; otherwise the order the app lists them in. */
+/** Providers in the order to offer them: the ones with a key first, and among those the ones that have curated models; otherwise the order the app lists them in. */
 export function rankProviders(list: ModelEntry[], keys: Record<string, boolean>): ProviderId[] {
   const seen: ProviderId[] = [];
   for (const m of list) if (!seen.includes(m.provider)) seen.push(m.provider);
-  return [...seen.filter((p) => keys[p]), ...seen.filter((p) => !keys[p])];
+  const curated = (p: ProviderId) => list.some((m) => m.provider === p && isCurated(m));
+  return [...seen].sort((a, b) => Number(!!keys[b]) - Number(!!keys[a]) || Number(curated(b)) - Number(curated(a)) || seen.indexOf(a) - seen.indexOf(b));
 }

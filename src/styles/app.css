@@ -38,7 +38,9 @@ input.narrow { width: 108px; }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 
 /* shell */
-.app { display: grid; grid-template-rows: 56px minmax(0, 1fr) auto; height: 100%; min-width: 0; }
+html, body { overflow: hidden; }      /* the page never scrolls: every screen scrolls inside its own panel, so the header and stage bar stay put */
+.main, .inspector-body, .sheet-body, .tl-scroll { overscroll-behavior: contain; }
+.app { display: grid; grid-template-rows: 56px minmax(0, 1fr) auto; height: 100%; min-width: 0; overflow: hidden; }
 .app:not(:has(.stagebar)) { grid-template-rows: 56px minmax(0, 1fr); }
 .header { display: flex; align-items: center; gap: 16px; padding: 0 24px; background: var(--mc-bg-app); }
 .header-actions { display: inline-flex; align-items: center; gap: 10px; }

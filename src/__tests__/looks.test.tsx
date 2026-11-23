@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { setApiForTests, type Api } from "../lib/api";
 import { approve, createProject } from "../lib/project";
-import { applyLook, currentLook, DIMENSIONS, FAMILIES } from "../lib/styles";
+import { applyLook, currentLook, detectConflicts, DIMENSIONS, FAMILIES, samePair } from "../lib/styles";
 import type { MotionProject } from "../types";
 
 function fake(project: MotionProject) {
@@ -60,6 +60,20 @@ describe("looks: one family for every dimension", () => {
     expect(currentLook(q)).toBeNull();
     const r = applyLook(p, "collage"); delete r.style.dimensions.texture;
     expect(currentLook(r)).toBeNull();
+  });
+
+  it("an override is remembered whichever order the dimensions come back in (the project file lists them A to Z)", () => {
+    const p = createProject("x");
+    p.style.dimensions.typography = { familyId: "cinematic-title", intensity: "moderate" };
+    p.style.dimensions.color = { familyId: "neon-light", intensity: "moderate" };
+    const first = detectConflicts(p);
+    expect(first).toHaveLength(1); expect(first[0].overridden).toBe(false);
+    const saved = { ...p, style: { ...p.style, conflicts: [{ a: first[0].a, b: first[0].b, reason: first[0].reason, overridden: true }] } };
+    // after a reload the dimensions come back alphabetically: color first, typography second
+    const reloaded = { ...saved, style: { ...saved.style, dimensions: { color: p.style.dimensions.color, typography: p.style.dimensions.typography } } };
+    const again = detectConflicts(reloaded);
+    expect(again).toHaveLength(1); expect(again[0].overridden).toBe(true);
+    expect(samePair({ a: "x", b: "y" }, "y", "x")).toBe(true); expect(samePair({ a: "x", b: "y" }, "x", "z")).toBe(false);
   });
 
   it("every family has a picture and every picture colour is a token", () => {

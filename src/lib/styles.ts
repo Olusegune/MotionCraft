@@ -28,6 +28,9 @@ const CONFLICTS: { a: string; b: string; reason: string }[] = [
 ];
 export const familyLabel = (id: string) => FAMILIES.find((f) => f.id === id)?.label ?? id;
 
+/** A conflict is a pair; it is the same pair in either order. (The saved project lists dimensions A to Z, so the order after a reload is not the order it was made in.) */
+export const samePair = (x: { a: string; b: string }, a: string, b: string): boolean => (x.a === a && x.b === b) || (x.a === b && x.b === a);
+
 export function detectConflicts(p: MotionProject) {
   const picks = Object.entries(p.style.dimensions).map(([d, v]) => ({ d, family: FAMILIES.find((f) => f.id === v!.familyId) }));
   const out: { a: string; b: string; reason: string; overridden: boolean }[] = [];
@@ -38,7 +41,7 @@ export function detectConflicts(p: MotionProject) {
       const hit = (fa.tags.includes(c.a) && fb.tags.includes(c.b)) || (fa.tags.includes(c.b) && fb.tags.includes(c.a));
       if (!hit) continue;
       const a = `${picks[i].d}:${fa.id}`, b = `${picks[j].d}:${fb.id}`;
-      const prior = p.style.conflicts.find((x) => x.a === a && x.b === b);
+      const prior = p.style.conflicts.find((x) => samePair(x, a, b));
       out.push({ a, b, reason: c.reason, overridden: prior?.overridden ?? false });
     }
   }
