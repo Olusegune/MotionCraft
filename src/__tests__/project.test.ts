@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { updateSettings } from "../lib/settings";
 import { approve, createProject, effectiveMode, gateState, reviseApproved, stageComplete, DEFAULT_MODES } from "../lib/project";
 import { detectConflicts } from "../lib/styles";
 import { firedRules } from "../lib/rules";
@@ -14,6 +15,8 @@ function ready(): MotionProject {
   return p;
 }
 
+afterEach(() => updateSettings({ llmReady: false }));
+
 describe("project model", () => {
   it("uses the PRD default control modes", () => {
     const p = createProject("T");
@@ -25,6 +28,13 @@ describe("project model", () => {
     const p = createProject("T");
     expect(effectiveMode(p, "intent")).toBe("manual");
     expect(p.controlModes.intent).toBe("assisted");
+  });
+  it("honours the stored mode once a language model is ready, and falls back to Manual when it is not", () => {
+    const p = createProject("T");
+    updateSettings({ llmReady: true });
+    expect(effectiveMode(p, "intent")).toBe("assisted");
+    updateSettings({ llmReady: false });
+    expect(effectiveMode(p, "intent")).toBe("manual");
   });
   it("walks gate A through its states", () => {
     let p = createProject("T");

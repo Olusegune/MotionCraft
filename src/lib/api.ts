@@ -34,7 +34,7 @@ export interface Api {
   setKey(provider: KeyAccount, key: string): Promise<void>;
   deleteKey(provider: KeyAccount): Promise<void>;
   /** The spend gate: call only from the click on the confirmation sheet. Returns a single-use token. */
-  confirmSpend(provider: ProviderId, model: string): Promise<string>;
+  confirmSpend(provider: string, model: string): Promise<string>;
   assetDataUrl(path: string, rel: string): Promise<string>;
   projectsFolder(): Promise<string>;
   revealProjectsFolder(): Promise<void>;

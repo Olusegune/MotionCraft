@@ -78,6 +78,11 @@ export default function App() {
       .catch((e) => setEngine({ state: "error", pinned: "0.24.1", detail: String(e) }));
   }, [settings.enginePath]);
   useEffect(() => { refreshEngine(); }, [refreshEngine]);
+  // Is a language model chosen and usable? Decides whether Assisted and Agent-led can be picked. Offline mode rules out cloud ones.
+  useEffect(() => {
+    getApi().then((a) => a.engine<{ ready: boolean }>("llm_status", { offline: settings.offline }, "", settings.enginePath))
+      .then((s) => updateSettings({ llmReady: s.ready === true })).catch(() => updateSettings({ llmReady: false }));
+  }, [settings.offline, settings.enginePath]);
   // The engine may be installed or started after MotionCraft: look again whenever the window regains focus while it is missing.
   useEffect(() => {
     const onFocus = () => { if (engine && engine.state !== "connected") refreshEngine(); };

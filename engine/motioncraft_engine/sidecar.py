@@ -28,6 +28,7 @@ from .providers.jobs import JobRefused, Jobs
 from .providers.net import Net
 from .providers.registry import Registry
 from .llm import Llm
+from .agents import director
 
 ECPROJ = "comp.ecproj"
 
@@ -149,6 +150,12 @@ class Service:
                      spend_token: str = "", offline: bool = False) -> dict:
         return self.llm.complete(provider=provider, model=model, messages=messages, schema=schema, api_key=api_key,
                                  spend_token=spend_token, offline=offline)
+
+    def director_intent(self, provider: str, model: str, brief: str, script: str = "", duration_sec: float = 15, api_key: str = "",
+                        spend_token: str = "", offline: bool = False) -> dict:
+        """The Director drafts the intent. A proposal only: the page applies it when the user clicks, and Gate A stays theirs."""
+        return director.draft_intent(self.llm, provider=provider, model=model, brief=brief, script=script, duration_sec=duration_sec,
+                                     api_key=api_key, spend_token=spend_token, offline=offline)
 
     def generate_poll(self, job: str) -> dict:
         return self.jobs.poll(job)

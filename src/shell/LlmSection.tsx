@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { KeyRound } from "lucide-react";
 import { getApi, type KeyAccount } from "../lib/api";
-import { useSettings } from "../lib/settings";
+import { updateSettings, useSettings } from "../lib/settings";
 
 type Prov = { id: string; label: string; local: boolean; base_url: string; note: string };
 type Status = { config: { provider: string | null; model: string; base_url: string }; ready: boolean; reason: string; providers: Prov[] };
@@ -22,7 +22,7 @@ export function LlmSection() {
     try {
       const api = await getApi();
       const s = (await api.engine("llm_status", { offline }, "", "")) as Status;
-      setSt(s); setProv(s.config.provider ?? ""); setModel(s.config.model); setUrl(s.config.base_url);
+      updateSettings({ llmReady: s.ready }); setSt(s); setProv(s.config.provider ?? ""); setModel(s.config.model); setUrl(s.config.base_url);
       setKeys(await api.keyStatus());
     } catch { setSt(null); }
   }, [offline]);
