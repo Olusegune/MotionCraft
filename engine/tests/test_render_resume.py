@@ -172,7 +172,7 @@ def test_resume_needs_a_fresh_token_a_real_job_and_nothing_running(rig):
     for bad in ("../../x", "zzzzzzzzzzzz", "", "a" * 12):
         with pytest.raises(RenderRefused, match="Unknown render"):
             rig.svc.handle("render_resume", {"job": bad, "spend_token": "tok-" + bad})
-    rig.fail_at, rig.block_at = set(), 2
+    rig.fail_at, rig.block_at = set(), rig.n + 1                   # block the very next engine call, i.e. the first part of the resume
     r = rig.svc.handle("render_resume", {"job": j["id"], "spend_token": "t3"})
     with pytest.raises(RenderRefused, match="still running"):
         rig.svc.handle("render_resume", {"job": j["id"], "spend_token": "t4"})
