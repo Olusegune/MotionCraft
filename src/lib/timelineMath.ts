@@ -62,4 +62,19 @@ export function readPps(project: string, store: Pick<Storage, "getItem"> | null 
 export function writePps(project: string, pps: number, store: Pick<Storage, "setItem"> | null = safeStore()): void {
   try { store?.setItem(KEY(project), JSON.stringify({ pps: clampPps(pps) })); } catch { /* remembering is a convenience only */ }
 }
+/** The height of the timeline dock on Build, chosen by dragging the divider. Always at least DOCK_MIN, and the preview keeps at least PREVIEW_MIN of the page. */
+export const DOCK_MIN = 120;
+export const PREVIEW_MIN = 220;
+export const clampDock = (h: number, total: number): number =>
+  Number.isFinite(h) ? Math.round(Math.min(Math.max(DOCK_MIN, h), Math.max(DOCK_MIN, total - PREVIEW_MIN))) : DOCK_MIN;
+const DOCK_KEY = (project: string) => `mc-dock:${String(project).slice(0, 200)}`;
+export function readDock(project: string, store: Pick<Storage, "getItem"> | null = safeStore()): number | null {
+  try {
+    const n = Number(JSON.parse(store?.getItem(DOCK_KEY(project)) ?? "null")?.h);
+    return Number.isFinite(n) && n > 0 ? Math.max(DOCK_MIN, Math.round(n)) : null;
+  } catch { return null; }
+}
+export function writeDock(project: string, h: number | null, store: Pick<Storage, "setItem" | "removeItem"> | null = safeStore()): void {
+  try { if (h === null) store?.removeItem(DOCK_KEY(project)); else store?.setItem(DOCK_KEY(project), JSON.stringify({ h: Math.max(DOCK_MIN, Math.round(h)) })); } catch { /* remembering is a convenience only */ }
+}
 function safeStore(): Storage | null { try { return typeof localStorage !== "undefined" ? localStorage : null; } catch { return null; } }

@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { timecode } from "../lib/time";
 
 export interface Marker { t: number; label: string; kind: "beat" | "note" | "section" }
@@ -17,6 +17,8 @@ export const Player = forwardRef<PlayerHandle, {
   fill?: boolean;
 }>(function Player({ src, fps, duration, markers = [], peaks, aspect = "16 / 9", stale, emptyText, onTime, onMarkerClick, fill = false }, ref) {
   const [theatre, setTheatre] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
   const ar = (() => { const [w, h] = aspect.split("/").map((x) => Number(x.trim())); return w > 0 && h > 0 ? w / h : 16 / 9; })();
   const video = useRef<HTMLVideoElement>(null);
   const [t, setT] = useState(0);
@@ -34,6 +36,7 @@ export const Player = forwardRef<PlayerHandle, {
 
   useImperativeHandle(ref, () => ({ seek, time: () => t, frame: () => frame(t) }), [seek, t]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onTime?.(t); }, [t, onTime]);
+  useEffect(() => { const v = video.current; if (v) { v.volume = volume; v.muted = muted; } }, [volume, muted, src]);
   useEffect(() => { setPlaying(false); setT(0); }, [src]);
 
   // follow the video while it plays
@@ -57,6 +60,7 @@ export const Player = forwardRef<PlayerHandle, {
     else if (e.key === "Escape" && theatre) { e.preventDefault(); setTheatre(false); }
   };
   const total = len || duration || 1;
+  const meta = src ? <>Draft at half resolution{stale ? " · Out of date: the project changed since" : ""}</> : "No render yet. Targets: first preview 60 s, small edit 10 s.";
 
   return (
     <div className={`player${fill ? " fill" : ""}${theatre ? " theatre" : ""}`} role="group" aria-label="Preview player" tabIndex={0} onKeyDown={key}>
@@ -68,9 +72,10 @@ export const Player = forwardRef<PlayerHandle, {
               onPause={() => { setPlaying(false); if (video.current) setT(video.current.currentTime); }}
               onEnded={() => setPlaying(false)} onSeeked={() => video.current && setT(video.current.currentTime)} />
           ) : <div className="viewer-empty"><p className="strong">No preview movie yet</p><p>{emptyText ?? "Press Build preview to render a draft you can play and scrub."}</p></div>}
+          {fill && <p className="viewer-meta stage-meta" role="status">{meta}</p>}
         </div>
         {fill && <button className="icon-btn stage-full" aria-label={theatre ? "Leave full screen" : "Full screen preview"} aria-pressed={theatre} title={theatre ? "Leave full screen (F or Esc)" : "Full screen: just the picture (F)"} onClick={() => setTheatre((v) => !v)}>{theatre ? <Minimize2 size={18} strokeWidth={1.75} /> : <Maximize2 size={18} strokeWidth={1.75} />}</button>}
-        <p className={`viewer-meta${fill ? " stage-meta" : ""}`} role="status">{src ? <>Draft at half resolution{stale ? " · Out of date: the project changed since" : ""}</> : "No render yet. Targets: first preview 60 s, small edit 10 s."}</p>
+        {!fill && <p className="viewer-meta" role="status">{meta}</p>}
       </div>
       <div className={`transport${fill ? " glass" : ""}`} aria-label="Transport">
         <button className="icon-btn" aria-label="Go to start" disabled={!src} onClick={() => seek(0)}><SkipBack size={18} strokeWidth={1.75} /></button>
@@ -80,6 +85,12 @@ export const Player = forwardRef<PlayerHandle, {
         <button className="icon-btn" aria-label="Go to end" disabled={!src} onClick={() => seek(total)}><SkipForward size={18} strokeWidth={1.75} /></button>
         <span className="mono timecode" aria-live="off" aria-label="Timecode">{timecode(t, fps)} / {timecode(total, fps)}</span>
         <span className="mono muted" aria-label="Frame">frame {frame(t)}</span>
+        {fill && (
+          <span className="volume">
+            <button className="icon-btn" aria-label={muted || volume === 0 ? "Unmute" : "Mute"} aria-pressed={muted} onClick={() => setMuted((m) => !m)}>{muted || volume === 0 ? <VolumeX size={18} strokeWidth={1.75} /> : <Volume2 size={18} strokeWidth={1.75} />}</button>
+            <input type="range" aria-label="Volume" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => { setVolume(Number(e.target.value)); setMuted(false); }} />
+          </span>
+        )}
       </div>
       <Ruler total={total} t={t} fps={fps} markers={markers} peaks={peaks} disabled={!src} onSeek={seek} onMarkerClick={onMarkerClick} />
     </div>

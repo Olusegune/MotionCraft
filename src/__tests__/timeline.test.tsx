@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { setApiForTests, type Api } from "../lib/api";
 import { createProject } from "../lib/project";
-import { barBox, clampPps, fitPps, laneCount, packLanes, PPS_MAX, PPS_MIN, readPps, rulerStep, rulerTicks, snapFrame, writePps } from "../lib/timelineMath";
+import { barBox, clampDock, clampPps, DOCK_MIN, fitPps, readDock, writeDock, laneCount, packLanes, PPS_MAX, PPS_MIN, readPps, rulerStep, rulerTicks, snapFrame, writePps } from "../lib/timelineMath";
 import type { MotionProject } from "../types";
 
 describe("timeline maths", () => {
@@ -37,6 +37,18 @@ describe("timeline maths", () => {
     expect(rulerStep(400)).toBe(0.2); expect(rulerStep(24)).toBe(5);
     expect(rulerTicks(20, 24)).toEqual([0, 5, 10, 15, 20]);
     expect(rulerTicks(1e9, 400).length).toBeLessThanOrEqual(2000);
+  });
+
+  it("keeps the timeline dock between its smallest size and what leaves the preview room, and remembers it", () => {
+    expect(clampDock(10, 800)).toBe(DOCK_MIN); expect(clampDock(5000, 800)).toBe(580); expect(clampDock(300, 800)).toBe(300);
+    expect(clampDock(NaN, 800)).toBe(DOCK_MIN); expect(clampDock(300, 0)).toBe(DOCK_MIN);
+    const mem = new Map<string, string>();
+    const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    expect(readDock("p", store)).toBeNull();
+    writeDock("p", 333, store); expect(readDock("p", store)).toBe(333);
+    writeDock("p", null, store); expect(readDock("p", store)).toBeNull();
+    mem.set("mc-dock:bad", "{ nope"); expect(readDock("bad", store)).toBeNull();
+    expect(() => writeDock("p", 5, { setItem: () => { throw new Error("blocked"); }, removeItem: () => { throw new Error("blocked"); } })).not.toThrow();
   });
 
   it("remembers the zoom per project, and survives storage that is missing, blocked or damaged", () => {
@@ -279,6 +291,27 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
   it("a collapsed fold really hides its content (the hidden attribute is not overridden by display)", async () => {
     const css = readFileSync("src/styles/app.css", "utf-8");
     expect(css).toMatch(/\.fold-body\[hidden\]\s*\{\s*display:\s*none/);
+  });
+
+  it("the divider resizes the timeline dock by keyboard, resets, and goes away with the timeline", async () => {
+    const user = userEvent.setup();
+    fake(project());
+    render(<App />);
+    await toBuild(user);
+    const sep = screen.getByRole("separator", { name: "Resize preview and timeline" });
+    const dock = document.querySelector(".timeline-dock") as HTMLElement;
+    expect(dock.style.height).toBe("");
+    sep.focus();
+    await user.keyboard("{ArrowUp}");
+    expect(dock.style.height).toBe(`${DOCK_MIN}px`);          // jsdom has no layout, so every size clamps to the smallest
+    await user.keyboard("{Home}");
+    expect(dock.style.height).toBe("");
+    await user.keyboard("{ArrowDown}");
+    expect(dock.style.height).toBe(`${DOCK_MIN}px`);
+    await user.dblClick(sep);
+    expect(dock.style.height).toBe("");
+    await user.keyboard("{Control>}j{/Control}");
+    await waitFor(() => expect(screen.queryByRole("separator", { name: "Resize preview and timeline" })).toBeNull());
   });
 
   it("has no raw colours: the styles use only tokens", async () => {

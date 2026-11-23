@@ -12,6 +12,7 @@ import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write 
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
+import { clampDock, readDock, writeDock } from "../lib/timelineMath";
 import { TimelinePanel, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
 import type { SongSection } from "./build/SectionsBar";
 import type { FrameProps } from "./common";
@@ -31,6 +32,28 @@ export function BuildPage(f: FrameProps) {
   const [audio, setAudio] = useState<AudioInfo | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const [tlOpen, setTlOpen] = useState(true);
+  // The divider between the preview and the timeline: drag it, or use Up and Down on it. Double-click puts it back. Remembered per project.
+  const studioEl = useRef<HTMLDivElement>(null);
+  const dockEl = useRef<HTMLDivElement>(null);
+  const [dockH, setDockH] = useState<number | null>(() => readDock(project.id));
+  const setDock = (h: number | null) => {
+    const n = h === null ? null : clampDock(h, studioEl.current?.clientHeight ?? 0);
+    setDockH(n); writeDock(project.id, n);
+  };
+  const dockNow = () => dockH ?? dockEl.current?.getBoundingClientRect().height ?? 0;
+  const startDividerDrag = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const y0 = e.clientY, h0 = dockNow();
+    const move = (ev: PointerEvent) => setDock(h0 + (y0 - ev.clientY));
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
+  const dividerKey = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 96 : 24;
+    if (e.key === "ArrowUp") { e.preventDefault(); setDock(dockNow() + step); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setDock(dockNow() - step); }
+    else if (e.key === "Home" || e.key === "Enter") { e.preventDefault(); setDock(null); }
+  };
   useEffect(() => {      // Ctrl and J hide or show the timeline, giving the preview the whole height
     const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "j" || e.key === "J")) { e.preventDefault(); setTlOpen((v) => !v); } };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
@@ -137,13 +160,16 @@ export function BuildPage(f: FrameProps) {
       <div className="row-actions"><button className="btn" onClick={refreshEngine}><RotateCcw size={16} aria-hidden="true" />Reconnect</button><button className="btn" onClick={showSettings}>Locate EffectCraft</button></div>
     </div>
   ) : (
-    <div className="studio">
+    <div className="studio" ref={studioEl}>
       {guiOpen && <div className="lockbar" role="status"><ExternalLink size={18} aria-hidden="true" /><span>EffectCraft has this project open. MotionCraft is read-only until you close it, then it reloads and logs what you changed.</span></div>}
       {err && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {err}</p>}
       {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
       <Player ref={player} fill src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
-      <div className="timeline-dock">
+      {tlOpen && <div className="studio-divider" role="separator" aria-orientation="horizontal" aria-label="Resize preview and timeline" tabIndex={0}
+        aria-valuenow={Math.round(dockNow())} aria-valuemin={120} title="Drag to resize. Up and Down arrows on it also work; double-click to reset."
+        onPointerDown={startDividerDrag} onKeyDown={dividerKey} onDoubleClick={() => setDock(null)}><span aria-hidden="true" /></div>}
+      <div className="timeline-dock" ref={dockEl} style={tlOpen && dockH !== null ? { height: dockH, maxHeight: "none" } : undefined}>
       <TimelinePanel open={tlOpen} onOpenChange={setTlOpen} projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
         sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
       </div>
