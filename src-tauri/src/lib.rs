@@ -95,6 +95,12 @@ pub fn check_package(root: &Path, path: &str) -> Result<PathBuf, String> {
 
 /// Write temp, fsync, rename (PROJECT_SCHEMA.md storage rule).
 pub fn atomic_write(dest: &Path, bytes: &[u8]) -> Result<(), String> {
+    // Keep the previous good file as `*.bak` first: if a crash or a full disk ever damages project.json, the last good copy is there.
+    if let Ok(old) = fs::read(dest) {
+        if serde_json::from_slice::<Value>(&old).is_ok() {
+            let _ = fs::write(dest.with_extension("json.bak"), &old);
+        }
+    }
     let tmp = dest.with_extension("json.tmp");
     let mut f = fs::File::create(&tmp).map_err(|e| format!("Could not write {}: {e}", tmp.display()))?;
     f.write_all(bytes).map_err(|e| e.to_string())?;
@@ -177,6 +183,106 @@ fn load_project(app: tauri::AppHandle, path: String) -> Result<Value, String> {
 fn save_project(app: tauri::AppHandle, path: String, project: Value) -> Result<(), String> {
     let dir = check_package(&projects_root(&app)?, &path)?;
     atomic_write(&dir.join("project.json"), &serialise(&project)?)
+}
+
+// ---------------------------------------------------------------- crash recovery (P1-06, P1-13)
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectHealth {
+    /// ok | damaged | missing
+    state: &'static str,
+    has_backup: bool,
+    backup_updated_at: Option<String>,
+}
+
+fn read_valid(path: &Path) -> Option<Value> {
+    let v: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    (v.get("schemaVersion").and_then(Value::as_str) == Some("1.0")).then_some(v)
+}
+
+fn health_of(dir: &Path) -> ProjectHealth {
+    let main = dir.join("project.json");
+    let bak = read_valid(&dir.join("project.json.bak"));
+    let state = if !main.exists() { "missing" } else if read_valid(&main).is_some() { "ok" } else { "damaged" };
+    ProjectHealth {
+        state,
+        has_backup: bak.is_some(),
+        backup_updated_at: bak.as_ref().and_then(|v| v.get("updatedAt")).and_then(Value::as_str).map(str::to_string),
+    }
+}
+
+/// Puts the last good copy back. The damaged file is kept beside it as project.damaged.json, never deleted.
+fn restore_backup_in(dir: &Path) -> Result<(), String> {
+    let bak = read_valid(&dir.join("project.json.bak")).ok_or("There is no usable backup of this project.")?;
+    let main = dir.join("project.json");
+    if main.exists() {
+        let _ = fs::rename(&main, dir.join("project.damaged.json"));
+    }
+    atomic_write(&main, &serialise(&bak)?)
+}
+
+#[tauri::command(async)]
+fn project_health(app: tauri::AppHandle, path: String) -> Result<ProjectHealth, String> {
+    Ok(health_of(&check_package(&projects_root(&app)?, &path)?))
+}
+
+#[tauri::command(async)]
+fn restore_backup(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    restore_backup_in(&check_package(&projects_root(&app)?, &path)?)
+}
+
+/// A marker file says "a project is open". It is removed on a normal exit or when the project is closed, so finding it at launch
+/// means MotionCraft did not close properly (crash, kill, power loss).
+fn marker_file(base: &Path) -> PathBuf {
+    base.join("session.json")
+}
+fn write_marker(base: &Path, package: &str) -> Result<(), String> {
+    fs::create_dir_all(base).map_err(|e| e.to_string())?;
+    atomic_write(&marker_file(base), serde_json::json!({ "package": package }).to_string().as_bytes())
+}
+fn read_marker(base: &Path) -> Option<String> {
+    let v: Value = serde_json::from_slice(&fs::read(marker_file(base)).ok()?).ok()?;
+    v.get("package").and_then(Value::as_str).map(str::to_string)
+}
+fn clear_marker(base: &Path) {
+    let _ = fs::remove_file(marker_file(base));
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Unclean {
+    path: String,
+    name: String,
+    updated_at: String,
+    health: ProjectHealth,
+}
+
+/// Called once at launch, before the new session starts. Clears the marker either way so the prompt shows once.
+#[tauri::command(async)]
+fn unclean_session(app: tauri::AppHandle) -> Option<Unclean> {
+    let base = app.path().app_data_dir().ok()?;
+    let pkg = read_marker(&base)?;
+    clear_marker(&base);
+    let dir = check_package(&projects_root(&app).ok()?, &pkg).ok()?;
+    let health = health_of(&dir);
+    let v = read_valid(&dir.join("project.json")).or_else(|| read_valid(&dir.join("project.json.bak")))?;
+    let s = summary(&dir, &v);
+    Some(Unclean { path: s.path, name: s.name, updated_at: s.updated_at, health })
+}
+
+#[tauri::command(async)]
+fn session_begin(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let dir = check_package(&projects_root(&app)?, &path)?;
+    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    write_marker(&base, &dir.to_string_lossy())
+}
+
+#[tauri::command(async)]
+fn session_end(app: tauri::AppHandle) {
+    if let Ok(base) = app.path().app_data_dir() {
+        clear_marker(&base);
+    }
 }
 
 fn cli_name() -> &'static str {
@@ -958,11 +1064,16 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&it("file-save-copy", "Save a &Copy…", Some("CmdOrCtrl+Shift+S"))?)
         .item(&it("file-close", "C&lose Project", Some("CmdOrCtrl+W"))?)
         .separator()
-        .item(&it("file-reveal", "Show Projects Fol&der", None)?)
-        .item(&it("file-settings", "Se&ttings…", Some("CmdOrCtrl+,"))?)
-        .separator()
-        .item(&PredefinedMenuItem::quit(app, Some(if cfg!(target_os = "macos") { "Quit MotionCraft" } else { "Exit" }))?)
-        .build()?;
+        .item(&it("file-reveal", "Show Projects Fol&der", None)?);
+    if !mac {
+        // On macOS Settings and Quit live in the app menu (built below), never in File.
+        file = file
+            .separator()
+            .item(&it("file-settings", "Se&ttings…", Some("CmdOrCtrl+,"))?)
+            .separator()
+            .item(&PredefinedMenuItem::quit(app, Some("Exit"))?);
+    }
+    let file = file.build()?;
     let edit = SubmenuBuilder::new(app, lbl("&Edit"))
         .item(&PredefinedMenuItem::undo(app, None)?)
         .item(&PredefinedMenuItem::redo(app, None)?)
@@ -1113,15 +1224,87 @@ pub fn run() {
             export_package,
             app_ready,
             startup_step,
-            open_docs
+            open_docs,
+            project_health,
+            restore_backup,
+            unclean_session,
+            session_begin,
+            session_end
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running MotionCraft");
+        .build(tauri::generate_context!())
+        .expect("error while building MotionCraft")
+        .run(|app, event| {
+            // A normal exit removes the "project is open" marker; a crash or kill leaves it, which is what the next launch looks for.
+            if let tauri::RunEvent::Exit = event {
+                if let Ok(base) = app.path().app_data_dir() {
+                    clear_marker(&base);
+                }
+            }
+        });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_crash_mid_save_loses_nothing_and_a_damaged_file_can_be_restored() {
+        let dir = std::env::temp_dir().join(format!("mc-crash-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("project.json");
+        let v1 = serde_json::json!({"schemaVersion": "1.0", "name": "x", "updatedAt": "t1"});
+        let v2 = serde_json::json!({"schemaVersion": "1.0", "name": "x", "updatedAt": "t2"});
+        atomic_write(&main, &serialise(&v1).unwrap()).unwrap();
+        assert!(!dir.join("project.json.bak").exists(), "the first write has nothing to back up");
+        atomic_write(&main, &serialise(&v2).unwrap()).unwrap();
+        assert_eq!(health_of(&dir).state, "ok");
+        assert_eq!(health_of(&dir).backup_updated_at.as_deref(), Some("t1"), "the backup is the previous good save");
+
+        // The process dies half-way through the next save: a torn temp file is left, project.json is untouched.
+        fs::write(dir.join("project.json.tmp"), b"{\"schemaVersion\": \"1.").unwrap();
+        assert_eq!(read_valid(&main).unwrap()["updatedAt"], "t2");
+
+        // The file itself is damaged (disk fault): it is reported, and restore brings back the last good copy.
+        fs::write(&main, b"{ not json").unwrap();
+        assert_eq!(health_of(&dir).state, "damaged");
+        restore_backup_in(&dir).unwrap();
+        assert_eq!(health_of(&dir).state, "ok");
+        assert_eq!(read_valid(&main).unwrap()["updatedAt"], "t1");
+        assert!(dir.join("project.damaged.json").exists(), "the damaged file is kept, not deleted");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_damaged_file_never_becomes_the_backup_and_restore_needs_a_good_one() {
+        let dir = std::env::temp_dir().join(format!("mc-nobak-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("project.json");
+        let good = serialise(&serde_json::json!({"schemaVersion": "1.0", "name": "x", "updatedAt": "g"})).unwrap();
+        atomic_write(&main, &good).unwrap();
+        atomic_write(&main, &good).unwrap();
+        fs::write(&main, b"junk").unwrap();
+        atomic_write(&main, &good).unwrap(); // saving over a damaged file must not overwrite the good backup with junk
+        assert_eq!(read_valid(&dir.join("project.json.bak")).unwrap()["updatedAt"], "g");
+        fs::write(dir.join("project.json.bak"), b"also junk").unwrap();
+        fs::write(&main, b"junk").unwrap();
+        assert!(restore_backup_in(&dir).is_err());
+        assert_eq!(fs::read(&main).unwrap(), b"junk", "nothing is touched when there is no good backup");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_open_project_marker_survives_only_an_unclean_exit() {
+        let base = std::env::temp_dir().join(format!("mc-marker-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        assert_eq!(read_marker(&base), None);
+        write_marker(&base, "C:/docs/MotionCraft/A.motioncraft").unwrap();
+        assert_eq!(read_marker(&base).as_deref(), Some("C:/docs/MotionCraft/A.motioncraft"), "still there after a crash");
+        clear_marker(&base);
+        assert_eq!(read_marker(&base), None, "a normal exit or close removes it");
+        let _ = fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn names_are_sanitised() {

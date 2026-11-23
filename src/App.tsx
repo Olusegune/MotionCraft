@@ -20,6 +20,8 @@ import { BuildPage } from "./pages/BuildPage";
 import { ReviewPage } from "./pages/ReviewPage";
 import { DeliverPage } from "./pages/DeliverPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { RecoverySheet } from "./shell/RecoverySheet";
+import type { ProjectHealth } from "./lib/api";
 
 const AUTOSAVE_MS = 30_000; // PRD target: at most 30 s of work lost
 const DEBOUNCE_MS = 1_000;
@@ -44,6 +46,7 @@ export default function App() {
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [recover, setRecover] = useState<null | { kind: "unclean" | "damaged"; summary: ProjectSummary; health: ProjectHealth; busy: boolean; error?: string }>(null);
   const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   useEffect(() => {
@@ -59,6 +62,12 @@ export default function App() {
   // Real start-up progress for the splash: each step is reported when it has actually finished.
   const readyOnce = useRef(false);
   useEffect(() => { getApi().then((a) => a.startupStep("ui")).catch(() => undefined); }, []);
+  // Did the last session end badly (crash, kill, power loss)? The shell leaves a marker while a project is open and removes it on a normal exit.
+  useEffect(() => {
+    getApi().then((a) => a.uncleanSession()).then((u) => {
+      if (u) setRecover({ kind: "unclean", summary: { id: "", name: u.name, path: u.path, updatedAt: u.updatedAt }, health: u.health, busy: false });
+    }).catch(() => undefined);
+  }, []);
   const refreshProjects = useCallback(async () => {
     setListing(true);
     try { setProjects(await (await getApi()).list()); setListError(null); }
@@ -100,7 +109,7 @@ export default function App() {
   }, []);
 
   const debounce = useRef<number | undefined>(undefined);
-  const update = useCallback((fn: (p: MotionProject) => MotionProject) => {
+  const update = useCallback((fn: (p: MotionProject) => MotionProject, saveNow = false) => {
     setProject((cur) => {
       if (!cur) return cur;
       const next = fn(cur);
@@ -109,7 +118,7 @@ export default function App() {
     });
     setSave({ kind: "dirty" });
     window.clearTimeout(debounce.current);
-    debounce.current = window.setTimeout(() => void flush(), DEBOUNCE_MS);
+    debounce.current = window.setTimeout(() => void flush(), saveNow ? 0 : DEBOUNCE_MS);   // a gate change is saved at once
   }, [flush]);
 
   useEffect(() => {
@@ -125,16 +134,25 @@ export default function App() {
 
   const open = async (s: ProjectSummary) => {
     try {
-      const p = await (await getApi()).load(s.path);
+      const api = await getApi();
+      const p = await api.load(s.path);
       pathRef.current = s.path; latest.current = p; dirty.current = false; setProject(p); setStage("brief"); setSave({ kind: "saved", at: Date.now() });
-    } catch (e) { setListError(`Could not open ${s.name}: ${e instanceof Error ? e.message : String(e)}`); }
+      void api.sessionBegin(s.path).catch(() => undefined);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/damaged|could not read/i.test(msg)) {   // offer the last good copy instead of just failing
+        try { const h = await (await getApi()).projectHealth(s.path); if (h.state !== "ok") { setRecover({ kind: "damaged", summary: s, health: h, busy: false }); return; } } catch { /* fall through to the plain error */ }
+      }
+      setListError(`Could not open ${s.name}: ${msg}`);
+    }
   };
   const create = async (name: string, d: Deliverable) => {
     const p = createProject(name, d);
     const s = await (await getApi()).create(p);
     pathRef.current = s.path; latest.current = p; dirty.current = false; setProject(p); setStage("brief"); setSave({ kind: "saved", at: Date.now() });
+    void (await getApi()).sessionBegin(s.path).catch(() => undefined);
   };
-  const home = async () => { await flush(); setProject(null); latest.current = null; setViewerOnly(false); void refreshProjects(); };
+  const home = async () => { await flush(); void (await getApi()).sessionEnd().catch(() => undefined); setProject(null); latest.current = null; setViewerOnly(false); void refreshProjects(); };
   const say = (m: string) => { setNotice(m); window.setTimeout(() => setNotice((n) => (n === m ? null : n)), 4000); };
   const openFolder = async () => {
     try {
@@ -160,7 +178,7 @@ export default function App() {
 
   const ctx: AppCtx | null = useMemo(() => !project ? null : ({
     project, projectPath: pathRef.current, stage, engine, update, go: setStage, refreshEngine,
-    approveGate: (g) => update((p) => approve(p, g)),
+    approveGate: (g) => update((p) => approve(p, g), true),
     unlockGate: (gate, revKind) => setOverlay({ kind: "impact", gate, revKind }),
     openEffectCraft: async () => { await (await getApi()).openEffectCraft(pathRef.current, settings.enginePath); },
     showSettings: () => setOverlay({ kind: "settings" }),
@@ -253,16 +271,26 @@ export default function App() {
           <StageBar project={project} stage={stage} onStage={setStage} onGate={(g) => { const s = Object.entries(GATE_AFTER).find(([, v]) => v === g)?.[0] as Stage | undefined; if (s) setStage(s); setOverlay({ kind: "gate", gate: g }); }} />
         </Ctx.Provider>
       )}
+      {recover && (
+        <RecoverySheet kind={recover.kind} name={recover.summary.name} updatedAt={recover.summary.updatedAt} health={recover.health} busy={recover.busy} error={recover.error}
+          onClose={() => setRecover(null)}
+          onOpen={() => { const s = recover.summary; setRecover(null); void open(s); }}
+          onRestore={async () => {
+            setRecover((r) => r && { ...r, busy: true, error: undefined });
+            try { const s = recover.summary; await (await getApi()).restoreBackup(s.path); setRecover(null); void refreshProjects(); await open(s); say("Restored the last good copy."); }
+            catch (e) { setRecover((r) => r && { ...r, busy: false, error: e instanceof Error ? e.message : String(e) }); }
+          }} />
+      )}
       {overlay?.kind === "palette" && <Palette items={palette} onClose={() => setOverlay(null)} />}
       {overlay?.kind === "settings" && <SettingsSheet engine={engine} onClose={() => setOverlay(null)} onRecheck={refreshEngine} onModels={() => setOverlay({ kind: "models" })} />}
       {overlay?.kind === "models" && <ModelsSheet onClose={() => setOverlay(null)} />}
       {overlay?.kind === "copy" && project && <SaveCopySheet defaultName={`${project.name} copy`} onClose={() => setOverlay(null)} onSave={async (n) => { setOverlay(null); try { await saveCopy(n); } catch (e) { say(e instanceof Error ? e.message : String(e)); } }} />}
       {overlay?.kind === "manual" && <ManualSheet onClose={() => setOverlay(null)} onSettings={() => setOverlay({ kind: "settings" })} />}
       {overlay?.kind === "about" && <AboutSheet engine={engine} onClose={() => setOverlay(null)} />}
-      {overlay?.kind === "gate" && project && <GateSheet project={project} gate={overlay.gate} onClose={() => setOverlay(null)} onApprove={() => update((p) => approve(p, (overlay as { gate: GateId }).gate))} />}
+      {overlay?.kind === "gate" && project && <GateSheet project={project} gate={overlay.gate} onClose={() => setOverlay(null)} onApprove={() => update((p) => approve(p, (overlay as { gate: GateId }).gate), true)} />}
       {overlay?.kind === "impact" && project && (
         <ImpactSheet project={project} gate={overlay.gate} onCancel={() => setOverlay(null)}
-          onConfirm={() => { update((p) => reviseApproved(p, overlay.gate, `Unlocked ${STAGE_LABEL[Object.entries(GATE_AFTER).find(([, v]) => v === overlay.gate)![0] as Stage]} for editing`, overlay.revKind)); setOverlay(null); }} />
+          onConfirm={() => { update((p) => reviseApproved(p, overlay.gate, `Unlocked ${STAGE_LABEL[Object.entries(GATE_AFTER).find(([, v]) => v === overlay.gate)![0] as Stage]} for editing`, overlay.revKind), true); setOverlay(null); }} />
       )}
       <span className="visually-hidden" role="status" aria-live="polite">{project ? `${STAGE_LABEL[stage]} page` : "Projects"}</span>
     </div>

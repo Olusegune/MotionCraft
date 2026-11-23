@@ -1,6 +1,8 @@
 import type { MotionProject, ProjectSummary } from "../types";
 import type { EngineSnapshot } from "./layers";
 
+export interface ProjectHealth { state: "ok" | "damaged" | "missing"; hasBackup: boolean; backupUpdatedAt?: string | null }
+export interface UncleanSession { path: string; name: string; updatedAt: string; health: ProjectHealth }
 export interface PreviewImage { width: number; height: number; png: string }
 export type ProviderId = "byteplus" | "google" | "openai" | "kie" | "fal";
 /** Credential-store accounts: the generation providers plus the two language-model-only ones. */
@@ -47,6 +49,12 @@ export interface Api {
   appReady(): Promise<void>;
   startupStep(step: "ui" | "projects" | "engine"): Promise<void>;
   openDocs(): Promise<void>;
+  /** Crash recovery (P1-06): is the project file readable, restore the last good copy, and the "a project was open" marker. */
+  projectHealth(path: string): Promise<ProjectHealth>;
+  restoreBackup(path: string): Promise<void>;
+  uncleanSession(): Promise<UncleanSession | null>;
+  sessionBegin(path: string): Promise<void>;
+  sessionEnd(): Promise<void>;
   pickMedia(): Promise<string[]>;
   /** A playable URL for a file under previews/, renders/ or assets/ of the project (the shell checks the path). */
   fileUrl(path: string, rel: string): Promise<string>;
@@ -90,6 +98,11 @@ async function tauriApi(): Promise<Api> {
     appReady: () => invoke("app_ready"),
     startupStep: (step) => invoke("startup_step", { step }),
     openDocs: () => invoke("open_docs"),
+    projectHealth: (path) => invoke("project_health", { path }),
+    restoreBackup: (path) => invoke("restore_backup", { path }),
+    uncleanSession: () => invoke("unclean_session"),
+    sessionBegin: (path) => invoke("session_begin", { path }),
+    sessionEnd: () => invoke("session_end"),
     async pickMedia() {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const r = await open({ multiple: true, directory: false, title: "Add pictures, video or audio",
@@ -150,6 +163,11 @@ function webApi(): Api {
     async pickPath() { return null; },
     async appReady() { /* no splash in the browser */ },
     async startupStep() { /* no splash in the browser */ },
+    async projectHealth() { return { state: "ok" as const, hasBackup: false }; },
+    async restoreBackup() { throw new Error("Restoring a backup needs the desktop app."); },
+    async uncleanSession() { return null; },
+    async sessionBegin() { /* desktop only */ },
+    async sessionEnd() { /* desktop only */ },
     async openDocs() { window.open("https://github.com/Olusegune/MotionCraft/tree/main/docs", "_blank", "noopener"); },
     async pickMedia() { return []; },
     async importAsset() { throw new Error("Adding media needs the desktop app."); },
