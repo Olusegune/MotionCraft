@@ -15,7 +15,7 @@ from typing import Any
 
 API_HOSTS = {
     "api.kie.ai", "docs.kie.ai", "queue.fal.run", "api.fal.ai", "ark.ap-southeast.bytepluses.com",
-    "generativelanguage.googleapis.com", "api.openai.com",
+    "generativelanguage.googleapis.com", "api.openai.com", "api.anthropic.com", "openrouter.ai",
 }
 UA = "MotionCraft/0.1"
 MAX_JSON = 8 * 1024 * 1024

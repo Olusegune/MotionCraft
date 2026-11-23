@@ -328,7 +328,13 @@ const ENGINE_METHODS: [&str; 19] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
     "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll",
 ];
-const MODEL_METHODS: [&str; 5] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel"];
+const MODEL_METHODS: [&str; 9] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete"];
+/// Language-model providers that run in the cloud: a call needs a key and a spend token. Local ones (ollama, lmstudio, inkling) need neither,
+/// and the helper only lets them reach a loopback address. Value = the credential-store account the key is kept under.
+const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthropic"), ("gemini", "google"), ("openrouter", "openrouter")];
+const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
+/// Credential-store accounts: the generation providers plus the two language-model-only ones.
+const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
 const WRITE_METHODS: [&str; 10] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
 const PAID_ENGINE_METHODS: [&str; 1] = ["render_start"];
@@ -413,7 +419,9 @@ fn provider_ok(p: &str) -> Result<(), String> {
 }
 
 fn key_entry(provider: &str) -> Result<keyring::Entry, String> {
-    provider_ok(provider)?;
+    if !KEY_ACCOUNTS.contains(&provider) {
+        return Err(format!("Unknown provider {provider}."));
+    }
     keyring::Entry::new(KEY_SERVICE, &format!("{provider}-api-key")).map_err(|e| format!("Credential store unavailable: {e}"))
 }
 
@@ -437,7 +445,7 @@ fn delete_provider_key(provider: String) -> Result<(), String> {
 
 #[tauri::command(async)]
 fn provider_key_status() -> HashMap<String, bool> {
-    PROVIDERS.iter().map(|p| (p.to_string(), key_entry(p).ok().and_then(|e| e.get_password().ok()).is_some())).collect()
+    KEY_ACCOUNTS.iter().map(|p| (p.to_string(), key_entry(p).ok().and_then(|e| e.get_password().ok()).is_some())).collect()
 }
 
 fn get_key(provider: &str) -> Result<String, String> {
@@ -523,6 +531,19 @@ fn engine_call(
         let key = get_key(&provider)?;
         params.as_object_mut().unwrap().insert("api_key".into(), Value::String(key));
     }
+    if method == "llm_complete" {
+        let provider = params.get("provider").and_then(Value::as_str).ok_or("No language-model provider.")?.to_string();
+        if let Some((_, account)) = LLM_CLOUD.iter().find(|(p, _)| *p == provider) {
+            let token = params.get("spend_token").and_then(Value::as_str).unwrap_or("").to_string();
+            if !take_spend(&st, &token) {
+                return Err("A cloud language-model call needs a spend confirmation from a click. Confirm again.".into());
+            }
+            let key = get_key(account)?;
+            params.as_object_mut().unwrap().insert("api_key".into(), Value::String(key));
+        } else if !LLM_LOCAL.contains(&provider.as_str()) {
+            return Err(format!("Unknown language-model provider {provider}."));
+        }
+    }
     if method == "models_refresh" {
         let mut keys = serde_json::Map::new();
         if let Ok(k) = get_key("fal") {
@@ -555,7 +576,7 @@ fn sidecar_request(st: &EngineState, cli: Option<&Path>, data_dir: Option<&Path>
     sc.next_id += 1;
     let line = serde_json::json!({"id": id, "method": method, "params": params}).to_string();
     let io_ok = writeln!(sc.stdin, "{line}").and_then(|_| sc.stdin.flush()).is_ok();
-    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" { 180 } else { 60 });
+    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || method == "llm_complete" { 180 } else { 60 });
     let reply: Result<Value, String> = if io_ok {
         loop {
             match sc.rx.recv_timeout(timeout) {
@@ -1168,7 +1189,7 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
-    /// Spend-gate test list (AGENTS.md): every paid path must go through `take_spend`. `generate_start` is the only paid method.
+    /// Spend-gate test list (AGENTS.md): every paid path must go through `take_spend`: generate_start, render_start and a cloud llm_complete.
     #[test]
     fn spend_tokens_are_single_use_and_expire() {
         let st = EngineState::default();
@@ -1190,6 +1211,18 @@ mod tests {
         assert!(provider_ok("kie").is_ok() && provider_ok("fal").is_ok() && provider_ok("byteplus").is_ok());
         assert!(provider_ok("suno").is_err() && provider_ok("../x").is_err());
         assert!(!WRITE_METHODS.contains(&"generate_start"));
+    }
+
+    #[test]
+    fn cloud_language_models_are_gated_and_keys_never_come_from_the_page() {
+        assert!(MODEL_METHODS.contains(&"llm_complete"));
+        for (p, account) in LLM_CLOUD {
+            assert!(!LLM_LOCAL.contains(&p), "{p} cannot be both cloud and local");
+            assert!(KEY_ACCOUNTS.contains(&account), "{account} has no credential-store account");
+        }
+        assert!(LLM_LOCAL.iter().all(|p| !LLM_CLOUD.iter().any(|(c, _)| c == p)));
+        assert!(!WRITE_METHODS.contains(&"llm_complete"), "a language-model call does not write the project");
+        assert!(key_entry("suno").is_err() && key_entry("../x").is_err());
     }
 
     #[test]

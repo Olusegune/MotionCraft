@@ -27,6 +27,7 @@ from .renderjobs import RenderJobs
 from .providers.jobs import JobRefused, Jobs
 from .providers.net import Net
 from .providers.registry import Registry
+from .llm import Llm
 
 ECPROJ = "comp.ecproj"
 
@@ -34,7 +35,9 @@ ECPROJ = "comp.ecproj"
 class Service:
     def __init__(self, adapter_factory, data_dir: Path | None = None, jobs: Jobs | None = None):
         self._factory = adapter_factory
-        self.reg = Registry((data_dir or Path.home() / ".motioncraft") / "registry.json")
+        base_dir = data_dir or Path.home() / ".motioncraft"
+        self.reg = Registry(base_dir / "registry.json")
+        self.llm = Llm(base_dir / "llm.json")
         self.jobs = jobs or Jobs(self.reg, Net())
         self.renders = RenderJobs(adapter_factory)
         self.a: BaseAdapter | None = None
@@ -131,6 +134,21 @@ class Service:
                        spend_token: str = "", generative_enabled: bool = False, offline: bool = False) -> dict:
         return self.jobs.start(provider=provider, model=model, prompt=prompt, params=params, api_key=api_key, package=Path(package),
                                spend_token=spend_token, generative_enabled=generative_enabled, offline=offline)
+
+    # ------------------------------------------------------------ language model (P1-05)
+    def llm_status(self, offline: bool = False) -> dict:
+        return self.llm.status(offline)
+
+    def llm_set(self, provider: str | None = None, model: str = "", base_url: str = "") -> dict:
+        return self.llm.save(provider, model, base_url)
+
+    def llm_models(self, provider: str, base_url: str = "") -> dict:
+        return self.llm.models(provider, base_url)
+
+    def llm_complete(self, provider: str, model: str, messages: list, schema: dict | None = None, api_key: str = "",
+                     spend_token: str = "", offline: bool = False) -> dict:
+        return self.llm.complete(provider=provider, model=model, messages=messages, schema=schema, api_key=api_key,
+                                 spend_token=spend_token, offline=offline)
 
     def generate_poll(self, job: str) -> dict:
         return self.jobs.poll(job)

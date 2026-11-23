@@ -5,6 +5,7 @@ import { Segmented } from "./Segmented";
 import { updateSettings, useSettings } from "../lib/settings";
 import { approvedGatesAffectedBy, GATE_NAME, gateLabel, gateState, stageComplete } from "../lib/project";
 import { ProvidersSection } from "./ProvidersSection";
+import { LlmSection } from "./LlmSection";
 import { SHORTCUTS } from "../lib/shortcuts";
 import { getApi, type EngineStatus } from "../lib/api";
 
@@ -93,6 +94,7 @@ export function SettingsSheet({ engine, onClose, onRecheck, onModels }: { engine
             <button className="btn quiet" onClick={() => { setPath(""); updateSettings({ enginePath: "" }); onRecheck(); }}>Find automatically</button></div>
           <p className="muted">Pinned: EffectCraft 0.24.1, commit 7e2d025.</p></section>
         <ProvidersSection onModels={onModels} />
+        <LlmSection />
         <section><h3>Shortcuts</h3><ul className="plain">{SHORTCUTS.map((x) => <li key={x.id}><span className="kbd">{x.keys}</span> {x.label}</li>)}</ul></section>
       </div>
     </Sheet>

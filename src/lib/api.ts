@@ -3,6 +3,8 @@ import type { EngineSnapshot } from "./layers";
 
 export interface PreviewImage { width: number; height: number; png: string }
 export type ProviderId = "byteplus" | "google" | "openai" | "kie" | "fal";
+/** Credential-store accounts: the generation providers plus the two language-model-only ones. */
+export type KeyAccount = ProviderId | "anthropic" | "openrouter";
 export interface ModelEntry {
   provider: ProviderId; model: string; name: string; media: "image" | "video"; official: boolean; listed: boolean; source: string;
   price: { known: boolean; unit: string | null; value: number | null; note: string };
@@ -28,9 +30,9 @@ export interface Api {
   /** Calls the Python engine helper (only a closed list of methods; the shell validates the package path). */
   engine<T = EngineSnapshot>(method: string, params: Record<string, unknown>, path: string, overridePath: string): Promise<T>;
   effectcraftWindowOpen(): Promise<boolean>;
-  keyStatus(): Promise<Record<ProviderId, boolean>>;
-  setKey(provider: ProviderId, key: string): Promise<void>;
-  deleteKey(provider: ProviderId): Promise<void>;
+  keyStatus(): Promise<Record<KeyAccount, boolean>>;
+  setKey(provider: KeyAccount, key: string): Promise<void>;
+  deleteKey(provider: KeyAccount): Promise<void>;
   /** The spend gate: call only from the click on the confirmation sheet. Returns a single-use token. */
   confirmSpend(provider: ProviderId, model: string): Promise<string>;
   assetDataUrl(path: string, rel: string): Promise<string>;
@@ -131,7 +133,7 @@ function webApi(): Api {
     async openEffectCraft() { throw new Error("Open in EffectCraft needs the desktop app."); },
     async engine() { throw new Error("The engine runs in the desktop app. This browser preview cannot reach it."); },
     async effectcraftWindowOpen() { return false; },
-    async keyStatus() { return { byteplus: false, google: false, openai: false, kie: false, fal: false }; },
+    async keyStatus() { return { byteplus: false, google: false, openai: false, kie: false, fal: false, anthropic: false, openrouter: false }; },
     async setKey() { throw new Error("Keys are stored in the operating system credential store, which needs the desktop app."); },
     async deleteKey() { /* nothing stored */ },
     async confirmSpend() { throw new Error("Spending needs the desktop app."); },
