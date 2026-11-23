@@ -67,6 +67,15 @@ export function DeliverPage(f: FrameProps) {
     }
   }, [job, renders, update, projectPath]);
 
+  // After the project is reopened the last finished H.264 render is shown again.
+  const lastH264 = [...renders].reverse().find((r) => r.preset === "h264");
+  useEffect(() => {
+    if (playUrl || !lastH264) return;
+    let live = true;
+    getApi().then((a) => a.fileUrl(projectPath, lastH264.rel)).then((u) => { if (live) setPlayUrl(u); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [lastH264?.rel, projectPath]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const render = async () => {
     setErr(null);
     try {
@@ -115,16 +124,22 @@ export function DeliverPage(f: FrameProps) {
   };
 
   const main = (
-    <div className="stack">
+    <div className="studio">
+      <Player fill aspectLabel={d.aspect} src={playUrl} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`}
+        emptyText="No final render yet. Render the video below and it appears here, ready to play." />
+      <div className="deliver-dock">
       {err && <p className="error-text" role="alert">{err}</p>}
       {note && <p className="muted" role="status">{note}</p>}
-      <ul className="outputs">{OUTPUTS.map((o) => {
+      <ul className="outputs out-row">{OUTPUTS.map((o) => {
         const done = o.preset ? renders.filter((r) => r.preset === o.preset) : [];
         return (
           <li key={o.title} className="output-card"><o.icon size={20} strokeWidth={1.75} aria-hidden="true" />
             <div><h2>{o.title}</h2><p className="strong">{o.detail}</p><p className="muted">{o.note}</p>
               {done.map((r) => <p key={r.id} className="mono muted">{r.rel} · {r.frames ?? "?"} frames · {kb(r.bytes)}</p>)}</div>
-            <span className="pill">{o.preset ? (done.length ? `${done.length} rendered` : "Not rendered") : "Ready to export"}</span></li>);
+            <div className="out-foot"><span className="pill">{o.preset ? (done.length ? `${done.length} rendered` : "Not rendered") : "Ready to export"}</span>
+              {o.preset
+                ? <button className="btn" disabled={!!reason} aria-label={o.preset === "h264" ? "Render H.264" : "Render with alpha"} title={reason} onClick={() => { setPreset(o.preset!); setSheet(true); }}><Play size={16} aria-hidden="true" />Render</button>
+                : <button className="btn" aria-label="Export package" onClick={() => void exportProject()}><FolderArchive size={16} aria-hidden="true" />Export</button>}</div></li>);
       })}</ul>
       {job && (
         <div className="job" role="status">
@@ -142,21 +157,7 @@ export function DeliverPage(f: FrameProps) {
           {job.state === "done" && <p className="mono">{job.output} · {job.frames} frames · {kb(job.bytes)}</p>}
         </div>
       )}
-      {unfinished.filter((u) => u.id !== job?.id && u.state !== "running").length > 0 && (
-        <section aria-labelledby="unfinished-h"><h2 id="unfinished-h">Unfinished renders</h2>
-          <ul className="plain">{unfinished.filter((u) => u.id !== job?.id && u.state !== "running").map((u) => (
-            <li key={u.id}>
-              <p><span className="strong">{u.preset === "prores4444" ? "ProRes 4444" : "H.264"}</span> · {u.parts ? `${u.parts.done} of ${u.parts.total} parts finished (${u.framesDone} of ${u.framesTotal} frames)` : "interrupted"}</p>
-              {u.error && <p className="muted">{u.error}</p>}
-              {u.changed && <p className="why">The project changed since this render started, so the finished parts no longer match it. Discard it and render again.</p>}
-              <div className="row-actions">
-                <button className="btn" disabled={!!u.changed || !connected || running} aria-label={`Resume the ${u.preset} render`} onClick={() => setResumeFor(u)}><Play size={16} aria-hidden="true" />Resume</button>
-                <button className="btn quiet" aria-label={`Discard the ${u.preset} render`} onClick={() => setDiscardFor(u)}><Trash2 size={16} aria-hidden="true" />Discard</button>
-              </div>
-            </li>))}</ul></section>
-      )}
-      {playUrl && <section aria-label="Rendered video"><h2>Rendered video</h2><Player src={playUrl} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} /></section>}
-      <section aria-labelledby="queue-h"><h2 id="queue-h">Render queue</h2>{running ? <p className="muted">One render running.</p> : <p className="empty-note">Nothing queued. Nothing renders without your confirmation.</p>}</section>
+      </div>
       {resumeFor && (
         <Sheet title="Resume render" onClose={() => setResumeFor(null)}
           footer={<><button className="btn" onClick={() => setResumeFor(null)}>Cancel</button><button className="btn primary" disabled={busy || !connected} onClick={() => void resume()}>Confirm and resume</button></>}>
@@ -185,8 +186,36 @@ export function DeliverPage(f: FrameProps) {
       )}
     </div>
   );
+  const inspector = (
+    <>
+      <div className="scene-head">
+        <h2 className="scene-title">Ready to deliver</h2>
+        <dl className="facts deliver-facts">
+          <dt>Size</dt><dd>{d.width} × {d.height}</dd>
+          <dt>Frame rate</dt><dd>{d.fps} fps</dd>
+          <dt>Length</dt><dd>{d.durationSec} s</dd>
+          <dt>Sign-off</dt><dd>{signed ? "Approved in Review" : "Not given yet"}</dd>
+          <dt>Cost</dt><dd>None from a provider; renders on this computer</dd>
+        </dl>
+      </div>
+      {unfinished.filter((u) => u.id !== job?.id && u.state !== "running").length > 0 && (
+        <section aria-labelledby="unfinished-h"><h2 id="unfinished-h">Unfinished renders</h2>
+          <ul className="plain">{unfinished.filter((u) => u.id !== job?.id && u.state !== "running").map((u) => (
+            <li key={u.id}>
+              <p><span className="strong">{u.preset === "prores4444" ? "ProRes 4444" : "H.264"}</span> · {u.parts ? `${u.parts.done} of ${u.parts.total} parts finished (${u.framesDone} of ${u.framesTotal} frames)` : "interrupted"}</p>
+              {u.error && <p className="muted">{u.error}</p>}
+              {u.changed && <p className="why">The project changed since this render started, so the finished parts no longer match it. Discard it and render again.</p>}
+              <div className="row-actions">
+                <button className="btn" disabled={!!u.changed || !connected || running} aria-label={`Resume the ${u.preset} render`} onClick={() => setResumeFor(u)}><Play size={16} aria-hidden="true" />Resume</button>
+                <button className="btn quiet" aria-label={`Discard the ${u.preset} render`} onClick={() => setDiscardFor(u)}><Trash2 size={16} aria-hidden="true" />Discard</button>
+              </div>
+            </li>))}</ul></section>
+      )}
+      <section aria-labelledby="queue-h"><h2 id="queue-h">Render queue</h2>{running ? <p className="muted">One render running.</p> : <p className="empty-note">Nothing queued. Nothing renders without your confirmation.</p>}</section>
+    </>
+  );
   return (
-    <PageFrame {...f} title="Deliver" intro="Three different outputs. Only what the connected engine supports is offered." main={main}
+    <PageFrame {...f} compactHead title="Deliver" intro="Three different outputs. Only what the connected engine supports is offered." main={main} inspector={inspector}
       action={{ label: "Render final…", onClick: () => setSheet(true), secondary: { label: "Export selected", onClick: () => void exportProject() } }} />
   );
 }
