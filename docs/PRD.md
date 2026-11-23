@@ -188,7 +188,7 @@ Reuses Pulseframe's beat, phrase and energy work as a shared package.
 | Sound | Voice, music, SFX | ElevenLabs; file import from Suno, VoiceKiller or any tool | ElevenLabs official API; the rest by import |
 | Enhance | Upscaling raster footage and images | Topaz | Local Video AI CLI first; Topaz REST API as cloud option |
 
-Rules: official APIs only (Suno is import-only until its invite-only developer programme grants access; imported
+Rules: official APIs only, except that image and video generation may also use Kie.ai and fal as opt-in aggregators (ADR-0005, 2026-11-22) (Suno is import-only until its invite-only developer programme grants access; imported
 Suno tracks carry a licence note); VoiceKiller import-only; local models handle brief analysis, drafts and QA
 summaries, the Builder defaults to the strongest configured model; Topaz only on raster sources, never on text,
 vector or logo layers or the final render, generative models off by default; every call records provider, model,
@@ -269,7 +269,7 @@ contract (package format + MCP import/export tools) but ships without them.
 2. "Motion Studio's multi-provider router" — no Motion Studio repo found; FilmCrafter3's `llm.py`/`routing.py` is
    used instead (ADR-0004).
 3. FilmCrafter3 provides backups (`filmbackup.py`), not a timed autosave; autosave is new work (P1-06).
-4. FilmCrafter3 reaches Topaz through Kie.ai/fal; that conflicts with "official APIs only", so it is not reused.
+4. FilmCrafter3 reaches Topaz through Kie.ai/fal; Topaz is still not reused that way. Kie.ai/fal for image and video generation were later allowed by ADR-0005.
 5. EffectCraft has a native layer **lock switch** (`layer.setSwitch … "lock"`). MotionCraft's approval lock uses
    both: adapter refusal (authoritative) and the native switch (so the GUI shows the lock). See ENGINE_ADAPTER.md.
 6. EffectCraft's project file lock is taken only by CLI runs, not by the desktop app or `mcp`, so concurrent GUI and

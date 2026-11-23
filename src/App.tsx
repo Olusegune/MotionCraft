@@ -10,6 +10,7 @@ import { Header, type SaveState } from "./shell/Header";
 import { StageBar } from "./shell/StageBar";
 import { Palette, type PaletteItem } from "./shell/Palette";
 import { ImpactSheet, GateSheet, SettingsSheet } from "./shell/Sheets";
+import { ModelsSheet } from "./shell/ModelsSheet";
 import { useInspectorState } from "./shell/PageFrame";
 import { BriefPage } from "./pages/BriefPage";
 import { IntentPage } from "./pages/IntentPage";
@@ -23,7 +24,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 const AUTOSAVE_MS = 30_000; // PRD target: at most 30 s of work lost
 const DEBOUNCE_MS = 1_000;
 
-type Overlay = null | { kind: "palette" } | { kind: "settings" } | { kind: "gate"; gate: GateId } | { kind: "impact"; gate: GateId; revKind: RevisionRecord["kind"] };
+type Overlay = null | { kind: "palette" } | { kind: "settings" } | { kind: "models" } | { kind: "gate"; gate: GateId } | { kind: "impact"; gate: GateId; revKind: RevisionRecord["kind"] };
 
 export default function App() {
   const settings = useSettings();
@@ -122,6 +123,7 @@ export default function App() {
       items.push({ id: "projects", label: "Back to projects", run: () => void home() });
     }
     items.push({ id: "settings", label: "Open settings", run: () => setOverlay({ kind: "settings" }) });
+    items.push({ id: "models", label: "Browse image and video models", run: () => setOverlay({ kind: "models" }) });
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
@@ -164,7 +166,8 @@ export default function App() {
         </Ctx.Provider>
       )}
       {overlay?.kind === "palette" && <Palette items={palette} onClose={() => setOverlay(null)} />}
-      {overlay?.kind === "settings" && <SettingsSheet engine={engine} onClose={() => setOverlay(null)} onRecheck={refreshEngine} />}
+      {overlay?.kind === "settings" && <SettingsSheet engine={engine} onClose={() => setOverlay(null)} onRecheck={refreshEngine} onModels={() => setOverlay({ kind: "models" })} />}
+      {overlay?.kind === "models" && <ModelsSheet onClose={() => setOverlay(null)} />}
       {overlay?.kind === "gate" && project && <GateSheet project={project} gate={overlay.gate} onClose={() => setOverlay(null)} onApprove={() => update((p) => approve(p, (overlay as { gate: GateId }).gate))} />}
       {overlay?.kind === "impact" && project && (
         <ImpactSheet project={project} gate={overlay.gate} onCancel={() => setOverlay(null)}

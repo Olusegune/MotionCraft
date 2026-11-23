@@ -6,6 +6,7 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -293,16 +294,23 @@ struct Sidecar {
     stdin: ChildStdin,
     rx: Receiver<String>,
     next_id: u64,
+    has_cli: bool,
 }
 
 #[derive(Default)]
 pub struct EngineState {
     sidecar: Mutex<Option<Sidecar>>,
     gui: Mutex<Option<Child>>,
+    /// Spend confirmations handed out after a user click: token -> expiry. Single use (AGENTS.md money rule).
+    spend: Mutex<HashMap<String, Instant>>,
 }
 
-const METHODS: [&str; 9] = ["open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close"];
+const ENGINE_METHODS: [&str; 9] = ["open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close"];
+const MODEL_METHODS: [&str; 5] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel"];
 const WRITE_METHODS: [&str; 5] = ["add_text", "set_text", "add_camera", "lock", "unlock"];
+const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
+const KEY_SERVICE: &str = "motioncraft";
+const SPEND_TTL: Duration = Duration::from_secs(300);
 
 fn sidecar_program() -> Result<(PathBuf, Vec<String>, Option<PathBuf>), String> {
     let exe_name = if cfg!(windows) { "motioncraft-engine.exe" } else { "motioncraft-engine" };
@@ -314,7 +322,9 @@ fn sidecar_program() -> Result<(PathBuf, Vec<String>, Option<PathBuf>), String> 
             }
         }
     }
-    // Development only: run the Python package from a checkout (MOTIONCRAFT_ENGINE_DIR=<repo>/engine).
+    // Development builds only: run the Python package from a checkout (MOTIONCRAFT_ENGINE_DIR=<repo>/engine). Release builds
+    // never read this variable, so an environment setting cannot choose what the installed app runs.
+    #[cfg(debug_assertions)]
     if let Ok(dir) = std::env::var("MOTIONCRAFT_ENGINE_DIR") {
         let d = PathBuf::from(dir);
         if d.join("motioncraft_engine").is_dir() {
@@ -325,10 +335,17 @@ fn sidecar_program() -> Result<(PathBuf, Vec<String>, Option<PathBuf>), String> 
     Err("The MotionCraft engine helper was not found next to the app. Reinstall MotionCraft.".into())
 }
 
-fn start_sidecar(cli: &Path) -> Result<Sidecar, String> {
+fn start_sidecar(cli: Option<&Path>, data_dir: Option<&Path>) -> Result<Sidecar, String> {
     let (prog, mut args, cwd) = sidecar_program()?;
-    args.push("--effectcraft-cli".into());
-    args.push(cli.to_string_lossy().into_owned());
+    if let Some(c) = cli {
+        args.push("--effectcraft-cli".into());
+        args.push(c.to_string_lossy().into_owned());
+    }
+    if let Some(d) = data_dir {
+        args.push("--data-dir".into());
+        args.push(d.to_string_lossy().into_owned());
+    }
+    // The helper gets no provider keys in its environment: keys travel per request, for the one provider a call uses.
     let mut cmd = Command::new(prog);
     cmd.args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
     if let Some(d) = cwd {
@@ -350,7 +367,7 @@ fn start_sidecar(cli: &Path) -> Result<Sidecar, String> {
             }
         }
     });
-    Ok(Sidecar { child, stdin, rx, next_id: 1 })
+    Ok(Sidecar { child, stdin, rx, next_id: 1, has_cli: cli.is_some() })
 }
 
 fn gui_running(st: &EngineState) -> bool {
@@ -367,8 +384,72 @@ fn gui_running(st: &EngineState) -> bool {
     }
 }
 
-/// One request to the Python engine helper. The method list is closed, the package path is re-validated here, and writes are
-/// refused while an EffectCraft window has the project open (P0-07: a write behind an open GUI is silently lost).
+fn provider_ok(p: &str) -> Result<(), String> {
+    if PROVIDERS.contains(&p) { Ok(()) } else { Err(format!("Unknown provider {p}.")) }
+}
+
+fn key_entry(provider: &str) -> Result<keyring::Entry, String> {
+    provider_ok(provider)?;
+    keyring::Entry::new(KEY_SERVICE, &format!("{provider}-api-key")).map_err(|e| format!("Credential store unavailable: {e}"))
+}
+
+/// Keys live only in the operating system credential store. They are never returned to the page.
+#[tauri::command]
+fn set_provider_key(provider: String, key: String) -> Result<(), String> {
+    let k = key.trim();
+    if k.len() < 8 || k.len() > 512 || k.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err("That does not look like an API key.".into());
+    }
+    key_entry(&provider)?.set_password(k).map_err(|e| format!("Could not save the key: {e}"))
+}
+
+#[tauri::command]
+fn delete_provider_key(provider: String) -> Result<(), String> {
+    match key_entry(&provider)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("Could not remove the key: {e}")),
+    }
+}
+
+#[tauri::command]
+fn provider_key_status() -> HashMap<String, bool> {
+    PROVIDERS.iter().map(|p| (p.to_string(), key_entry(p).ok().and_then(|e| e.get_password().ok()).is_some())).collect()
+}
+
+fn get_key(provider: &str) -> Result<String, String> {
+    key_entry(provider)?.get_password().map_err(|_| format!("Add your {provider} key in Settings first."))
+}
+
+fn random_token() -> Result<String, String> {
+    let mut b = [0u8; 16];
+    getrandom::fill(&mut b).map_err(|e| format!("No secure random source: {e}"))?;
+    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
+}
+
+/// The spend gate (S-01). The page calls this from the click on the confirmation sheet, which has shown the price. The token is
+/// single use and expires; `engine_call` refuses `generate_start` without a live one.
+#[tauri::command]
+fn confirm_spend(st: State<EngineState>, provider: String, model: String) -> Result<String, String> {
+    provider_ok(&provider)?;
+    if model.is_empty() || model.len() > 200 {
+        return Err("Bad model.".into());
+    }
+    let t = random_token()?;
+    let mut m = st.spend.lock().unwrap();
+    m.retain(|_, exp| *exp > Instant::now());
+    m.insert(t.clone(), Instant::now() + SPEND_TTL);
+    Ok(t)
+}
+
+fn take_spend(st: &EngineState, token: &str) -> bool {
+    let mut m = st.spend.lock().unwrap();
+    m.retain(|_, exp| *exp > Instant::now());
+    m.remove(token).is_some()
+}
+
+/// One request to the Python engine helper. The method list is closed, the package path is re-validated here, writes are refused
+/// while an EffectCraft window has the project open (P0-07), keys are injected for the one provider a call uses, and a paid call
+/// needs a live spend token.
 #[tauri::command]
 fn engine_call(
     app: tauri::AppHandle,
@@ -378,7 +459,8 @@ fn engine_call(
     override_path: String,
     package: Option<String>,
 ) -> Result<Value, String> {
-    if !METHODS.contains(&method.as_str()) {
+    let is_engine = ENGINE_METHODS.contains(&method.as_str());
+    if !is_engine && !MODEL_METHODS.contains(&method.as_str()) {
         return Err(format!("Unknown engine method {method}."));
     }
     if WRITE_METHODS.contains(&method.as_str()) && gui_running(&st) {
@@ -387,29 +469,61 @@ fn engine_call(
     if !params.is_object() {
         params = serde_json::json!({});
     }
-    if method == "open" {
+    {
+        // Never trust the page for secrets or paths.
+        let o = params.as_object_mut().unwrap();
+        for k in ["package", "api_key", "keys"] {
+            o.remove(k);
+        }
+    }
+    if method == "open" || method == "generate_start" {
         let root = projects_root(&app)?;
         let pkg = check_package(&root, package.as_deref().ok_or("No project path.")?)?;
         params.as_object_mut().unwrap().insert("package".into(), Value::String(pkg.to_string_lossy().into_owned()));
-    } else {
-        params.as_object_mut().unwrap().remove("package");
     }
-    let cli = find_cli(&override_path).ok_or("EffectCraft was not found. Set its path in Settings.")?;
-    sidecar_request(&st, &cli, &method, params)
+    if method == "generate_start" {
+        let provider = params.get("provider").and_then(Value::as_str).ok_or("No provider.")?.to_string();
+        provider_ok(&provider)?;
+        let token = params.get("spend_token").and_then(Value::as_str).unwrap_or("").to_string();
+        if !take_spend(&st, &token) {
+            return Err("This needs a spend confirmation from a click on the confirmation sheet. Confirm again.".into());
+        }
+        let key = get_key(&provider)?;
+        params.as_object_mut().unwrap().insert("api_key".into(), Value::String(key));
+    }
+    if method == "models_refresh" {
+        let mut keys = serde_json::Map::new();
+        if let Ok(k) = get_key("fal") {
+            keys.insert("fal".into(), Value::String(k)); // only fal's listing needs a key
+        }
+        params.as_object_mut().unwrap().insert("keys".into(), Value::Object(keys));
+    }
+    let cli = find_cli(&override_path);
+    if is_engine && cli.is_none() {
+        return Err("EffectCraft was not found. Set its path in Settings.".into());
+    }
+    let data_dir = app.path().app_data_dir().ok();
+    sidecar_request(&st, cli.as_deref(), data_dir.as_deref(), &method, params)
 }
 
 /// Sends one request to the engine helper (starting it if needed) and waits for the reply with the matching id.
-fn sidecar_request(st: &EngineState, cli: &Path, method: &str, params: Value) -> Result<Value, String> {
+fn sidecar_request(st: &EngineState, cli: Option<&Path>, data_dir: Option<&Path>, method: &str, params: Value) -> Result<Value, String> {
     let mut guard = st.sidecar.lock().unwrap();
+    let need_restart = matches!(guard.as_ref(), Some(s) if cli.is_some() && !s.has_cli);
+    if need_restart {
+        if let Some(mut old) = guard.take() {
+            let _ = old.child.kill();
+        }
+    }
     if guard.is_none() {
-        *guard = Some(start_sidecar(cli)?);
+        *guard = Some(start_sidecar(cli, data_dir)?);
     }
     let sc = guard.as_mut().unwrap();
     let id = sc.next_id;
     sc.next_id += 1;
     let line = serde_json::json!({"id": id, "method": method, "params": params}).to_string();
     let io_ok = writeln!(sc.stdin, "{line}").and_then(|_| sc.stdin.flush()).is_ok();
-    let timeout = Duration::from_secs(if method == "open" || method == "preview" { 180 } else { 60 });
+    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" { 180 } else { 60 });
     let reply: Result<Value, String> = if io_ok {
         loop {
             match sc.rx.recv_timeout(timeout) {
@@ -471,6 +585,34 @@ fn open_in_effectcraft(app: tauri::AppHandle, st: State<EngineState>, path: Stri
     Ok(())
 }
 
+/// A generated picture as a data URL, for the thumbnail. Only files under the package's assets/images folder, images only.
+#[tauri::command]
+fn asset_data_url(app: tauri::AppHandle, path: String, rel: String) -> Result<String, String> {
+    use base64::Engine as _;
+    let dir = check_package(&projects_root(&app)?, &path)?;
+    let r = Path::new(&rel);
+    let parts: Vec<_> = r.components().collect();
+    let plain = parts.iter().all(|c| matches!(c, std::path::Component::Normal(_)));
+    if !plain || parts.len() != 3 || parts[0].as_os_str() != "assets" || parts[1].as_os_str() != "images" {
+        return Err("Not a picture asset of this project.".into());
+    }
+    let file = dir.join(r).canonicalize().map_err(|_| "That picture no longer exists.".to_string())?;
+    if !file.starts_with(&dir) {
+        return Err("Not a picture asset of this project.".into());
+    }
+    let mime = match file.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        _ => return Err("Not a picture file.".into()),
+    };
+    if file.metadata().map_err(|e| e.to_string())?.len() > 20 * 1024 * 1024 {
+        return Err("That picture is too large to preview.".into());
+    }
+    let bytes = fs::read(&file).map_err(|e| e.to_string())?;
+    Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
 #[tauri::command]
 fn effectcraft_window_open(st: State<EngineState>) -> bool {
     gui_running(&st)
@@ -488,7 +630,12 @@ pub fn run() {
             engine_status,
             open_in_effectcraft,
             effectcraft_window_open,
-            engine_call
+            engine_call,
+            set_provider_key,
+            delete_provider_key,
+            provider_key_status,
+            confirm_spend,
+            asset_data_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running MotionCraft");
@@ -553,17 +700,41 @@ mod tests {
         let pkg = base.join("T.motioncraft");
         fs::create_dir_all(&pkg).unwrap();
         let st = EngineState::default();
-        let open = sidecar_request(&st, &cli, "open", serde_json::json!({"package": pkg.to_string_lossy()})).unwrap();
+        let open = sidecar_request(&st, Some(&cli), None, "open", serde_json::json!({"package": pkg.to_string_lossy()})).unwrap();
         assert_eq!(open["layers"].as_array().unwrap().len(), 0);
-        let added = sidecar_request(&st, &cli, "add_text", serde_json::json!({"text": "From Rust"})).unwrap();
+        let added = sidecar_request(&st, Some(&cli), None, "add_text", serde_json::json!({"text": "From Rust"})).unwrap();
         assert_eq!(added["layers"][0]["name"], "From Rust");
-        let prev = sidecar_request(&st, &cli, "preview", serde_json::json!({"times": [0.0], "max_side": 320})).unwrap();
+        let prev = sidecar_request(&st, Some(&cli), None, "preview", serde_json::json!({"times": [0.0], "max_side": 320})).unwrap();
         assert!(prev["png"].as_str().unwrap().len() > 100);
-        let bad = sidecar_request(&st, &cli, "nope", serde_json::json!({}));
+        let bad = sidecar_request(&st, Some(&cli), None, "nope", serde_json::json!({}));
         assert!(bad.is_err());
-        let again = sidecar_request(&st, &cli, "inspect", serde_json::json!({}));
+        let again = sidecar_request(&st, Some(&cli), None, "inspect", serde_json::json!({}));
         assert!(again.is_ok(), "helper must keep serving after an error reply");
         let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Spend-gate test list (AGENTS.md): every paid path must go through `take_spend`. `generate_start` is the only paid method.
+    #[test]
+    fn spend_tokens_are_single_use_and_expire() {
+        let st = EngineState::default();
+        let t = random_token().unwrap();
+        assert_eq!(t.len(), 32);
+        assert_ne!(t, random_token().unwrap());
+        assert!(!take_spend(&st, &t), "an unknown token is refused");
+        st.spend.lock().unwrap().insert(t.clone(), Instant::now() + SPEND_TTL);
+        assert!(take_spend(&st, &t));
+        assert!(!take_spend(&st, &t), "a token works once");
+        st.spend.lock().unwrap().insert("old".into(), Instant::now() - Duration::from_secs(1));
+        assert!(!take_spend(&st, "old"), "an expired token is refused");
+        assert!(!take_spend(&st, ""));
+    }
+
+    #[test]
+    fn only_generate_start_is_paid_and_providers_are_a_closed_list() {
+        assert!(MODEL_METHODS.contains(&"generate_start"));
+        assert!(provider_ok("kie").is_ok() && provider_ok("fal").is_ok() && provider_ok("byteplus").is_ok());
+        assert!(provider_ok("suno").is_err() && provider_ok("../x").is_err());
+        assert!(!WRITE_METHODS.contains(&"generate_start"));
     }
 
     #[test]
