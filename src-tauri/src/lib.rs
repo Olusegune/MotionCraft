@@ -812,10 +812,31 @@ fn export_package(app: tauri::AppHandle, path: String, dest_parent: String) -> R
     }
     let base = src.file_stem().and_then(|s| s.to_str()).unwrap_or("project").to_string();
     let dst = unique_package(&parent, &base);
-    copy_dir(&src, &dst, 0).inspect_err(|_| {
+    collect_package(&src, &dst).inspect_err(|_| {
         let _ = fs::remove_dir_all(&dst);
     })?;
     Ok(dst.to_string_lossy().into_owned())
+}
+
+/// What a collected editable project leaves out: the draft movies and stills (they are made again on Build) and the working logs. Everything else is
+/// kept, with its relative paths, so the package opens on another computer: the composition, the assets, the font manifest, the renders, the project file.
+const COLLECT_SKIP: [&str; 2] = ["previews", "logs"];
+
+fn collect_package(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| format!("Could not create {}: {e}", dst.display()))?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
+        let name = entry.file_name();
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_symlink() || (kind.is_dir() && COLLECT_SKIP.iter().any(|s| name == std::ffi::OsStr::new(s))) {
+            continue;
+        }
+        if kind.is_dir() {
+            copy_dir(&entry.path(), &dst.join(&name), 1)?;
+        } else if kind.is_file() {
+            fs::copy(entry.path(), dst.join(&name)).map_err(|e| format!("Could not copy {}: {e}", entry.path().display()))?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command(async)]
@@ -1590,6 +1611,35 @@ mod tests {
         copy_dir(&src, &dst, 0).unwrap();
         assert_eq!(fs::read(dst.join("assets").join("images").join("x.png")).unwrap(), b"png");
         assert_eq!(unique_package(&base, "a").file_name().unwrap(), "a 2.motioncraft");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_collected_project_keeps_what_is_needed_to_reopen_it_and_leaves_out_drafts_and_logs() {
+        let base = std::env::temp_dir().join(format!("mc-collect-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let src = base.join("a.motioncraft");
+        for d in ["assets/images", "assets/audio", "fonts", "renders", "previews", "logs", "analysis", "revisions"] {
+            fs::create_dir_all(src.join(d)).unwrap();
+        }
+        fs::write(src.join("project.json"), b"{}").unwrap();
+        fs::write(src.join("comp.ecproj"), b"ecproj").unwrap();
+        fs::write(src.join("fonts").join("manifest.json"), b"[]").unwrap();
+        fs::write(src.join("assets/images/x.png"), b"png").unwrap();
+        fs::write(src.join("assets/audio/s.wav"), b"wav").unwrap();
+        fs::write(src.join("renders/final.mp4"), b"mp4").unwrap();
+        fs::write(src.join("analysis/s.wav.1-2.json"), b"{}").unwrap();
+        fs::write(src.join("revisions/v1.ecproj"), b"v1").unwrap();
+        fs::write(src.join("previews/draft.mp4"), b"big draft").unwrap();
+        fs::write(src.join("logs/text-layers.json"), b"{}").unwrap();
+        let dst = base.join("out.motioncraft");
+        collect_package(&src, &dst).unwrap();
+        for kept in ["project.json", "comp.ecproj", "fonts/manifest.json", "assets/images/x.png", "assets/audio/s.wav", "renders/final.mp4", "analysis/s.wav.1-2.json", "revisions/v1.ecproj"] {
+            assert!(dst.join(kept).is_file(), "{kept} should be kept");
+        }
+        assert!(!dst.join("previews").exists(), "draft movies are left out");
+        assert!(!dst.join("logs").exists(), "working logs are left out");
+        assert_eq!(fs::read(dst.join("comp.ecproj")).unwrap(), b"ecproj");
         let _ = fs::remove_dir_all(&base);
     }
 

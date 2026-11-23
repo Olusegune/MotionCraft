@@ -16,7 +16,7 @@ type Preset = "h264" | "prores4444";
 const OUTPUTS: { icon: typeof Film; title: string; detail: string; note: string; preset?: Preset }[] = [
   { icon: Film, title: "Rendered video", detail: "H.264", note: "A finished video file.", preset: "h264" },
   { icon: Layers, title: "Graphics with transparency", detail: "ProRes 4444 with alpha", note: "For compositing over other footage.", preset: "prores4444" },
-  { icon: FolderArchive, title: "Collected editable project", detail: ".motioncraft package", note: "The .ecproj, assets and font manifest, relative paths only." },
+  { icon: FolderArchive, title: "Collected editable project", detail: ".motioncraft package", note: "The .ecproj, assets, renders and font manifest, relative paths only. Draft movies and logs are left out." },
 ];
 const kb = (n: number | null) => (n === null ? "" : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1e3)} KB`);
 
