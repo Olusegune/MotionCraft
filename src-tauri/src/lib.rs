@@ -430,9 +430,9 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 21] = [
+const ENGINE_METHODS: [&str; 22] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
-    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run",
+    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
 ];
 const MODEL_METHODS: [&str; 11] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
@@ -443,7 +443,7 @@ const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthr
 const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
 /// Credential-store accounts: the generation providers plus the two language-model-only ones.
 const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
-const WRITE_METHODS: [&str; 11] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute"];
+const WRITE_METHODS: [&str; 12] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
 const PAID_ENGINE_METHODS: [&str; 1] = ["render_start"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
@@ -1407,6 +1407,7 @@ mod tests {
         assert!(LLM_CALL_METHODS.contains(&"builder_plan"), "the Builder's planning call goes through the same gate");
         assert!(ENGINE_METHODS.contains(&"builder_execute") && WRITE_METHODS.contains(&"builder_execute"), "building writes the project, so it is refused while EffectCraft has it open");
         assert!(ENGINE_METHODS.contains(&"qa_run") && !WRITE_METHODS.contains(&"qa_run") && !PAID_ENGINE_METHODS.contains(&"qa_run"), "QA reads the composition and writes nothing");
+        assert!(ENGINE_METHODS.contains(&"qa_fix") && WRITE_METHODS.contains(&"qa_fix") && !PAID_ENGINE_METHODS.contains(&"qa_fix"), "a QA fix writes the composition, so it is refused while EffectCraft has it open");
         assert!(!PAID_ENGINE_METHODS.contains(&"builder_execute"), "a plan costs a known $0 today; a paid plan would need its own token path");
         assert!(LLM_CALL_METHODS.contains(&"director_intent"), "the Director calls a model, so it goes through the same gate");
         for (p, account) in LLM_CLOUD {

@@ -199,6 +199,33 @@ class Service:
     def qa_run(self, facts: dict | None = None, contrast: bool = True) -> dict:
         """Runs the tier-1 checks on the open composition. Read-only: nothing in the project or the composition is changed.
         `facts` is what only the page knows: the deliverable, the imported assets, and the renders made so far."""
+        scene = self._qa_scene(facts, contrast)
+        results = [qa_checks.to_dict(r) for r in qa_checks.run_all(scene)]
+        count = {"error": 0, "warn": 0, "info": 0}
+        for r in results:
+            for f in r["findings"]:
+                count[f["severity"]] += 1
+        return {"results": results, "counts": count, "checked": sum(1 for r in results if r["state"] != "not-checked"), "total": len(results)}
+
+    FIXABLE = {"safe-title": qa_checks.safe_title}
+
+    def qa_fix(self, check: str, layer: int | None = None, facts: dict | None = None) -> dict:
+        """Applies the safe fix of a QA finding (P4-04). The page names the check and the layer; the commands are worked out here from the
+        composition as it is now, never taken from the page. They run as the QA actor, so the adapter refuses them on an approved layer."""
+        fn = self.FIXABLE.get(check)
+        if fn is None:
+            raise AdapterError("This check has no automatic fix.")
+        res = fn(self._qa_scene(facts, contrast=False))
+        cmds = [c for f in res.findings if (layer is None or f.get("at", {}).get("layerId") == layer) and (f.get("fix") or {}).get("safe")
+                for c in f["fix"]["commands"]]
+        if not cmds:
+            raise AdapterError("There is nothing to fix here any more.")
+        a = self._need()
+        a.execute([Command(id=c["id"], params=c["params"]) for c in cmds], actor=QA)
+        a.save()
+        return {"applied": len(cmds), "fixed": sorted({int(c["params"]["layer"]) for c in cmds}), **self._snapshot()}
+
+    def _qa_scene(self, facts: dict | None, contrast: bool) -> "qa_checks.Scene":
         a = self._need()
         facts = facts if isinstance(facts, dict) else {}
         snap = a.inspect()
@@ -227,7 +254,9 @@ class Service:
             qa_checks_layers.append(qa_checks.Layer(
                 id=l.id, name=l.name, kind=l.kind, parent=l.parent, text=txt if isinstance(txt, str) else None,
                 font=font if isinstance(font, str) else None, size=float(size) if isinstance(size, (int, float)) else None,
-                position=pair(pos, None) if isinstance(pos, (list, tuple)) else None, scale=pair(val(props, ("transform/scale",)), (100.0, 100.0)),
+                position=pair(pos, None) if isinstance(pos, (list, tuple)) else None,
+                position_z=float(pos[2]) if isinstance(pos, (list, tuple)) and len(pos) > 2 and isinstance(pos[2], (int, float)) else 0.0,
+                position_keyed=bool((props.get("transform/position") or {}).get("keys")), scale=pair(val(props, ("transform/scale",)), (100.0, 100.0)),
                 opacity=float(op) if isinstance(op, (int, float)) else 100.0,
                 t_in=float(lp["in"]) if isinstance(lp.get("in"), (int, float)) else None, t_out=float(lp["out"]) if isinstance(lp.get("out"), (int, float)) else None))
         fonts = None
@@ -269,12 +298,7 @@ class Service:
         scene = qa_checks.Scene(width=comp.width, height=comp.height, fps=comp.frame_rate, duration=comp.duration, layers=qa_checks_layers,
                                 deliverable=facts.get("deliverable") or {}, assets=assets, package=self.pkg, renders=[x for x in (facts.get("renders") or []) if isinstance(x, dict)],
                                 installed_fonts=fonts, font_manifest=manifest, markers=markers, audio=audio, audio_skipped=skipped, frames=frames)
-        results = [qa_checks.to_dict(r) for r in qa_checks.run_all(scene)]
-        count = {"error": 0, "warn": 0, "info": 0}
-        for r in results:
-            for f in r["findings"]:
-                count[f["severity"]] += 1
-        return {"results": results, "counts": count, "checked": sum(1 for r in results if r["state"] != "not-checked"), "total": len(results)}
+        return scene
 
     def generate_poll(self, job: str) -> dict:
         return self.jobs.poll(job)

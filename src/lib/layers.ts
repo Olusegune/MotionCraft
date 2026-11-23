@@ -67,6 +67,18 @@ export function markBuilt(p: MotionProject, created: { layer: number; role: stri
   return { ...p, layerMap: map, revisions: [...p.revisions, rev], updatedAt: nowIso() };
 }
 
+/** A QA fix the user applied with one click: one revision, so it can be seen in History and undone by hand. Approvals are untouched. */
+export function logQaFix(p: MotionProject, layers: number[], summary: string): MotionProject {
+  const rev: RevisionRecord = { id: newId(), at: nowIso(), actor: "agent:qa", kind: "qa_fix", layers, summary };
+  return { ...p, revisions: [...p.revisions, rev], updatedAt: nowIso() };
+}
+
+/** Points one imported asset at the file the QA check found. Only MotionCraft's own record changes. */
+export function relinkAsset(p: MotionProject, assetId: string, to: string): MotionProject {
+  if (!(p.assets ?? []).some((a) => a.id === assetId)) return p;
+  return { ...p, assets: (p.assets ?? []).map((a) => (a.id === assetId ? { ...a, path: to } : a)), updatedAt: nowIso() };
+}
+
 /** A layer shows "Changed in EffectCraft" while its latest layer approval says so and its hash still differs from the approved one. */
 export function isChangedSinceApproval(p: MotionProject, l: EngineLayer): boolean {
   const b = bindingFor(p, l.id);

@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from . import images
 
+SAFE_TOLERANCE_PX = 0.5       # less than half a pixel outside is not a violation (and absorbs rounding in the fix)
 SAFE_FRACTION = 0.90          # graphics-safe: the inner 90% of width and height
 CHAR_WIDTH = 0.55             # average glyph width as a fraction of the font size (an estimate)
 LINE_HEIGHT = 1.2
@@ -38,6 +39,8 @@ class Layer:
     font: str | None = None
     size: float | None = None
     position: tuple[float, float] | None = None
+    position_z: float = 0.0
+    position_keyed: bool = False        # the position is animated: a fixed value would fight the keyframes
     scale: tuple[float, float] = (100.0, 100.0)
     opacity: float = 100.0
     t_in: float | None = None
@@ -136,7 +139,7 @@ def missing_assets(s: Scene) -> Result:
             for p in (s.package / "assets").rglob(rel.name):
                 if p.is_file():
                     cands.append(p.relative_to(s.package).as_posix())
-        fix = {"label": f"Relink to {cands[0]}", "safe": True, "commands": [], "relink": {"assetId": a.get("id"), "to": cands[0]}} if len(cands) == 1 else None
+        fix = {"label": f"Relink to {cands[0]}", "safe": True, "commands": [], "kind": "relink", "relink": {"assetId": a.get("id"), "to": cands[0]}} if len(cands) == 1 else None
         r.findings.append(finding(r.check, "error", f"{a.get('path')} is not in the project folder.", "The file was moved, renamed or deleted after it was imported.",
                                   fix=fix, assetId=a.get("id"), candidates=cands))
     return _done(r)
@@ -253,6 +256,20 @@ def low_resolution(s: Scene) -> Result:
     return _done(r)
 
 
+def _move_fix(l: Layer, b: tuple[float, float, float, float], s: Scene, mx: float, my: float) -> dict | None:
+    """A static nudge back inside the safe area. Offered only when it can work: the text fits inside, and its position is not animated."""
+    if l.position is None or l.position_keyed:
+        return None
+    if (b[2] - b[0]) > s.width - 2 * mx or (b[3] - b[1]) > s.height - 2 * my:
+        return None                      # wider than the safe area: moving cannot help, the text itself has to change
+    dx = mx - b[0] if b[0] < mx else (s.width - mx) - b[2] if b[2] > s.width - mx else 0.0
+    dy = my - b[1] if b[1] < my else (s.height - my) - b[3] if b[3] > s.height - my else 0.0
+    x, y = round(l.position[0] + dx, 1), round(l.position[1] + dy, 1)
+    way = " and ".join(w for w in (f"{abs(dx):.0f} px {'right' if dx > 0 else 'left'}" if dx else "", f"{abs(dy):.0f} px {'down' if dy > 0 else 'up'}" if dy else "") if w)
+    return {"label": f"Move it {way}", "safe": True, "kind": "move",
+            "commands": [{"id": "prop.set", "params": {"layer": l.id, "path": "transform/position", "value": [x, y, l.position_z]}}]}
+
+
 # ------------------------------------------------------------------------------------------------------------------ 7
 def safe_title(s: Scene) -> Result:
     r = Result("safe-title", "Safe-title violations")
@@ -267,9 +284,9 @@ def safe_title(s: Scene) -> Result:
             continue
         known += 1
         out = max(margin_x - b[0], b[2] - (s.width - margin_x), margin_y - b[1], b[3] - (s.height - margin_y), 0)
-        if out > 0:
+        if out > SAFE_TOLERANCE_PX:
             r.findings.append(finding(r.check, "warn", f"“{(l.text or '')[:40]}” reaches about {out:.0f} px outside the {SAFE_FRACTION:.0%} safe area (estimated from its size and position).",
-                                      "Some screens crop the edges. Move the text inwards.", layer=l.id, measured=out, threshold=0, estimated=True))
+                                      "Some screens crop the edges. Move the text inwards.", layer=l.id, measured=out, threshold=0, estimated=True, fix=_move_fix(l, b, s, margin_x, margin_y)))
     if not known:
         return _unchecked(r.check, r.label, "EffectCraft did not report the position and size of the text layers.")
     return _done(r)

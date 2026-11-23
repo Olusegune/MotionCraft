@@ -289,3 +289,76 @@ def test_qa_run_reads_wav_audio_and_checks_the_beat_markers(svc, tmp_path):
     assert {r["check"]: r for r in svc.handle("qa_run", {"facts": facts})["results"]}["beat-misalignment"]["state"] == "passed"
     svc.handle("sync_markers", {"times": [t + 0.2 for t in beats[:2]], "comment": "motioncraft:beat", "replace": True})
     assert {r["check"]: r for r in svc.handle("qa_run", {"facts": facts})["results"]}["beat-misalignment"]["state"] == "findings"
+
+
+# ---------------------------------------------------------------------------------------------------------- safe fixes (P4-04)
+from motioncraft_engine.adapter import Command, USER  # noqa: E402
+from motioncraft_engine.adapter.errors import AdapterError, LockedLayerError  # noqa: E402
+
+
+def test_the_move_fix_brings_the_text_inside_and_is_offered_only_when_it_can_work():
+    mx, my = 1920 * 0.05, 1080 * 0.05
+    left = C.safe_title(scene([text(1, "Far left edge", pos=(40, 540))])).findings[0]["fix"]
+    assert left["safe"] and left["kind"] == "move" and left["label"].startswith("Move it ") and "right" in left["label"]
+    cmd = left["commands"][0]
+    assert cmd["id"] == "prop.set" and cmd["params"]["layer"] == 1 and cmd["params"]["path"] == "transform/position"
+    x, y, z = cmd["params"]["value"]
+    moved = text(1, "Far left edge", pos=(x, y))
+    assert C.box(moved)[0] == pytest.approx(mx, abs=0.2) and y == 540 and z == 0.0
+    assert C.safe_title(scene([moved])).state == "passed", "after the fix the check passes"
+    low = C.safe_title(scene([text(1, "Low", pos=(960, 1060))])).findings[0]["fix"]
+    assert "up" in low["label"] and low["commands"][0]["params"]["value"][0] == 960
+    assert "fix" not in C.safe_title(scene([text(1, "x" * 60, pos=(960, 540), size=200)])).findings[0], "wider than the safe area: moving cannot help"
+    keyed = text(1, "Far left edge", pos=(40, 540), position_keyed=True)
+    assert "fix" not in C.safe_title(scene([keyed])).findings[0], "an animated position would fight a fixed value"
+
+
+@pytest.fixture
+def fixable(svc):
+    """Two text layers on the mock: one hanging off the left edge, one fine. The mock reports no text size on its own, so it is set."""
+    ids = []
+    for t, pos in (("Far left edge", [40.0, 540.0, 0.0]), ("Centre", [960.0, 540.0, 0.0])):
+        lid = svc.handle("add_text", {"text": t})["layer"]
+        svc.a.execute([Command(id="prop.set", params={"layer": lid, "path": "text/fontSize", "value": 120}),
+                       Command(id="prop.set", params={"layer": lid, "path": "transform/position", "value": pos})], actor=USER)
+        ids.append(lid)
+    svc.facts = {"deliverable": DELIV}  # type: ignore[attr-defined]
+    return svc, ids
+
+
+def safe_title_result(svc):
+    return next(r for r in svc.handle("qa_run", {"facts": svc.facts, "contrast": False})["results"] if r["check"] == "safe-title")
+
+
+def test_qa_fix_moves_only_the_named_layer_and_the_check_then_passes(fixable):
+    svc, (edge, centre) = fixable
+    before = svc.a.hash_layers(None)
+    res = safe_title_result(svc)
+    assert res["state"] == "findings" and res["findings"][0]["at"]["layerId"] == edge and res["findings"][0]["fix"]["safe"]
+    out = svc.handle("qa_fix", {"check": "safe-title", "layer": edge, "facts": svc.facts})
+    assert out["applied"] == 1 and out["fixed"] == [edge]
+    after = svc.a.hash_layers(None)
+    assert after[edge] != before[edge] and after[centre] == before[centre], "only the fixed layer changed"
+    assert svc.a.layer_props(None, edge)["props"]["transform/position"]["value"][0] > 40
+    assert safe_title_result(svc)["state"] == "passed"
+    with pytest.raises(AdapterError, match="nothing to fix"):
+        svc.handle("qa_fix", {"check": "safe-title", "layer": edge, "facts": svc.facts})
+
+
+def test_qa_fix_never_touches_an_approved_layer(fixable):
+    svc, (edge, _) = fixable
+    svc.handle("lock", {"layers": [edge]})
+    before = svc.a.hash_layers(None)[edge]
+    with pytest.raises(LockedLayerError):
+        svc.handle("qa_fix", {"check": "safe-title", "layer": edge, "facts": svc.facts})
+    assert svc.a.hash_layers(None)[edge] == before and svc.a.layer_props(None, edge)["props"]["transform/position"]["value"][0] == 40.0
+
+
+def test_qa_fix_runs_only_known_fixes_and_never_takes_commands_from_the_page(fixable):
+    svc, (edge, _) = fixable
+    for check in ("frame-rate", "missing-assets", "contrast", "../etc"):
+        with pytest.raises(AdapterError, match="no automatic fix"):
+            svc.handle("qa_fix", {"check": check, "facts": svc.facts})
+    with pytest.raises(TypeError):     # there is no parameter for commands: a page cannot supply its own
+        svc.handle("qa_fix", {"check": "safe-title", "layer": edge, "facts": svc.facts, "commands": [{"id": "edit.clear", "params": {}}]})
+    assert len(svc.handle("inspect", {})["layers"]) == 2
