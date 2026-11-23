@@ -5,8 +5,10 @@ import { useApp } from "../ctx";
 import { Fold } from "../shell/Fold";
 import { PageFrame } from "../shell/PageFrame";
 import { Segmented } from "../shell/Segmented";
-import { Field, type FrameProps } from "./common";
+import { Field, useLocked, type FrameProps } from "./common";
 import { hasAnyProvider } from "../lib/project";
+import { applyLook, currentLook } from "../lib/styles";
+import { StyleCard } from "../shell/StyleArt";
 import { GeneratePanel } from "./GeneratePanel";
 import type { Tone } from "../types";
 
@@ -32,6 +34,7 @@ const TONES: { id: Tone; label: string }[] = [
 export function BriefPage(f: FrameProps) {
   const { project, update, go } = useApp();
   const imp = useImportMedia();
+  const styleLocked = useLocked("B");
   const [tab, setTab] = useState<Tab>("brief");
   const [budgetText, setBudgetText] = useState(() => String(project.budget.capUsd));
   const briefBox = useRef<HTMLTextAreaElement>(null);
@@ -65,6 +68,10 @@ export function BriefPage(f: FrameProps) {
             <button className="btn" disabled={!hasAnyProvider()} title={hasAnyProvider() ? undefined : noAi}><Sparkles size={16} aria-hidden="true" />Auto suggest</button>
             <button className="btn" onClick={() => go("direction")}><LayoutGrid size={16} aria-hidden="true" />Browse styles</button>
           </div>
+          <div className="style-row" role="group" aria-label="Quick style picks">
+            {["bauhaus", "cut-paper", "neon-light"].map((id) => <StyleCard key={id} id={id} compact on={currentLook(project) === id} disabled={styleLocked} onPick={() => update((p) => applyLook(p, id))} />)}
+          </div>
+          <button className="btn quiet link-btn" onClick={() => go("direction")}>Explore all styles →</button>
         </div>
         <div className="pref">
           <span className="pref-label">Duration</span>

@@ -44,3 +44,16 @@ export function detectConflicts(p: MotionProject) {
   }
   return out;
 }
+
+/** Use one family for every dimension at once (the "look"). Intensities already chosen are kept; conflicts cannot arise inside one family. */
+export function applyLook(p: MotionProject, familyId: string): MotionProject {
+  if (!FAMILIES.some((f) => f.id === familyId)) return p;
+  const dims: MotionProject["style"]["dimensions"] = {};
+  for (const d of DIMENSIONS) dims[d.id] = { familyId, intensity: p.style.dimensions[d.id]?.intensity ?? "moderate" };
+  return { ...p, style: { ...p.style, dimensions: dims, conflicts: [] }, updatedAt: new Date().toISOString() };
+}
+/** The family used for all seven dimensions, or null when the dimensions differ or are not all chosen. */
+export function currentLook(p: MotionProject): string | null {
+  const ids = DIMENSIONS.map((d) => p.style.dimensions[d.id]?.familyId);
+  return ids.every((x) => x && x === ids[0]) ? ids[0]! : null;
+}

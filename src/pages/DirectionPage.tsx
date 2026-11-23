@@ -4,7 +4,8 @@ import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Segmented } from "../shell/Segmented";
-import { DIMENSIONS, detectConflicts, FAMILIES, familyLabel } from "../lib/styles";
+import { applyLook, currentLook, DIMENSIONS, detectConflicts, FAMILIES, familyLabel } from "../lib/styles";
+import { StyleCard } from "../shell/StyleArt";
 import { gateState } from "../lib/project";
 import { LockBar, useLocked, type FrameProps } from "./common";
 import { MediaWall, useImportMedia } from "../shell/Media";
@@ -45,6 +46,13 @@ export function DirectionPage(f: FrameProps) {
         {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
       </section>
       <Proposals />
+      <section aria-labelledby="looks-h">
+        <h2 id="looks-h">Style presets</h2>
+        <p className="muted">Pick one to use that family for everything, then fine-tune any dimension below. Nothing is chosen until you click one.</p>
+        <div className="style-grid" role="group" aria-labelledby="looks-h">
+          {FAMILIES.map((fam) => <StyleCard key={fam.id} id={fam.id} on={currentLook(project) === fam.id} disabled={locked} onPick={() => update((p) => applyLook(p, fam.id))} />)}
+        </div>
+      </section>
       <fieldset className="grp" disabled={locked}>
         <legend className="visually-hidden">Style system</legend>
         <h2>Style system</h2>

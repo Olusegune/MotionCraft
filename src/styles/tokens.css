@@ -16,5 +16,18 @@
   --mc-font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
   --mc-font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   --mc-scale: 1;
+  /* colours of the drawn style pictures (shell/StyleArt.tsx): illustrations of each family's idea, not UI colours */
+  --mc-art-swiss-bg: #F4F1EA; --mc-art-swiss-a: #D6262C; --mc-art-swiss-b: #151515;
+  --mc-art-editorial-minimal-bg: #EFE9DD; --mc-art-editorial-minimal-a: #2A2A2A; --mc-art-editorial-minimal-b: #B49A6E;
+  --mc-art-bauhaus-bg: #EFE6D2; --mc-art-bauhaus-a: #E8B923; --mc-art-bauhaus-b: #1F4E9C; --mc-art-bauhaus-c: #D1352B;
+  --mc-art-brutalist-bg: #BDBDBD; --mc-art-brutalist-a: #111111; --mc-art-brutalist-b: #F2F2F2;
+  --mc-art-bold-kinetic-bg: #0E0E10; --mc-art-bold-kinetic-a: #C6FF3D; --mc-art-bold-kinetic-b: #FF3D8B;
+  --mc-art-cinematic-title-bg: #0C1E24; --mc-art-cinematic-title-a: #2F6B73; --mc-art-cinematic-title-b: #E8D9B5;
+  --mc-art-clean-broadcast-bg: #0B3A78; --mc-art-clean-broadcast-a: #1E7BDC; --mc-art-clean-broadcast-b: #FFFFFF;
+  --mc-art-cut-paper-bg: #F1E7D3; --mc-art-cut-paper-a: #1F8A8A; --mc-art-cut-paper-b: #F08A3C; --mc-art-cut-paper-c: #D9503F;
+  --mc-art-risograph-bg: #F3EEE4; --mc-art-risograph-a: #FF5C8A; --mc-art-risograph-b: #2D6BFF;
+  --mc-art-retro-futurist-bg: #2B1055; --mc-art-retro-futurist-a: #FF7A59; --mc-art-retro-futurist-b: #FFC857;
+  --mc-art-neon-light-bg: #07070D; --mc-art-neon-light-a: #FF2BD6; --mc-art-neon-light-b: #25F4EE;
+  --mc-art-collage-bg: #E9DFC9; --mc-art-collage-a: #3D5A80; --mc-art-collage-b: #EE6C4D; --mc-art-collage-c: #98C1D9;
 }
 @media (prefers-reduced-motion: reduce) { :root { --mc-t-panel: 0ms; } }
