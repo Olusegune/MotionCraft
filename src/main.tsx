@@ -12,3 +12,8 @@ import "./styles/app.css";
 import App from "./App";
 
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
+
+// Close the splash once the page has drawn, but keep it up long enough to be seen.
+if ("__TAURI_INTERNALS__" in window) {
+  window.setTimeout(() => { import("./lib/api").then((m) => m.getApi()).then((a) => a.appReady()).catch(() => undefined); }, 1600);
+}

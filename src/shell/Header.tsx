@@ -19,9 +19,9 @@ export function saveText(s: SaveState, now: number): string {
   }
 }
 
-export function Header({ project, stage, save, now, engine, onSetMode, onHome, onPalette, onSettings, onEngine }: {
+export function Header({ project, stage, save, now, engine, onSetMode, onHome, onPalette, onSettings, onEngine, onManual }: {
   project: MotionProject | null; stage: Stage; save: SaveState; now: number; engine: EngineStatus | null;
-  onSetMode: (m: ControlMode) => void; onHome: () => void; onPalette: () => void; onSettings: () => void; onEngine: () => void;
+  onSetMode: (m: ControlMode) => void; onHome: () => void; onPalette: () => void; onSettings: () => void; onEngine: () => void; onManual: () => void;
 }) {
   const key = STAGE_MODE[stage];
   const why = "Needs an AI provider. Add one in Settings, Providers. Nothing else is blocked.";
@@ -39,6 +39,12 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
         </>
       )}
       <span className="grow" />
+      {project && (
+        <button className="chip" onClick={onManual} aria-label="Working mode: Manual. Everything works without AI. Open help"
+          title="You are working manually. Every page works without an AI provider.">
+          <Bot size={16} aria-hidden="true" />{hasAnyProvider() ? "Mixed mode" : "Working mode: Manual"}
+        </button>
+      )}
       {project && key && (
         <div className="mode-wrap">
           <Bot size={16} aria-hidden="true" />
@@ -48,12 +54,11 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
               { value: "assisted", label: "Assisted", disabled: !hasAnyProvider(), why },
               { value: "agent-led", label: "Agent-led", disabled: !hasAnyProvider(), why },
             ]} />
-          {!hasAnyProvider() && <span className="why">No AI provider</span>}
         </div>
       )}
       {project && <EngineChip engine={engine} onClick={onEngine} />}
       <button className="btn quiet" onClick={onPalette} aria-label="Command search"><Search size={18} strokeWidth={1.75} /><span className="kbd"><Command size={12} aria-hidden="true" />K</span></button>
-      <button className="icon-btn" onClick={onSettings} aria-label="Settings"><Settings2 size={20} strokeWidth={1.75} /></button>
+      <button className="btn" onClick={onSettings} aria-label="Settings"><Settings2 size={18} strokeWidth={1.75} aria-hidden="true" />Settings</button>
     </header>
   );
 }

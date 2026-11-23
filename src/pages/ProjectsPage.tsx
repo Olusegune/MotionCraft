@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FilePlus2, Folder } from "lucide-react";
+import { FilePlus2 } from "lucide-react";
 import type { Deliverable, ProjectSummary } from "../types";
 import { Sheet } from "../shell/Sheet";
 import { BrandMark } from "../shell/BrandMark";
@@ -10,21 +10,24 @@ const ASPECTS: { aspect: Deliverable["aspect"]; width: number; height: number }[
 ];
 const FPS: Deliverable["fps"][] = [23.976, 24, 25, 29.97, 30, 50, 60];
 
-export function ProjectsPage({ projects, loading, error, onOpen, onCreate }: {
+export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOpen, setNewOpen, onOpenFolder, onReveal }: {
   projects: ProjectSummary[]; loading: boolean; error: string | null; onOpen: (p: ProjectSummary) => void; onCreate: (name: string, d: Deliverable) => Promise<void>;
+  newOpen: boolean; setNewOpen: (v: boolean) => void; onOpenFolder: () => void; onReveal: () => void;
 }) {
-  const [sheet, setSheet] = useState(false);
+  const sheet = newOpen;
+  const setSheet = setNewOpen;
   return (
     <main className="projects" aria-labelledby="page-title">
-      <div className="page-head"><div><h1 id="page-title">Projects</h1><p className="intro">Direct, build, review and deliver motion graphics.</p></div>
-        <button className="btn primary" onClick={() => setSheet(true)}><FilePlus2 size={18} strokeWidth={1.75} aria-hidden="true" />New project</button></div>
+      <div className="page-head"><div><h1 id="page-title">Projects</h1><p className="intro">Direct, build, review and deliver motion graphics. Everything works manually: no AI account is needed.</p></div>
+        <div className="row-actions"><button className="btn" onClick={onOpenFolder}>Open project folder…</button><button className="btn" onClick={onReveal}>Show projects folder</button>
+        <button className="btn primary" onClick={() => setSheet(true)}><FilePlus2 size={18} strokeWidth={1.75} aria-hidden="true" />New project</button></div></div>
       {error && <p className="error-text" role="alert">{error}</p>}
       {loading ? <p className="muted" role="status">Loading projects…</p> : projects.length === 0 ? (
         <div className="empty-page"><BrandMark size={48} /><p className="strong">No projects yet</p><p>A project holds your brief, your decisions and your approvals. The composition itself lives in an EffectCraft file inside it.</p>
           <button className="btn primary" onClick={() => setSheet(true)}>New project</button></div>
       ) : (
         <ul className="project-grid">{projects.map((p) => (
-          <li key={p.path}><button className="project-card" onClick={() => onOpen(p)}><Folder size={20} strokeWidth={1.75} aria-hidden="true" />
+          <li key={p.path}><button className="project-card" onClick={() => onOpen(p)}><img className="project-icon" src="project-icon.png" alt="" />
             <span className="strong">{p.name}</span><span className="muted">Edited {new Date(p.updatedAt).toLocaleString()}</span></button></li>))}</ul>
       )}
       {sheet && <NewProject onClose={() => setSheet(false)} onCreate={async (n, d) => { await onCreate(n, d); setSheet(false); }} />}
