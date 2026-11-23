@@ -4,6 +4,7 @@ import { useApp } from "../ctx";
 import { Sheet } from "../shell/Sheet";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
 import { getApi, type GenJob, type ModelEntry, type ModelList, type ProviderId } from "../lib/api";
+import { rankModels, rankProviders } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { Frame } from "../shell/Media";
 
@@ -31,8 +32,8 @@ export function GeneratePanel() {
   }, [enginePath]);
   useEffect(() => { void load(); }, [load, generative]);
 
-  const providers = useMemo(() => [...new Set(models.filter((m) => m.media === kind).map((m) => m.provider))] as ProviderId[], [models, kind]);
-  const choices = useMemo(() => models.filter((m) => m.media === kind && m.provider === provider), [models, kind, provider]);
+  const providers = useMemo(() => rankProviders(models.filter((m) => m.media === kind), keys), [models, kind, keys]);
+  const choices = useMemo(() => rankModels(models.filter((m) => m.media === kind && m.provider === provider)), [models, kind, provider]);
   useEffect(() => { if (!providers.includes(provider as ProviderId)) setProvider(providers[0] ?? ""); }, [providers, provider]);
   useEffect(() => { if (!choices.some((m) => m.model === model)) setModel(choices[0]?.model ?? ""); }, [choices, model]);
   const picked = choices.find((m) => m.model === model);

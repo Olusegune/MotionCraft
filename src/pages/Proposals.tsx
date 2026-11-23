@@ -4,7 +4,8 @@ import { useApp } from "../ctx";
 import { Sheet } from "../shell/Sheet";
 import { Frame } from "../shell/Media";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
-import { getApi, type GenJob, type ModelEntry, type ModelList } from "../lib/api";
+import { getApi, type GenJob, type ModelEntry, type ModelList, type ProviderId } from "../lib/api";
+import { rankModels, rankProviders } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { FAMILIES } from "../lib/styles";
 import { nowIso } from "../lib/project";
@@ -27,6 +28,7 @@ export function Proposals() {
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [keys, setKeys] = useState<Record<string, boolean>>({});
   const [model, setModel] = useState("");
+  const [provider, setProvider] = useState<ProviderId | "">("");
   const [cards, setCards] = useState<Card[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -43,8 +45,11 @@ export function Proposals() {
   useEffect(() => { void load(); }, [load, generative]);
 
   const usable = useMemo(() => models.filter((m) => m.media === "image" && keys[m.provider]), [models, keys]);
-  useEffect(() => { if (!usable.some((m) => m.model === model)) setModel(usable[0]?.model ?? ""); }, [usable, model]);
-  const picked = usable.find((m) => m.model === model);
+  const providers = useMemo(() => rankProviders(usable, keys), [usable, keys]);
+  const choices = useMemo(() => rankModels(usable.filter((m) => m.provider === provider)), [usable, provider]);
+  useEffect(() => { if (!providers.includes(provider as ProviderId)) setProvider(providers[0] ?? ""); }, [providers, provider]);
+  useEffect(() => { if (!choices.some((m) => m.model === model)) setModel(choices[0]?.model ?? ""); }, [choices, model]);
+  const picked = choices.find((m) => m.model === model);
   const running = cards.some((c) => c.job && (c.job.state === "running" || c.job.state === "queued"));
   const reason = !generative ? "Generative models are off. Turn them on in Settings." : offline ? "Offline mode is on." : !picked ? "Add an image provider key in Settings." : running ? "Stills are being made." : undefined;
   const each = picked?.price.known ? picked.price.value : null;
@@ -103,9 +108,12 @@ export function Proposals() {
       <h2 id="prop-h">Direction proposals</h2>
       <p className="muted">Three contrasting starting points, each with a still from your image provider. Edit a prompt, make the stills, then use the one that is closest. This is optional: you can build a direction yourself below.</p>
       <div className="row end">
+        <label className="field"><span className="field-label">Provider</span>
+          <select value={provider} disabled={!providers.length} onChange={(e) => setProvider(e.target.value as ProviderId)}>
+            {providers.length === 0 ? <option value="">No provider key yet</option> : providers.map((p) => <option key={p} value={p}>{PROVIDER_LABEL[p]}</option>)}</select></label>
         <label className="field"><span className="field-label">Image model</span>
-          <select value={model} disabled={!usable.length} onChange={(e) => setModel(e.target.value)}>
-            {usable.length === 0 ? <option value="">No provider key yet</option> : usable.map((m) => <option key={`${m.provider}/${m.model}`} value={m.model}>{m.name} ({PROVIDER_LABEL[m.provider]})</option>)}</select></label>
+          <select value={model} disabled={!choices.length} onChange={(e) => setModel(e.target.value)}>
+            {choices.length === 0 ? <option value="">No provider key yet</option> : choices.map((m) => <option key={`${m.provider}/${m.model}`} value={m.model}>{m.name}</option>)}</select></label>
         <button className="btn" disabled={!!reason} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />Make 3 stills…</button>
       </div>
       {reason && <p className="why">{reason}</p>}
