@@ -1,15 +1,15 @@
 /* Design tokens from docs/UI_UX.md section 10. No raw hex outside this file. */
 :root {
-  --mc-bg-app: #181A1C;      --mc-bg-panel: #222426;
-  --mc-bg-raised: #2B2E30;   --mc-bg-viewer: #303030;
-  --mc-divider: #3A3D40;           /* decorative only */
+  --mc-bg-app: #12151A;      --mc-bg-panel: #181C21;
+  --mc-bg-raised: #20252B;   --mc-bg-viewer: #12151A;
+  --mc-divider: #2C333A;           /* decorative only */
   --mc-control-border: #7A8086;    /* inputs, segmented controls, gate outlines */
   --mc-text: #F2F3F4;  --mc-text-2: #B8BDC2;  --mc-text-3: #92999F;
   --mc-brand-gold: #E3C48F;   /* brand mark only; never a UI state colour */
   --mc-accent: #48DCE5;  --mc-on-accent: #181A1C;
   --mc-success: #83C5A0; --mc-warning: #E5BB72; --mc-error: #E68C88;
-  --mc-r-ctl: 6px; --mc-r-panel: 8px; --mc-r-card: 10px;
-  --mc-ctl-h: 36px;
+  --mc-r-ctl: 10px; --mc-r-panel: 16px; --mc-r-card: 14px;
+  --mc-ctl-h: 40px;
   --mc-focus: 0 0 0 2px var(--mc-bg-app), 0 0 0 4px var(--mc-accent);
   --mc-t-panel: 180ms;
   --mc-font-ui: "Inter", system-ui, "Segoe UI", sans-serif;

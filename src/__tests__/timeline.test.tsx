@@ -162,8 +162,9 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(bg).toBeInTheDocument();
     expect(within(tl).getByRole("button", { name: "Layer Title, Text, 0:02 to 0:09, approved, made by Builder" })).toBeInTheDocument();
     expect(within(tl).getByRole("button", { name: "Layer Subtitle, Text, 0:05 to 0:14" })).toBeInTheDocument();
-    expect(within(tl).getByLabelText("Intent arc")).toHaveTextContent("curiosity");
-    expect(within(tl).getByLabelText("Intent arc")).toHaveTextContent("joy");
+    expect(within(tl).queryByLabelText("Intent arc")).toBeNull();          // the beats are the scene cards now, not bars in the timeline
+    const scenes = screen.getByRole("list", { name: "Scenes" });
+    expect(scenes).toHaveTextContent("curiosity"); expect(scenes).toHaveTextContent("joy");
     expect(log.calls.filter((c) => c.method === "timeline_read").length).toBeGreaterThan(0);
   });
 

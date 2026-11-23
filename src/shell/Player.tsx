@@ -15,7 +15,9 @@ export const Player = forwardRef<PlayerHandle, {
   emptyText?: string; onTime?: (t: number) => void; onMarkerClick?: (m: Marker) => void;
   /** Studio layout: the picture takes all the height it is given (never cropped), with a frosted transport bar and a full-screen view (key F). */
   fill?: boolean;
-}>(function Player({ src, fps, duration, markers = [], peaks, aspect = "16 / 9", stale, emptyText, onTime, onMarkerClick, fill = false }, ref) {
+  /** The aspect as people say it (16:9), shown as a chip in the studio transport. */
+  aspectLabel?: string;
+}>(function Player({ src, fps, duration, markers = [], peaks, aspect = "16 / 9", stale, emptyText, onTime, onMarkerClick, fill = false, aspectLabel }, ref) {
   const [theatre, setTheatre] = useState(false);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
@@ -60,6 +62,7 @@ export const Player = forwardRef<PlayerHandle, {
     else if (e.key === "Escape" && theatre) { e.preventDefault(); setTheatre(false); }
   };
   const total = len || duration || 1;
+  const ruler = <Ruler slim={fill} total={total} t={t} fps={fps} markers={markers} peaks={peaks} disabled={!src} onSeek={seek} onMarkerClick={onMarkerClick} />;
   const meta = src ? <>Draft at half resolution{stale ? " · Out of date: the project changed since" : ""}</> : "No render yet. Targets: first preview 60 s, small edit 10 s.";
 
   return (
@@ -74,8 +77,7 @@ export const Player = forwardRef<PlayerHandle, {
           ) : <div className="viewer-empty"><p className="strong">No preview movie yet</p><p>{emptyText ?? "Press Build preview to render a draft you can play and scrub."}</p></div>}
           {fill && <p className="viewer-meta stage-meta" role="status">{meta}</p>}
         </div>
-        {fill && <button className="icon-btn stage-full" aria-label={theatre ? "Leave full screen" : "Full screen preview"} aria-pressed={theatre} title={theatre ? "Leave full screen (F or Esc)" : "Full screen: just the picture (F)"} onClick={() => setTheatre((v) => !v)}>{theatre ? <Minimize2 size={18} strokeWidth={1.75} /> : <Maximize2 size={18} strokeWidth={1.75} />}</button>}
-        {!fill && <p className="viewer-meta" role="status">{meta}</p>}
+                {!fill && <p className="viewer-meta" role="status">{meta}</p>}
       </div>
       <div className={`transport${fill ? " glass" : ""}`} aria-label="Transport">
         <button className="icon-btn" aria-label="Go to start" disabled={!src} onClick={() => seek(0)}><SkipBack size={18} strokeWidth={1.75} /></button>
@@ -85,20 +87,23 @@ export const Player = forwardRef<PlayerHandle, {
         <button className="icon-btn" aria-label="Go to end" disabled={!src} onClick={() => seek(total)}><SkipForward size={18} strokeWidth={1.75} /></button>
         <span className="mono timecode" aria-live="off" aria-label="Timecode">{timecode(t, fps)} / {timecode(total, fps)}</span>
         <span className="mono muted" aria-label="Frame">frame {frame(t)}</span>
+        {fill && ruler}
+        {fill && <span className="aspect-chip" aria-label={`Aspect ${aspectLabel ?? aspect.replace(/\s/g, "")}`}>{aspectLabel ?? aspect.replace(/\s/g, "")}</span>}
         {fill && (
           <span className="volume">
             <button className="icon-btn" aria-label={muted || volume === 0 ? "Unmute" : "Mute"} aria-pressed={muted} onClick={() => setMuted((m) => !m)}>{muted || volume === 0 ? <VolumeX size={18} strokeWidth={1.75} /> : <Volume2 size={18} strokeWidth={1.75} />}</button>
             <input type="range" aria-label="Volume" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => { setVolume(Number(e.target.value)); setMuted(false); }} />
           </span>
         )}
+        {fill && <button className="icon-btn" aria-label={theatre ? "Leave full screen" : "Full screen preview"} aria-pressed={theatre} title={theatre ? "Leave full screen (F or Esc)" : "Full screen: just the picture (F)"} onClick={() => setTheatre((v) => !v)}>{theatre ? <Minimize2 size={18} strokeWidth={1.75} /> : <Maximize2 size={18} strokeWidth={1.75} />}</button>}
       </div>
-      <Ruler total={total} t={t} fps={fps} markers={markers} peaks={peaks} disabled={!src} onSeek={seek} onMarkerClick={onMarkerClick} />
+      {!fill && ruler}
     </div>
   );
 });
 
-function Ruler({ total, t, fps, markers, peaks, disabled, onSeek, onMarkerClick }: {
-  total: number; t: number; fps: number; markers: Marker[]; peaks?: number[]; disabled: boolean; onSeek: (s: number) => void; onMarkerClick?: (m: Marker) => void;
+function Ruler({ slim = false, total, t, fps, markers, peaks, disabled, onSeek, onMarkerClick }: {
+  slim?: boolean; total: number; t: number; fps: number; markers: Marker[]; peaks?: number[]; disabled: boolean; onSeek: (s: number) => void; onMarkerClick?: (m: Marker) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -114,12 +119,13 @@ function Ruler({ total, t, fps, markers, peaks, disabled, onSeek, onMarkerClick 
   }, [peaks]);
   const pct = (s: number) => `${Math.min(100, Math.max(0, (s / total) * 100))}%`;
   return (
-    <div className="ruler">
+    <div className={`ruler${slim ? " slim" : ""}`}>
       <canvas ref={ref} width={1200} height={44} className="wave" aria-hidden="true" />
+      {slim && <><div className="track" aria-hidden="true"><div className="fill-bar" style={{ width: pct(t) }} /></div></>}
       <div className="marks">{markers.map((m, i) => (
         <button key={`${m.kind}-${i}`} className={`mark ${m.kind}`} style={{ left: pct(m.t) }} aria-label={`${m.label} at ${timecode(m.t, fps)}`} title={`${m.label} · ${timecode(m.t, fps)}`}
           onClick={() => { onSeek(m.t); onMarkerClick?.(m); }} tabIndex={m.kind === "beat" ? -1 : 0} />))}</div>
-      <div className="playhead" style={{ left: pct(t) }} aria-hidden="true" />
+      <div className={slim ? "knob" : "playhead"} style={{ left: pct(t) }} aria-hidden="true" />
       <input type="range" className="scrub" aria-label="Scrub" min={0} max={Math.max(1, Math.round(total * fps))} step={1} value={Math.round(t * fps)} disabled={disabled}
         onChange={(e) => onSeek(Number(e.target.value) / fps)} />
     </div>

@@ -53,6 +53,8 @@ async function toBuild(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole("heading", { name: "Brief" });
   const bar = screen.getByRole("navigation", { name: "Stages" });
   await user.click(Array.from(bar.querySelectorAll("button")).find((b) => b.textContent === "Build")!);
+  const head = await screen.findByRole("button", { name: /^Text$/ });          // the Text panel starts closed: the inspector is kept calm
+  if (head.getAttribute("aria-expanded") === "false") await user.click(head);
 }
 
 describe("Build page with the engine connected", () => {

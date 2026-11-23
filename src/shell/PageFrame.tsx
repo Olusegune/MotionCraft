@@ -11,17 +11,18 @@ export interface MainAction { label: string; onClick: () => void; disabledReason
  * One layout for every page: large central area, optional left rail, collapsible right inspector with the page main
  * action pinned at its bottom, shallow story strip, and the stage bar (rendered by App).
  */
-export function PageFrame({ title, intro, main, inspector, rail, strip, action, viewerOnly, inspectorOpen, onToggleInspector }: {
-  title: string; intro: string; main: ReactNode; inspector?: ReactNode; rail?: ReactNode; strip?: boolean; action?: MainAction;
+export function PageFrame({ title, intro, main, inspector, rail, strip, action, viewerOnly, inspectorOpen, onToggleInspector, compactHead }: {
+  /** compactHead: the studio pages have no title row; the title stays for screen readers. */
+  compactHead?: boolean; title: string; intro: string; main: ReactNode; inspector?: ReactNode; rail?: ReactNode; strip?: boolean; action?: MainAction;
   viewerOnly: boolean; inspectorOpen: boolean; onToggleInspector: () => void;
 }) {
   const showSide = !viewerOnly;
   return (
-    <div className={`frame${viewerOnly ? " viewer-only" : ""}`}>
+    <div className={`frame${viewerOnly ? " viewer-only" : ""}${compactHead ? " compact" : ""}`}>
       {showSide && rail && <aside className="rail" aria-label="Rail">{rail}</aside>}
       <section className="center" aria-labelledby="page-title">
-        <div className="page-head">
-          <div><h1 id="page-title">{title}</h1><p className="intro">{intro}</p></div>
+        <div className={`page-head${compactHead ? " compact" : ""}`}>
+          <div><h1 id="page-title" className={compactHead ? "visually-hidden" : undefined}>{title}</h1><p className="intro">{intro}</p></div>
           {showSide && inspector && (
             <button className="icon-btn" aria-label={inspectorOpen ? "Collapse inspector" : "Expand inspector"} aria-expanded={inspectorOpen} onClick={onToggleInspector}>
               {inspectorOpen ? <PanelRightClose size={20} strokeWidth={1.75} /> : <PanelRightOpen size={20} strokeWidth={1.75} />}

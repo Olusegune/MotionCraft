@@ -33,7 +33,7 @@ export function AddLayerPanel({ write, disabled, onAdded }: { write: Write; disa
   const media = (project.assets ?? []).filter((a) => a.kind !== "audio");
   const pick = media.find((m) => m.id === mediaId) ?? media[0];
   return (
-    <Fold title="Add layers" defaultOpen>
+    <Fold title="Add layers" defaultOpen={false}>
       <div className="row-actions">
         <select aria-label="Shape" value={shape} onChange={(e) => setShape(e.target.value)}>
           {[["rect", "Rectangle"], ["rounded", "Rounded rectangle"], ["ellipse", "Ellipse"], ["star", "Star"], ["polygon", "Polygon"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}

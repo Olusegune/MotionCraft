@@ -17,9 +17,9 @@ export interface TLLayer { id: number; name: string; kind: string; index: number
  * as a bar from its in point to its out point. Click anywhere to move the playhead; the player follows. Nothing here edits the
  * composition: keyframes, effects and properties stay in EffectCraft.
  */
-export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect, editable = false, onTiming, message = null, open, onOpenChange, peaks, audioDuration }: {
+export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], showIntent = true, selected, onSelect, editable = false, onTiming, message = null, open, onOpenChange, peaks, audioDuration }: {
   projectKey: string; duration: number; fps: number; playhead: number; onSeek: (t: number) => void; layers: TLLayer[];
-  sections?: SongSection[]; downbeats?: number[]; arc?: Beat[]; marks?: TLMark[]; selected?: number | null; onSelect?: (id: number) => void;
+  sections?: SongSection[]; downbeats?: number[]; arc?: Beat[]; marks?: TLMark[]; showIntent?: boolean; selected?: number | null; onSelect?: (id: number) => void;
   /** T3: layers can be moved and trimmed when true (never an approved layer). `onTiming` is the only way a change leaves this component. */
   editable?: boolean; onTiming?: (id: number, change: TimingChange) => void;
   /** The engine's reason when a move or trim was refused, shown here where the person is looking. */
@@ -125,7 +125,7 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
           <div className="tl-labels" aria-hidden="true">
             <div className="tl-lab" style={{ height: 24 }} />
             <div className="tl-lab" style={{ height: 44 }}>Audio</div>
-            <div className="tl-lab" style={{ height: 28 }}>Intent</div>
+            {showIntent && <div className="tl-lab" style={{ height: 28 }}>Intent</div>}
             {arc.length > 0 && <div className="tl-lab" style={{ height: 44 }}>Emotional arc</div>}
             <div className="tl-lab" style={{ height: 24 }}>QA and versions</div>
             <div className="tl-lab" style={{ height: Math.max(1, nLanes) * LANE_H + 8 }}>Layers</div>
@@ -141,10 +141,12 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
                 {downbeats.slice(0, 2000).map((t, i) => <i key={i} className="tl-beat" style={{ left: t * pps }} aria-hidden="true" />)}
                 {!sections.length && <span className="tl-empty">{downbeats.length ? "Beats only: analyse the audio for sections" : "No audio analysed yet (Audio panel)"}</span>}
               </div>
+              {showIntent && (
               <div className="tl-lane" style={{ height: 28 }} aria-label="Intent arc">
-                {arc.map((b) => <span key={b.beatId} className="tl-arc" style={{ ...barBox(b.startSec, b.endSec, pps), height: 24 }} title={`${b.primary || "Beat"} · intensity ${b.intensity} · energy ${b.energy}`}><span className="sec-name">{b.primary || "Beat"}</span></span>)}
-                {!arc.length && <span className="tl-empty">No intent beats yet</span>}
-              </div>
+                  {arc.map((b) => <span key={b.beatId} className="tl-arc" style={{ ...barBox(b.startSec, b.endSec, pps), height: 24 }} title={`${b.primary || "Beat"} · intensity ${b.intensity} · energy ${b.energy}`}><span className="sec-name">{b.primary || "Beat"}</span></span>)}
+                  {!arc.length && <span className="tl-empty">No intent beats yet</span>}
+                </div>
+              )}
               {arc.length > 0 && (
                 <div className="tl-lane" style={{ height: 44 }} aria-label="Emotional arc curve">
                   <svg className="tl-arcsvg" width={width} height={44} aria-hidden="true">

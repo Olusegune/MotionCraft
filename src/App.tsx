@@ -1,3 +1,4 @@
+import { SideRail } from "./shell/SideRail";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ControlMode, Deliverable, GateId, MotionProject, ProjectSummary, RevisionRecord, Stage } from "./types";
 import { STAGES } from "./types";
@@ -261,6 +262,8 @@ export default function App() {
           onReveal={() => getApi().then((a) => a.revealProjectsFolder()).catch((e) => say(String(e instanceof Error ? e.message : e)))} />
       ) : (
         <Ctx.Provider value={ctx}>
+          <div className="body">
+          {!viewerOnly && <SideRail stage={stage} onHome={() => void home()} onStage={setStage} onSettings={() => setOverlay({ kind: "settings" })} />}
           <div className="page" key={stage}>
             {stage === "brief" && <BriefPage {...frame} />}
             {stage === "intent" && <IntentPage {...frame} />}
@@ -269,6 +272,7 @@ export default function App() {
             {stage === "build" && <BuildPage {...frame} />}
             {stage === "review" && <ReviewPage {...frame} />}
             {stage === "deliver" && <DeliverPage {...frame} />}
+          </div>
           </div>
           {viewerOnly && <button className="btn viewer-exit" onClick={() => setViewerOnly(false)}>Exit viewer-only (Esc)</button>}
           <StageBar project={project} stage={stage} onStage={setStage} onGate={(g) => { const s = Object.entries(GATE_AFTER).find(([, v]) => v === g)?.[0] as Stage | undefined; if (s) setStage(s); setOverlay({ kind: "gate", gate: g }); }} />

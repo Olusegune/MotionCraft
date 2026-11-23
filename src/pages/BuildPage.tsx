@@ -187,7 +187,7 @@ export function BuildPage(f: FrameProps) {
       {guiOpen && <div className="lockbar" role="status"><ExternalLink size={18} aria-hidden="true" /><span>EffectCraft has this project open. MotionCraft is read-only until you close it, then it reloads and logs what you changed.</span></div>}
       {err && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {err}</p>}
       {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
-      <Player ref={player} fill src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
+      <Player ref={player} fill aspectLabel={d.aspect} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
       <SceneStrip scenes={scenes} current={beatAt(beats, playhead)} onSeek={(t) => player.current?.seek(t)} />
       {tlOpen && <div className="studio-divider" role="separator" aria-orientation="horizontal" aria-label="Resize preview and timeline" tabIndex={0}
@@ -195,13 +195,24 @@ export function BuildPage(f: FrameProps) {
         onPointerDown={startDividerDrag} onKeyDown={dividerKey} onDoubleClick={() => setDock(null)}><span aria-hidden="true" /></div>}
       <div className="timeline-dock" ref={dockEl} style={tlOpen && dockH !== null ? { height: dockH, maxHeight: "none" } : undefined}>
       <TimelinePanel open={tlOpen} onOpenChange={setTlOpen} projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
-        sections={structure?.sections} downbeats={structure?.downbeats} peaks={audio?.peaks} audioDuration={audio?.duration} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
+        sections={structure?.sections} downbeats={structure?.downbeats} peaks={audio?.peaks} audioDuration={audio?.duration} arc={project.intent.arc} marks={marks} showIntent={!beats.length} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
       </div>
     </div>
   );
 
+  const sceneIdx = beatAt(beats, playhead);
+  const scene = sceneIdx >= 0 ? beats[sceneIdx] : null;
   const inspector = (
     <>
+      <div className="scene-head">
+        <h2 className="scene-title">{scene ? <>Scene {String(sceneIdx + 1).padStart(2, "0")} · {scene.primary || "Beat"}</> : "Composition"}</h2>
+        {scene && (
+          <label className="field dir-summary"><span className="field-label">Direction summary</span>
+            <input value={project.treatment[scene.beatId]?.plan ?? ""} placeholder="Say in a few words how this scene should feel"
+              onChange={(e) => update((p) => ({ ...p, treatment: { ...p.treatment, [scene.beatId]: { ...(p.treatment[scene.beatId] ?? { plan: "", motion: "" }), plan: e.target.value } }, updatedAt: new Date().toISOString() }))} />
+          </label>
+        )}
+      </div>
       <Fold title="Layers" defaultOpen meta={<span className="count">{layers.length}</span>}>
         {loading && <p className="muted" role="status">Opening the composition…</p>}
         {!loading && layers.length === 0 && <p className="muted">No layers yet. Add some below, or open EffectCraft.</p>}
@@ -232,7 +243,7 @@ export function BuildPage(f: FrameProps) {
         <button className="btn" onClick={open} disabled={!connected || guiOpen}><ExternalLink size={16} aria-hidden="true" />Open in EffectCraft</button>
         <button className="btn quiet" onClick={() => void load()} disabled={!connected || loading || guiOpen}><RotateCcw size={16} aria-hidden="true" />Refresh from file</button>
       </Fold>
-      <Fold title="Text" defaultOpen>
+      <Fold title="Text" defaultOpen={false}>
         <TextPanel write={write} disabled={writesOff} sel={sel} locked={selLocked} onAdded={(id) => id !== undefined && setSelected(id)} />
       </Fold>
       <AddLayerPanel write={write} disabled={writesOff} onAdded={(id) => id !== undefined && setSelected(id)} />
@@ -254,7 +265,7 @@ export function BuildPage(f: FrameProps) {
   );
 
   return (
-    <PageFrame {...f} title="Build" intro="Build the composition, play a draft, and refine in EffectCraft." strip={!beats.length} main={main} inspector={inspector}
+    <PageFrame {...f} compactHead title="Build" intro="Build the composition, play a draft, and refine in EffectCraft." strip={!beats.length} main={main} inspector={inspector}
       action={{
         label: movie.status.state === "rendering" ? "Rendering…" : "Build preview", onClick: () => void movie.start(),
         disabledReason: !connected ? "Needs a connected EffectCraft engine." : layers.length === 0 ? "Add a layer first." : movie.status.state === "rendering" ? "Rendering a draft…" : guiOpen ? "Close EffectCraft first so the draft shows your latest changes." : undefined,
