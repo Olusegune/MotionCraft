@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .adapter import BUILDER, USER, Command, CompSettings, MockAdapter, UserAction
+from .adapter import BUILDER, QA, USER, Command, CompSettings, MockAdapter, UserAction
 from .adapter.base import BaseAdapter
 from .adapter.errors import AdapterContractError, AdapterError, CommandFailed, LockedLayerError
 from .adapter.real import EffectCraftAdapter
@@ -29,6 +29,7 @@ from .providers.net import Net
 from .providers.registry import Registry
 from .llm import Llm
 from .agents import builder, director
+from .qa import checks as qa_checks
 
 ECPROJ = "comp.ecproj"
 
@@ -193,6 +194,87 @@ class Service:
             raise AdapterError(f"The build stopped after {len(created)} of {len(checked['plan']['layers'])} layers: {e}") from None
         a.save()
         return {"created": created, "warnings": warnings, "cost": checked["cost"], **self._snapshot()}
+
+    # ------------------------------------------------------------ QA (P4-01, P4-02)
+    def qa_run(self, facts: dict | None = None, contrast: bool = True) -> dict:
+        """Runs the tier-1 checks on the open composition. Read-only: nothing in the project or the composition is changed.
+        `facts` is what only the page knows: the deliverable, the imported assets, and the renders made so far."""
+        a = self._need()
+        facts = facts if isinstance(facts, dict) else {}
+        snap = a.inspect()
+        comp = snap.comp(None)
+        qa_checks_layers: list[qa_checks.Layer] = []
+        font_keys = ("text/font", "text/fontFamily", "text/fontName", "text/sourceText/font")
+        size_keys = ("text/fontSize", "text/size", "text/sourceText/size")
+
+        def val(props: dict, keys: tuple[str, ...]):
+            for k in keys:
+                v = (props.get(k) or {}).get("value")
+                if v is not None:
+                    return v
+            return None
+
+        def pair(v, default):
+            return (float(v[0]), float(v[1])) if isinstance(v, (list, tuple)) and len(v) >= 2 else default
+
+        for l in comp.layers:
+            lp = a.layer_props(comp.id, l.id)
+            props = lp.get("props") or {}
+            txt = val(props, ("text/sourceText",))
+            font, size = val(props, font_keys), val(props, size_keys)
+            pos = val(props, ("transform/position",))
+            op = val(props, ("transform/opacity",))
+            qa_checks_layers.append(qa_checks.Layer(
+                id=l.id, name=l.name, kind=l.kind, parent=l.parent, text=txt if isinstance(txt, str) else None,
+                font=font if isinstance(font, str) else None, size=float(size) if isinstance(size, (int, float)) else None,
+                position=pair(pos, None) if isinstance(pos, (list, tuple)) else None, scale=pair(val(props, ("transform/scale",)), (100.0, 100.0)),
+                opacity=float(op) if isinstance(op, (int, float)) else 100.0,
+                t_in=float(lp["in"]) if isinstance(lp.get("in"), (int, float)) else None, t_out=float(lp["out"]) if isinstance(lp.get("out"), (int, float)) else None))
+        fonts = None
+        try:
+            res = a.execute([Command(id="text.fonts", params={})], actor=QA).results[0].result or {}
+            fams = res.get("families") if isinstance(res, dict) else None
+            if isinstance(fams, list):
+                fonts = {str(f.get("family") or f.get("name")) if isinstance(f, dict) else str(f) for f in fams}
+        except Exception:  # noqa: BLE001 - not available: the font checks say so
+            fonts = None
+        manifest = None
+        if self.pkg is not None:
+            try:
+                m = json.loads((self.pkg / "fonts" / "manifest.json").read_text(encoding="utf-8"))
+                manifest = m if isinstance(m, list) else None
+            except (OSError, ValueError):
+                manifest = None
+        assets = [{"id": x.get("id"), "kind": x.get("kind"), "path": str(x.get("path", ""))} for x in (facts.get("assets") or []) if isinstance(x, dict)][:500]
+        audio, skipped = [], []
+        for x in assets:
+            if x["kind"] != "audio":
+                continue
+            try:
+                info = audio_mod.analyze(self._asset(x["path"], ("audio",)))
+                audio.append({"path": x["path"], "duration": info.get("duration"), "beats": info.get("beats") or []})
+            except (audio_mod.AudioError, AdapterError) as e:
+                skipped.append(f"{x['path']}: {e}")
+        frames: dict[int, tuple[float, bytes]] = {}
+        if contrast:
+            for L in [l for l in qa_checks_layers if l.kind == "Text" and (l.text or "").strip()][:6]:
+                t0, t1 = qa_checks.visible_window(L, qa_checks.Scene(comp.width, comp.height, comp.frame_rate, comp.duration, [], {}))
+                t = round(max(0.0, min(comp.duration - 1 / max(comp.frame_rate, 1), (t0 + t1) / 2)), 3)
+                try:
+                    frames[L.id] = (t, a.preview(comp.id, [t], max_side=640).png)
+                except Exception:  # noqa: BLE001
+                    continue
+        real = isinstance(a, EffectCraftAdapter)
+        markers = None if real else [{"time": m.time, "comment": m.comment} for m in comp.markers]   # the real engine does not report markers in get_comp
+        scene = qa_checks.Scene(width=comp.width, height=comp.height, fps=comp.frame_rate, duration=comp.duration, layers=qa_checks_layers,
+                                deliverable=facts.get("deliverable") or {}, assets=assets, package=self.pkg, renders=[x for x in (facts.get("renders") or []) if isinstance(x, dict)],
+                                installed_fonts=fonts, font_manifest=manifest, markers=markers, audio=audio, audio_skipped=skipped, frames=frames)
+        results = [qa_checks.to_dict(r) for r in qa_checks.run_all(scene)]
+        count = {"error": 0, "warn": 0, "info": 0}
+        for r in results:
+            for f in r["findings"]:
+                count[f["severity"]] += 1
+        return {"results": results, "counts": count, "checked": sum(1 for r in results if r["state"] != "not-checked"), "total": len(results)}
 
     def generate_poll(self, job: str) -> dict:
         return self.jobs.poll(job)

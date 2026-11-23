@@ -430,9 +430,9 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 20] = [
+const ENGINE_METHODS: [&str; 21] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
-    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute",
+    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run",
 ];
 const MODEL_METHODS: [&str; 11] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
@@ -684,7 +684,7 @@ fn sidecar_request(st: &EngineState, cli: Option<&Path>, data_dir: Option<&Path>
     sc.next_id += 1;
     let line = serde_json::json!({"id": id, "method": method, "params": params}).to_string();
     let io_ok = writeln!(sc.stdin, "{line}").and_then(|_| sc.stdin.flush()).is_ok();
-    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || method == "builder_execute" || LLM_CALL_METHODS.contains(&method) { 180 } else { 60 });
+    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || method == "builder_execute" || method == "qa_run" || LLM_CALL_METHODS.contains(&method) { 180 } else { 60 });
     let reply: Result<Value, String> = if io_ok {
         loop {
             match sc.rx.recv_timeout(timeout) {
@@ -1406,6 +1406,7 @@ mod tests {
         }
         assert!(LLM_CALL_METHODS.contains(&"builder_plan"), "the Builder's planning call goes through the same gate");
         assert!(ENGINE_METHODS.contains(&"builder_execute") && WRITE_METHODS.contains(&"builder_execute"), "building writes the project, so it is refused while EffectCraft has it open");
+        assert!(ENGINE_METHODS.contains(&"qa_run") && !WRITE_METHODS.contains(&"qa_run") && !PAID_ENGINE_METHODS.contains(&"qa_run"), "QA reads the composition and writes nothing");
         assert!(!PAID_ENGINE_METHODS.contains(&"builder_execute"), "a plan costs a known $0 today; a paid plan would need its own token path");
         assert!(LLM_CALL_METHODS.contains(&"director_intent"), "the Director calls a model, so it goes through the same gate");
         for (p, account) in LLM_CLOUD {

@@ -1,17 +1,14 @@
 import { useRef, useState } from "react";
-import { CircleHelp, CircleSlash, MessageSquarePlus, Trash2 } from "lucide-react";
+import { CircleSlash, MessageSquarePlus, Trash2 } from "lucide-react";
 import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Player, type Marker, type PlayerHandle } from "../shell/Player";
 import { gateState, newId, nowIso } from "../lib/project";
 import { timecode } from "../lib/time";
-import { StatusLine, type FrameProps } from "./common";
+import type { FrameProps } from "./common";
+import { QaPanel } from "./review/QaPanel";
 import { usePreviewMovie } from "./build/usePreview";
-
-/** PRD tier 1 deterministic checks. None can run until their data exists, so each says Not checked and why. */
-const TIER1 = ["Missing assets and fonts", "Font licence for video use", "Frame rate", "Aspect ratio", "Low-resolution media", "Safe-title violations",
-  "Text collisions", "Contrast on rendered frames", "Audio drift", "Beat misalignment", "Alpha errors", "Colour space", "Unsupported effects", "Orphan layers"];
 
 export function ReviewPage(f: FrameProps) {
   const { project, update, approveGate, engine, go } = useApp();
@@ -28,7 +25,7 @@ export function ReviewPage(f: FrameProps) {
     update((p) => ({ ...p, review: { ...p.review, comments: [...p.review.comments, { id: newId().slice(0, 8), atSec: at, text: text.trim(), at: nowIso() }].sort((a, b) => a.atSec - b.atSec) }, updatedAt: nowIso() }));
     setText("");
   };
-  const reason = `Not checked: ${engine?.state === "connected" ? "this check is not built yet" : "the engine is not connected"}.`;
+  const qaOff = engine?.state === "connected" ? undefined : "Needs a connected engine (EffectCraft). Notes and the player work without it.";
   const markers: Marker[] = project.review.comments.map((c) => ({ t: c.atSec, label: c.text, kind: "note" as const }));
 
   const main = (
@@ -51,10 +48,7 @@ export function ReviewPage(f: FrameProps) {
   );
   const inspector = (
     <>
-      <Fold title="Technical findings" defaultOpen meta={<span className="count">0 raised</span>}>
-        <p className="muted">Deterministic checks (tier 1). Each finding shows location, evidence, severity, likely cause and a next action.</p>
-        <ul className="statuses">{TIER1.map((c) => <StatusLine key={c} label={c} text={reason} tone="warn" icon={<CircleHelp size={16} aria-hidden="true" />} />)}</ul>
-      </Fold>
+      <QaPanel disabledReason={qaOff} />
       <Fold title="Compare"><p className="muted"><CircleSlash size={16} aria-hidden="true" /> Needs two revision snapshots. Revision snapshots cost milliseconds (P0-15); the compare view is not built yet.</p></Fold>
       <Fold title="History" meta={<span className="count">{project.revisions.length}</span>}>
         {project.revisions.length === 0 ? <p className="muted">No revisions yet.</p> : (
