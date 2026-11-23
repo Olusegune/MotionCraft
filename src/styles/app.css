@@ -248,15 +248,15 @@ html.narrow .stagebar { flex-wrap: wrap; }
 
 /* scene strip under the picture */
 .scene-strip { flex: none; list-style: none; margin: 0; padding: 2px 0 6px; display: flex; gap: 12px; overflow-x: auto; }
-.scene-card { display: flex; flex-direction: column; gap: 6px; width: 150px; padding: 4px; background: transparent; border: 2px solid transparent; border-radius: 10px; color: var(--mc-text); cursor: pointer; text-align: left; }
+.scene-card { display: flex; flex-direction: column; gap: 6px; width: 200px; padding: 4px; background: transparent; border: 2px solid transparent; border-radius: 10px; color: var(--mc-text); cursor: pointer; text-align: left; }
 .scene-card:hover { background: var(--mc-bg-raised); }
 .scene-card.on { border-color: var(--mc-accent); }
 .scene-card:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
-.scene-thumb { display: block; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--mc-bg-app); }
+.scene-thumb { display: block; aspect-ratio: 16 / 9; max-height: 78px; border-radius: 6px; overflow: hidden; background: var(--mc-bg-app); }
 .scene-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .scene-blank { display: block; width: 100%; height: 100%; }
 .scene-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 22px; }
-.scene-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scene-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; background: var(--mc-bg-raised); border: 1px solid var(--mc-divider); white-space: nowrap; }
 .scene-badge.approved { color: var(--mc-text); }
 .scene-badge.needs-review { color: var(--mc-warning); border-color: var(--mc-warning); }

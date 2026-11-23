@@ -254,7 +254,7 @@ export function BuildPage(f: FrameProps) {
   );
 
   return (
-    <PageFrame {...f} title="Build" intro="Build the composition, play a draft, and refine in EffectCraft." strip main={main} inspector={inspector}
+    <PageFrame {...f} title="Build" intro="Build the composition, play a draft, and refine in EffectCraft." strip={!beats.length} main={main} inspector={inspector}
       action={{
         label: movie.status.state === "rendering" ? "Rendering…" : "Build preview", onClick: () => void movie.start(),
         disabledReason: !connected ? "Needs a connected EffectCraft engine." : layers.length === 0 ? "Add a layer first." : movie.status.state === "rendering" ? "Rendering a draft…" : guiOpen ? "Close EffectCraft first so the draft shows your latest changes." : undefined,
