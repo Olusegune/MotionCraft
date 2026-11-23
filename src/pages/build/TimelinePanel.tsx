@@ -17,11 +17,13 @@ export interface TLLayer { id: number; name: string; kind: string; index: number
  * as a bar from its in point to its out point. Click anywhere to move the playhead; the player follows. Nothing here edits the
  * composition: keyframes, effects and properties stay in EffectCraft.
  */
-export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect, editable = false, onTiming }: {
+export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, layers, sections = [], downbeats = [], arc = [], marks = [], selected, onSelect, editable = false, onTiming, message = null }: {
   projectKey: string; duration: number; fps: number; playhead: number; onSeek: (t: number) => void; layers: TLLayer[];
   sections?: SongSection[]; downbeats?: number[]; arc?: Beat[]; marks?: TLMark[]; selected?: number | null; onSelect?: (id: number) => void;
   /** T3: layers can be moved and trimmed when true (never an approved layer). `onTiming` is the only way a change leaves this component. */
   editable?: boolean; onTiming?: (id: number, change: TimingChange) => void;
+  /** The engine's reason when a move or trim was refused, shown here where the person is looking. */
+  message?: string | null;
 }) {
   const [pps, setPpsState] = useState(() => readPps(projectKey) ?? 24);
   const scroller = useRef<HTMLDivElement>(null);
@@ -148,6 +150,7 @@ export function TimelinePanel({ projectKey, duration, fps, playhead, onSeek, lay
             </div>
           </div>
         </div>
+        {message && <p className="error-text" role="alert">{message}</p>}
         <p className="hint">Click to move the playhead; Left and Right step one frame (Shift: one second). Ctrl and the wheel zoom. {editable ? "Drag a layer to move it or its edges to trim it (Alt and arrows nudge). Approved layers stay put: unlock them first. Keyframes stay where they are in time; edit them in EffectCraft." : "Moving and trimming are off right now (EffectCraft has the project open, or the engine is busy). Keyframes and properties are edited in EffectCraft."}</p>
       </div>
     </Fold>

@@ -69,14 +69,15 @@ export function BuildPage(f: FrameProps) {
     return () => window.clearInterval(t);
   }, [connected, load]);
 
+  const errRef = useRef<string | null>(null);
   const write: Write = async (label, method, params, targets = []) => {
-    setBusy(label); setErr(null);
+    setBusy(label); setErr(null); errRef.current = null;
     try {
       const r = await call<EngineSnapshot & { layer?: number; created?: { layer: number }[] }>(method, params);
       const own = [...(r.layer !== undefined ? [r.layer] : []), ...targets, ...(r.created ?? []).map((c) => c.layer)];
       setSnap(r); update((p) => reconcile(p, r, own));
       return r;
-    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); return undefined; }
+    } catch (e) { const m = String(e instanceof Error ? e.message : e); errRef.current = m; setErr(m); return undefined; }
     finally { setBusy(null); }
   };
 
@@ -100,11 +101,13 @@ export function BuildPage(f: FrameProps) {
     ...project.revisions.filter((r) => r.snapshot).map((r) => ({ id: r.id, t: Math.min(d.durationSec, Math.min(...(r.layers.length ? r.layers.map((id) => spans?.find((x) => x.id === id)?.in ?? 0) : [0]))), label: r.summary, kind: "version" as const })),
   ], [qaPins, project.revisions, spans, d.durationSec]);
   /** Timeline move or trim (ADR-0007, T3). The engine refuses approved layers and clamps to the composition; each change is one revision with saved versions. */
+  const [tlErr, setTlErr] = useState<string | null>(null);
   const retime = async (id: number, c: TimingChange) => {
+    setTlErr(null);
     const l = layers.find((x) => x.id === id);
     const params = { layer: id, ...(c.delta !== undefined ? { delta: c.delta } : {}), ...(c.tIn !== undefined ? { t_in: c.tIn } : {}), ...(c.tOut !== undefined ? { t_out: c.tOut } : {}) };
     const r = (await write(`Retiming ${l?.name ?? "layer"}`, "layer_timing", params, [id])) as (EngineSnapshot & { versions?: { before?: string | null; after?: string | null } }) | undefined;
-    if (!r) return;
+    if (!r) { setTlErr(errRef.current); return; }
     const n = (x: number) => Math.round(x * 100) / 100;
     const what = c.delta !== undefined ? `Moved ${l?.name ?? "layer"} by ${c.delta > 0 ? "+" : ""}${n(c.delta)} s` : `Trimmed ${l?.name ?? "layer"} ${c.tIn !== undefined ? "start" : "end"} to ${n(c.tIn ?? c.tOut ?? 0)} s`;
     update((p) => logTiming(p, id, what, r.versions));
@@ -136,7 +139,7 @@ export function BuildPage(f: FrameProps) {
       <Player ref={player} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
         onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
       <TimelinePanel projectKey={project.id} duration={d.durationSec} fps={d.fps} playhead={playhead} onSeek={(t) => player.current?.seek(t)} layers={tlLayers}
-        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} />
+        sections={structure?.sections} downbeats={structure?.downbeats} arc={project.intent.arc} marks={marks} selected={selected} onSelect={setSelected} editable={!writesOff} onTiming={retime} message={tlErr} />
     </div>
   );
 

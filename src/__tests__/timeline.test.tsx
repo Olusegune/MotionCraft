@@ -239,6 +239,20 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(within(tl).getByText(/Moving and trimming|Drag a layer/)).toBeInTheDocument();
   });
 
+  it("T3: when the engine refuses a move, its reason shows under the timeline", async () => {
+    const user = userEvent.setup();
+    const log = fake(project());
+    const api = (await import("../lib/api")) as unknown as { getApi: () => Promise<{ engine: (m: string, p: Record<string, unknown>) => Promise<unknown> }> };
+    const real = (await api.getApi()).engine;
+    setApiForTests({ ...(await api.getApi()), engine: async (m: string, p: Record<string, unknown>) => { if (m === "layer_timing") { log.calls.push({ method: m, params: p }); throw new Error("The layer is already at that edge."); } return real(m, p); } } as unknown as Api);
+    render(<App />);
+    const tl = await toBuild(user);
+    const sub = await within(tl).findByRole("button", { name: /Layer Subtitle/ });
+    sub.focus();
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(await within(tl).findByRole("alert")).toHaveTextContent("already at that edge");
+  });
+
   it("has no raw colours: the styles use only tokens", async () => {
     const css = (await import("../styles/app.css?raw")).default as string;
     const block = css.slice(css.indexOf("/* Director's timeline"));
