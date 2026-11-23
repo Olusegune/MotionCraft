@@ -1,122 +1,119 @@
-# MotionCraft handover — 2026-11-22
+# MotionCraft handover — 2026-11-23
 
-Everything you need to continue on another PC. Written at the end of the session that built Phase 0 and a slice of Phases 1 to 5.
-Owner: Victor Edun. Repo: https://github.com/Olusegune/MotionCraft. Latest work: branch `p1-splash-fix` (PR 23).
+Everything needed to continue on another PC. Owner: Victor Edun. Repo: https://github.com/Olusegune/MotionCraft.
+A copy of this note is also at the repo root (`HANDOVER.md`) and, once merged, on `main`. Until PR 1 and the stack are merged,
+**`main` contains only the README**: the code and docs live on branches (section 2).
 
-## 1. What MotionCraft is (one paragraph)
+## 0. Start here (about 30 minutes)
+
+1. Install the tools in section 3.
+2. `gh auth login`, then `git clone --branch docs-interop-plan https://github.com/Olusegune/MotionCraft.git`
+   (`docs-interop-plan` is the newest branch and contains everything; `main` does not).
+3. `cd MotionCraft; npm ci`, then build the helper and run the checks in section 4. They should reproduce the numbers there.
+4. Read, in this order: `AGENTS.md`, `docs/PRD.md`, `docs/UI_UX.md`, `docs/ENGINE_ADAPTER.md`, `docs/PHASE0_REPORT.md`,
+   `docs/UX_REVIEW.md`, `docs/INTEROP_PLAN.md`, `docs/adr/` (0001, 0005, 0006).
+5. Install the latest installer on a clean PC and use it. **This has never been done by a person**: it is the biggest unverified
+   risk (section 7).
+
+## 1. What MotionCraft is
 
 The director layer for motion design. Tauri 2 shell (`src-tauri/`, Rust) + React 19 / TypeScript UI (`src/`) + a Python engine
 helper (`engine/motioncraft_engine/`, frozen with PyInstaller and bundled as a sidecar) that drives **EffectCraft** (a separate
 Rust motion-graphics app, pinned to commit `7e2d025`, version 0.24.1) through `effectcraft-cli mcp`. MotionCraft stores intent,
-approvals, provenance and history in `project.json`; the composition lives only in the `.ecproj` file. Read first, in this
-order: `AGENTS.md` (hard rules), `docs/PRD.md`, `docs/UI_UX.md`, `docs/ENGINE_ADAPTER.md`, `docs/PHASE0_REPORT.md`,
-`docs/UX_REVIEW.md`, `docs/adr/0005-image-video-providers.md`.
+approvals, provenance and history in `project.json`; the composition lives only in the `.ecproj` file. Detailed editing happens
+in EffectCraft; MotionCraft has no compositor of its own.
 
 ## 2. Where everything is
 
 | Thing | Location |
 | --- | --- |
-| Code | GitHub `Olusegune/MotionCraft`. The newest branch contains everything: `p1-splash-fix` |
-| Latest installers and a source zip | Desktop of the old PC: `MotionCraft_Build\` (also rebuilt by CI on every PR; artifacts on the Actions run) |
-| Brand art (app icon, document icon, splash, 21:9 splash) | `brand/` in the repo |
-| Original mockup images | `Downloads\` on the old PC (not in the repo): copy them if you want them |
-| Phase 0 evidence (scripts and results) | `spike/` and `spike/results/` |
-| Sibling repos used for reading only (never push) | `effectcraft` @ `7e2d0256209974ffb92a29d8bdb6f2a49078f51f`, `FilmCrafter3` @ `ac99ec977c4b5896874dea7d63a7682ec0c82900`, `Pulseframe-Music-Video-Maker` @ `a0ee7ece663df9e68368c27268e6d10d6c254d7b` (private) |
+| Code and docs | GitHub `Olusegune/MotionCraft`, newest branch `docs-interop-plan` (everything is pushed; nothing is merged) |
+| Installers | Built by CI on every PR (Windows setup `.exe`, `.msi`, portable zip; macOS `.dmg` for Apple silicon and Intel). Latest green run with installers: Actions run **45101892053** on branch `p1-splash-fix`. Download with `gh run download 45101892053 --repo Olusegune/MotionCraft`. The old PC also has `Desktop\MotionCraft_Build\` (not transferable) |
+| Brand art (app icon, document icon, splash, 21:9 splash) | `brand/` |
+| Original mockup images | `Downloads\` on the old PC only (not in the repo): copy them if wanted |
+| Phase 0 evidence | `spike/` scripts, `spike/results/`, `docs/PHASE0_REPORT.md` |
+| Read-only sibling repos (never push to them) | `storytold/effectcraft` @ `7e2d0256209974ffb92a29d8bdb6f2a49078f51f`; `Olusegune/FilmCrafter3` @ `ac99ec977c4b5896874dea7d63a7682ec0c82900`; `Olusegune/Pulseframe-Music-Video-Maker` @ `a0ee7ece663df9e68368c27268e6d10d6c254d7b` (private) |
 
-Not in the repo and not transferable: provider API keys (they live in the **operating system credential store** under service
-`motioncraft`; enter them again on the new PC in Settings), the GitHub login (`gh auth login`), your Rafter API key
-(`RAFTER_API_KEY`) and its fast-scan quota (it was used up in this billing period, so `rafter run` fails until it resets).
+**Not in the repo and not transferable:** provider API keys (they live in the operating system credential store under service
+`motioncraft`; enter them again in Settings), the GitHub login, your Rafter API key and its fast-scan quota (used up for this
+billing period, so `rafter run` fails until it resets), and any Claude session memory.
 
-## 3. Pull requests and merge order
+### Pull requests and merge order
 
-Nothing is merged. PR 1 is the docs; everything else is stacked. Bottom to top:
+Bottom to top; each is based on the one before it.
 
-1. **PR 1** docs (branch `docs/v1-agent-docs`, base `main`): merge first.
-2. **PR 2** app shell, then **PR 18** adapter wiring, **PR 19** providers, **PR 20** menus and UX, **PR 21** visual workspace, **PR 22**
-   playback, layers, motion, audio, proposals, render, **PR 23** splash. Each is based on the one before, so merge in this order, or
-   merge only PR 23 (it contains all of them) after PR 1.
-3. **PRs 3 to 17** are the Phase 0 tickets (P0-01 to P0-15), one branch each, stacked on each other and on PR 1. PR 18 already
-   includes their content by merge, so after PR 18 lands you can close them as "included", or merge them in order for history.
+1. **PR 1** docs (`docs/v1-agent-docs` → `main`). Merge first.
+2. **PR 2** app shell → **18** adapter wiring → **19** providers → **20** menus and UX → **21** visual workspace → **22** playback,
+   layers, motion, audio, proposals, render → **23** splash → **24** After Effects and Resolve plan (docs only).
+   Merging only PR 24 after PR 1 brings in all of them.
+3. **PRs 3 to 17** are the Phase 0 tickets (P0-01 to P0-15), stacked on each other. PR 18 already contains their content, so close
+   them as "included" after PR 18 lands, or merge in order for history.
 
-Each PR body lists what was and was not checked. CI (`.github/workflows/build.yml`) runs the frontend tests, the Python tests and
-`npm audit`, then builds Windows and two macOS targets (Apple silicon, Intel) and uploads the installers.
+Each PR body lists what was and was not checked. **Auto-fix is enabled** on this session's PRs in the desktop app: it watches CI
+and merge conflicts; on another PC that watching does not follow you.
 
-## 4. Set up on a new Windows PC
+## 3. Install on a new Windows PC
 
-Install: Git, GitHub CLI (`gh`), Node 22, Rust (stable, MSVC toolchain), Visual Studio Build Tools (C++), Python 3.11,
-WebView2 runtime (included in Windows 11), and **EffectCraft 0.24.1** (the MSI installs to `C:\Program Files\EffectCraft`).
-Optional: `ffmpeg` and `ffprobe` on PATH (used for non-WAV audio and for the render tests).
+Git, GitHub CLI (`gh`), Node 22, Rust (stable, MSVC toolchain), Visual Studio Build Tools (C++ workload), Python 3.11, WebView2
+runtime (included in Windows 11), and **EffectCraft 0.24.1** (its MSI installs to `C:\Program Files\EffectCraft`; the app also finds
+it on PATH or via Settings, Browse). Optional: `ffmpeg` and `ffprobe` on PATH (non-WAV audio, and the render tests).
+macOS cannot be built on Windows: push a branch and let CI build it, or build on a Mac with `npx tauri build`.
+
+## 4. Build, test, run
 
 ```powershell
-gh auth login
-git clone https://github.com/Olusegune/MotionCraft.git
-cd MotionCraft
-git switch p1-splash-fix            # or main once the PRs are merged
-npm ci
 python -m venv build\venv
 build\venv\Scripts\python -m pip install pyinstaller pydantic pytest pillow
-```
-
-Run the tests (all of these passed at handover):
-
-```powershell
 npx tsc --noEmit
-npx vitest run                                   # 55 tests
-cd engine; python -m pytest -q; cd ..            # 90 on the mock engine
-cd src-tauri; cargo test; cd ..                  # 12 (+3 that need a real machine)
-npm audit
+npx vitest run                                   # 55 tests passed at handover
+cd engine; python -m pytest -q; cd ..            # 90 passed on the mock engine
+cd src-tauri; cargo test; cd ..                  # 12 passed, 3 ignored (they need a real machine)
+npm audit                                        # 0 vulnerabilities
 ```
 
-Run against the real engine (needs EffectCraft installed):
+Against the real engine (needs EffectCraft installed):
 
 ```powershell
 $env:EFFECTCRAFT_CLI = "C:\Program Files\EffectCraft\effectcraft-cli.exe"
-cd engine; python -m pytest -q -m real_engine; cd ..             # 45; the same suite passed on two different engine builds
+cd engine; python -m pytest -q -m real_engine; cd ..     # 45 passed on the installed release and on the pinned build
 cd src-tauri
-$env:MOTIONCRAFT_ENGINE_DIR = "$PWD\..\engine"                    # dev builds only: run the helper from source
-cargo test -- --ignored                                          # engine detection, helper round trip, motion + draft + final render
+$env:MOTIONCRAFT_ENGINE_DIR = "$PWD\..\engine"            # dev builds only: run the helper from source
+cargo test -- --ignored                                  # detection, helper round trip, motion + draft + final render
 ```
 
-Build the app:
+Build and run:
 
 ```powershell
-build\venv\Scripts\python scripts\build_sidecar.py     # makes src-tauri\binaries\motioncraft-engine-<triple>.exe (needed before tauri build)
-npx tauri build                                        # installers in src-tauri\target\release\bundle\ (nsis exe, msi)
-npx tauri build --no-bundle                            # just src-tauri\target\release\motioncraft.exe, faster
-npm run dev                                            # the web UI only, at http://127.0.0.1:1420 (no engine, no file dialogs)
+build\venv\Scripts\python scripts\build_sidecar.py       # REQUIRED before tauri build: makes src-tauri\binaries\motioncraft-engine-<triple>.exe
+npx tauri build                                          # installers in src-tauri\target\release\bundle\
+npx tauri build --no-bundle                              # just target\release\motioncraft.exe (faster)
+npm run dev                                              # web UI only, http://127.0.0.1:1420 (no engine, no file dialogs)
 ```
-
-macOS cannot be built on Windows: push a branch and let CI build it, or build on a Mac with the same commands (`npx tauri build`,
-Rust targets `aarch64-apple-darwin` or `x86_64-apple-darwin`).
 
 ## 5. How the pieces connect
 
-- **UI** (`src/`): pages in `src/pages/`, shell pieces in `src/shell/`, tokens in `src/styles/tokens.css` (no raw hex elsewhere,
-  a test enforces it), project logic in `src/lib/` (`project.ts` gates and revisions, `layers.ts` drift, `api.ts` the only door to
-  the desktop shell; in a browser it falls back to local storage and reports the engine as missing).
-- **Shell** (`src-tauri/src/lib.rs`): project packages in `Documents\MotionCraft\*.motioncraft`, menus, splash, key storage,
-  spend tokens, engine locator, and `engine_call`, which relays a **closed list** of methods to the helper. Every command runs
-  off the UI thread (`#[tauri::command(async)]`): a plain sync command freezes the window.
-- **Helper** (`engine/motioncraft_engine/sidecar.py`): JSON lines over stdin/stdout. Uses the **adapter**
-  (`adapter/base.py`, `real.py`, `mock.py`, `policy.py`) for everything touching EffectCraft; also `primitives/library.py` (10
-  motions), `audio.py`, `renderjobs.py` (draft movie and final render on their own engine process), `providers/` (image and
-  video generation).
-- **Adapter contract tests**: `engine/tests/adapter_contract/`. They run on the mock in CI and on the real engine with
-  `-m real_engine`. The pinned command list is `engine/tests/fixtures/effectcraft_commands.7e2d025.json`; a test fails if a command
-  the adapter uses disappears.
+- **UI** (`src/`): pages in `src/pages/`, shell in `src/shell/`, tokens in `src/styles/tokens.css` (no raw hex elsewhere; a test
+  enforces it), logic in `src/lib/` (`project.ts` gates and revisions, `layers.ts` drift, `api.ts` the only door to the desktop
+  shell; in a browser it falls back to local storage and reports the engine as missing).
+- **Shell** (`src-tauri/src/lib.rs`): project packages in `Documents\MotionCraft\*.motioncraft`, menus, splash with real progress,
+  key storage, spend tokens, engine locator, and `engine_call`, which relays a **closed list** of methods to the helper. Every
+  command is `#[tauri::command(async)]`: a plain sync command runs on the UI thread and froze the window for 5 s at startup.
+- **Helper** (`engine/motioncraft_engine/sidecar.py`): JSON lines over stdin/stdout, using the **adapter** (`adapter/base.py`,
+  `real.py`, `mock.py`, `policy.py`) for everything touching EffectCraft; also `primitives/library.py` (10 motions), `audio.py`,
+  `renderjobs.py` (draft movie and final render on their own engine process), `providers/` (image and video generation).
+- **Contract tests**: `engine/tests/adapter_contract/`, on the mock in CI and on the real engine with `-m real_engine`. The pinned
+  command list is `engine/tests/fixtures/effectcraft_commands.7e2d025.json`.
 
-## 6. Rules that must not be broken (from AGENTS.md, in short)
+## 6. Rules that must not be broken (AGENTS.md, in short)
 
 Composition data only in the `.ecproj`. Every engine call goes through the adapter. Approved (locked) layers are untouchable by
-agents (the adapter refuses before sending; EffectCraft's own lock is weak, see PHASE0_REPORT). Any paid call and every final
-render needs a single-use spend token from a user click (`confirm_spend`; `generate_start` and `render_start` are the paid
-methods and are covered by a Rust test). Keys only in the OS credential store. Confine the engine to the project folder.
-Native editable text. Everything must work in Manual mode with no AI provider. **ADR-0005 (Victor, 2026-11-22):** image and video
-generation may use Kie.ai and fal as opt-in providers next to BytePlus, Google and OpenAI; music and voice via Kie.ai and Topaz
-via Kie or fal stay banned.
-
-Your global instructions (`~/.claude/CLAUDE.md`) also require a Rafter review (`rafter-code-review` plus `rafter run`) before
-declaring work that touches files, shell, network, keys or dependencies done. `rafter run --mode plus` is paid: ask first.
+agents (the adapter refuses before sending; EffectCraft's own lock is weak). Any paid call and every final render needs a
+single-use spend token from a user click (`generate_start` and `render_start` are the paid methods, covered by a Rust test). Keys
+only in the OS credential store. Confine the engine to the project folder. Native editable text. Everything works in Manual mode
+with no AI provider. **ADR-0005:** image and video generation may use Kie.ai and fal as opt-in providers next to BytePlus, Google
+and OpenAI; music and voice via Kie.ai, and Topaz via Kie or fal, stay banned. The global `~/.claude/CLAUDE.md` also requires a
+Rafter review (`rafter-code-review` plus `rafter run`) before declaring work done that touches files, shell, network, keys or
+dependencies; `rafter run --mode plus` is paid, so ask first.
 
 ## 7. Where the project stands
 
@@ -127,71 +124,71 @@ projects, menus, splash, settings; EffectCraft auto-detection; Build page on the
 storyboard; draft movie player; shapes, solids, media layers; 10 motion presets; WAV beats; direction proposals; final render;
 collected project export; provider registry (17 built-in models plus Kie.ai discovery, 157 models checked live).
 
-**Open for Victor (Phase 0 sign-off):**
-1. The **hand-edit test** (P0-07): edit in the EffectCraft window while the agent edits through the bridge; steps are in `docs/PHASE0_REPORT.md`.
-2. A **Mac** run of the P0-01 build (reproducible-build criterion is unresolved: two clean Windows builds gave different binaries).
-3. Look at `spike/results/c6_*.png` (Arabic and Hebrew text, per-letter weight).
-4. Confirm: Templates page deferred, and the stage-mode defaults marked "proposed" in `docs/UI_UX.md` section 4.3.
+**Not checked anywhere:** installing and uninstalling the installers; the draft movie playing inside the installed app; the
+Documentation button on the splash; every menu item clicked in the packaged app; anything on macOS; any paid provider call (no
+keys were available; clients are tested only against a local fake server); audio inside renders; beat grids on real music; a real
+screen reader; contrast measured in the rendered app; opening an exported `.aep` in After Effects.
 
-**Not checked anywhere (be honest about these):** installing and uninstalling the installers; the draft movie playing inside the
-installed app; the Documentation button on the splash; every menu item clicked in the packaged app; anything on macOS; any
-paid provider call (no keys were available; clients are tested against a local fake server, and the Kie.ai model index was fetched
-live without a key); audio inside renders; beat grids on real music; a real screen reader; contrast measured in the rendered app.
+**Facts worth remembering:** the installed EffectCraft 0.24.1 release is **not byte-identical** to the pinned commit (763 vs 766
+commands, 7 schemas differ, `render_preview` has no `times`); `--version` cannot tell them apart; the adapter handles what the app
+uses and the real-engine suite passes on both. Layer ids are unique, not sequential, and stable across save and reopen.
+EffectCraft's native lock stops very little. A second process saving the `.ecproj` while its GUI is open is silently lost, so
+MotionCraft is read-only while an EffectCraft window it launched is open. Two clean Windows builds of the pinned EffectCraft gave
+different binaries (reproducible build, Phase 0 criterion 7, is unresolved).
 
-**Known facts worth remembering:** the installed EffectCraft 0.24.1 release is **not byte-identical** to the pinned commit
-(763 vs 766 commands, 7 schemas differ, `render_preview` has no `times`); `--version` cannot tell them apart. The adapter handles
-what the app uses and the real-engine suite passes on both. Layer ids from EffectCraft are unique, not sequential, and stable
-across save and reopen. EffectCraft's native lock stops very little. A second process saving the `.ecproj` while its GUI is open
-is silently lost: MotionCraft is read-only while an EffectCraft window it launched is open.
+## 8. Decisions waiting for Victor, and my recommendations
 
-## 8. Suggested next steps (most valuable first)
+1. **After Effects and Fusion: hand-off targets or full alternative editors?** Recommended: **hand-off targets**. EffectCraft
+   already writes and reads `.aep` files, so After Effects hand-off is the cheapest big feature (days if the files open cleanly).
+   Full editors would need a second adapter and contract suite and would break "the `.ecproj` is the only home of composition
+   data": a different product. Cost of hand-off: MotionCraft cannot enforce approvals or locks inside the other editor; only an
+   `.aep` import brings edits back (as a new revision); Resolve and Fusion give back rendered media only. ADR-0006 is proposed.
+2. **First check (P6-01, about a day):** open the `.aep` that `file.exportAep` writes in After Effects 2025. EffectCraft's notes say
+   2026 opens it; 2025 is unverified.
+3. **Fusion:** start with rendered ProRes 4444 clips with alpha on the Fusion page (any Resolve edition). Do not promise generated
+   Fusion comps or live control until you know whether Resolve is the free or **Studio** edition (only Studio can be scripted from
+   outside). Is it the Fusion page inside Resolve, or Fusion Studio?
+4. **Phase 0 sign-off items:** the hand-edit test (P0-07, steps in `docs/PHASE0_REPORT.md`); a Mac run of the P0-01 build; a look at
+   `spike/results/c6_*.png` (Arabic and Hebrew text, per-letter weight).
+5. **Templates page** deferral, and the stage-mode defaults marked "proposed" in `docs/UI_UX.md` section 4.3.
+6. **Sequence I recommend:** (a) install and use the installer on a clean PC, (b) the language-model router and the agents (what
+   makes this a director tool and not a form-filler), (c) After Effects hand-off P6-01 to P6-03, (d) Resolve and Fusion.
 
-1. Merge PR 1 and the stack, tag a release, and install the installers on a clean PC (the biggest untested thing).
-2. Watch the draft movie play in the installed app; if it does not, check the asset protocol scope and codec first.
-3. Language-model router (port FilmCrafter3 `llm.py`, `routing.py`; add Inkling): unlocks Assisted and Agent-led modes (backlog P1-05).
-4. The agents (Director, Builder, QA) and the intent rule table editor (P1-08 to P1-10, P2-08).
-5. Primitive library growth toward ~100 (P2-02, P2-03), camera moves, style families as data (P2-04).
+## 9. Suggested next steps (most valuable first)
+
+1. Merge PR 1 and the stack; tag a release; install on a clean PC; watch the draft movie play (if it does not, check the asset
+   protocol scope and the codec first).
+2. Language-model router (port FilmCrafter3 `llm.py`, `routing.py`; add Inkling): unlocks Assisted and Agent-led (P1-05).
+3. The agents (Director, Builder, QA) and the intent rule-table editor (P1-08 to P1-10, P2-08).
+4. P6-01 After Effects spike, then P6-02 and P6-03.
+5. Primitive library toward ~100 (P2-02, P2-03), camera moves, style families as data (P2-04).
 6. QA tier-1 checks and the compare view (P4-02, P4-05); render cancel and resume (P5-02).
-7. Audio: sections, word timings, Pulseframe analysis package (P3-01); ElevenLabs and music import with licence notes (P3-05).
+7. Audio sections, word timings, Pulseframe package (P3-01); ElevenLabs and music import with licence notes (P3-05).
 8. Autosave kill test, crash recovery sheet, revision snapshots wired to compare (P1-06, P1-13).
-9. Reproducible builds: pin the toolchain, try `/Brepro` and path remapping (Phase 0 criterion 7).
-10. **After Effects and DaVinci Resolve (Fusion) as hand-off targets** (Victor's request, 2026-11-23): `docs/INTEROP_PLAN.md`, proposed
-    `docs/adr/0006-other-editors-as-hand-off-targets.md`, backlog Phase 6. Start with P6-01 (open an `file.exportAep` result in After
-    Effects). It needs Victor's decision first: hand-off targets (recommended) or full alternative editors.
+9. Reproducible builds: pin the toolchain, try `/Brepro` and path remapping.
 
-## 9. Working agreements
+## 10. Gotchas learned the hard way
+
+- Build the sidecar (`scripts\build_sidecar.py`) before `tauri build`, or the bundle fails or the app has no engine helper.
+- A `build/` line in `.gitignore` once silently excluded `src/pages/build/` from a commit and broke CI: ignore rules are anchored
+  (`/build/`).
+- Sync Tauri commands block the UI thread. Keep `#[tauri::command(async)]` on anything that can wait (starting programs, copying
+  files, the engine).
+- `python -I` ignores environment variables (so `PYTHONIOENCODING` does nothing): use `python -X utf8`.
+- Shell here-documents with quotes broke repeatedly on Windows: write multi-line files with an editor or a small Python script, and
+  keep commit messages free of double quotes (also in AGENTS.md).
+- The installed EffectCraft is not the pinned build; always run the real-engine suite on both before trusting a result.
+- CRLF warnings from git on Windows are harmless.
+- Rafter's fast scan is limited to one per billing period; the manual `rafter-code-review` checklist was used for most PRs.
+
+## 11. Working agreements
 
 One ticket per branch and PR using `.github/pull_request_template.md`. Report test counts honestly; a skipped test is "not
-checked", never "passed". If the PRD, AGENTS.md and the code disagree, stop and say so in the PR. On Windows, write multi-line
-files with Python or an editor (shell here-documents with quotes broke repeatedly) and keep commit messages free of double quotes.
+checked", never "passed". If the PRD, AGENTS.md and the code disagree, stop and say so in the PR.
 
-## 10. Open decisions and my recommendation (2026-11-23)
+## 12. What is on the old PC (in case you need it)
 
-Victor asked what I think about the After Effects and Fusion question and asked for it to be recorded here. This is opinion, not
-fact; the facts are in [INTEROP_PLAN.md](INTEROP_PLAN.md).
-
-**After Effects and Fusion: make them hand-off targets, not second engines.**
-- EffectCraft already writes and reads `.aep` files, so After Effects hand-off is the cheapest big feature on the list: days if the
-  files open cleanly, not weeks. Making After Effects or Fusion a full editor would mean a second adapter, a second contract test
-  suite, and giving up the rule that the `.ecproj` is the only home of composition data. That is a different product.
-- The honest cost of hand-off: once work is in After Effects, MotionCraft cannot enforce approvals or locks there. Only an `.aep`
-  import brings edits back, and it should be treated as a new revision. Resolve and Fusion give back rendered media only.
-- **Do the 1-day check first (P6-01):** open the `.aep` that `file.exportAep` writes in your After Effects 2025. It has not been
-  opened yet, and EffectCraft's notes say After Effects 2026 opens it. If it opens cleanly, build "Open in After Effects"; if it
-  does not, the plan changes before any UI is written.
-- **Fusion:** start with rendered ProRes 4444 clips with alpha on the Fusion page, which works in any Resolve edition. Do not
-  promise generated Fusion comps or live control until you know whether your Resolve is the free or Studio edition (Studio only
-  can be scripted from outside) and whether you mean the Fusion page or Fusion Studio.
-
-**Sequence.** Keep the order: (1) install and run the installers on a clean PC and watch the draft movie play, (2) the
-language-model router and the agents, which are what make this a director tool and not a form-filler, (3) After Effects hand-off
-(P6-01 to P6-03), (4) Resolve and Fusion. Reason: the editors you can hand to are only useful once the thing that produces the
-work is solid, and the biggest unverified risk today is that the installed app has never been run end to end by a person.
-
-**Decisions still waiting for Victor**
-1. Hand-off targets (recommended) or full alternative editors for After Effects and Fusion (ADR-0006 is proposed, not accepted).
-2. Fusion page inside Resolve, or Fusion Studio?
-3. Resolve edition: free or Studio (Help, About).
-4. Phase 0 sign-off items in section 7 (hand-edit test, a Mac build, the Arabic and Hebrew pictures).
-5. Templates page deferral and the stage-mode defaults marked "proposed" in `docs/UI_UX.md`.
-
+`C:\Users\eduni\code\`: `MotionCraft` (main working copy), `MotionCraft_p0` (git worktree for the Phase 0 spike branches),
+`effectcraft`, `FilmCrafter3` and `Pulseframe-Music-Video-Maker` (pinned reading copies), `_spike_work` (scratch output), `_ci_artifacts*`
+(downloaded installers), `_assets_extract` (your mockup zip). `Desktop\MotionCraft_Build\` holds the latest installers and source zip.
+Nothing there is needed if the repo and the CI artifacts are reachable.
