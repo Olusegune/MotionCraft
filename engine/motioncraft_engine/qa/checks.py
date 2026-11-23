@@ -4,8 +4,8 @@ Rules every check follows:
   * a missing input is "not-checked" with the reason, never "passed";
   * a number measured or estimated is shown with its threshold, and an estimate says it is an estimate;
   * a finding on a layer names the layer; a fix is offered only when it is safe (and none is applied here: fixes are P4-04).
-Assumptions are named where they are made: layer positions are pixels from the top-left of the composition (the mock and the
-primitives use that convention), and text size is the font size in pixels.
+Assumptions are named where they are made: layer positions are pixels from the top-left of the composition, and text size is the font
+size in pixels as recorded when MotionCraft made the layer (EffectCraft does not report it).
 """
 from __future__ import annotations
 
@@ -19,8 +19,33 @@ from . import images
 
 SAFE_TOLERANCE_PX = 0.5       # less than half a pixel outside is not a violation (and absorbs rounding in the fix)
 SAFE_FRACTION = 0.90          # graphics-safe: the inner 90% of width and height
-CHAR_WIDTH = 0.55             # average glyph width as a fraction of the font size (an estimate)
+# Text box estimate, calibrated against real EffectCraft 0.24.1 renders (see tests/test_qa.py, TestBoxCalibration): text is centred
+# horizontally on its position, and the baseline of the first line is at the position's y. The font is not readable from the engine,
+# so glyph widths come from Arial-like proportions, scaled to match what the engine's default font measured.
+ASCENT = 0.73                 # cap height above the baseline, as a fraction of the size
+DESCENT = 0.22
 LINE_HEIGHT = 1.2
+WIDTH_SCALE = 1.05
+def _adv(ch: str) -> float:
+    """Advance of one character in ems (Arial-like)."""
+    if ch in "iIlj.,:;'!|":
+        return 0.24
+    if ch in "tf()[]/\\ -":
+        return 0.30
+    if ch in "mM":
+        return 0.85
+    if ch in "wW@":
+        return 0.92
+    if ch == "r":
+        return 0.34
+    if ch.isdigit():
+        return 0.556
+    if ch.isupper():
+        return 0.68
+    if ch.isascii():
+        return 0.54
+    return 1.0 if ord(ch) > 0x2E7F else 0.6      # CJK and the like are full-width; other scripts: a middling guess
+
 CONTRAST_SMALL, CONTRAST_LARGE = 4.5, 3.0   # WCAG AA; "large" text is 36 px or more in a video frame
 LARGE_PX = 36
 BEAT_TOLERANCE_FRAMES = 1.0
@@ -109,15 +134,19 @@ def _text_layers(s: Scene) -> list[Layer]:
     return [l for l in s.layers if l.kind == "Text" and (l.text or "").strip()]
 
 
+def text_width_em(line: str) -> float:
+    return sum(_adv(c) for c in line) * WIDTH_SCALE
+
+
 def box(l: Layer) -> tuple[float, float, float, float] | None:
-    """Estimated (left, top, right, bottom) of a text layer: centred on its position. An estimate: the real glyph extents are not reported."""
+    """Estimated (left, top, right, bottom) of a text layer, in pixels. An estimate: the font and the real glyph extents are not reported."""
     if l.position is None or not l.size:
         return None
-    lines = (l.text or "").split("\n")
-    w = max((len(x) for x in lines), default=0) * l.size * CHAR_WIDTH * l.scale[0] / 100
-    h = len(lines) * l.size * LINE_HEIGHT * l.scale[1] / 100
+    lines = (l.text or "").split(chr(10))
+    sx, sy = l.scale[0] / 100, l.scale[1] / 100
+    w = max((text_width_em(x) for x in lines), default=0) * l.size * sx
     x, y = l.position
-    return (x - w / 2, y - h / 2, x + w / 2, y + h / 2)
+    return (x - w / 2, y - ASCENT * l.size * sy, x + w / 2, y + ((len(lines) - 1) * LINE_HEIGHT + DESCENT) * l.size * sy)
 
 
 def visible_window(l: Layer, s: Scene) -> tuple[float, float]:
@@ -288,7 +317,7 @@ def safe_title(s: Scene) -> Result:
             r.findings.append(finding(r.check, "warn", f"“{(l.text or '')[:40]}” reaches about {out:.0f} px outside the {SAFE_FRACTION:.0%} safe area (estimated from its size and position).",
                                       "Some screens crop the edges. Move the text inwards.", layer=l.id, measured=out, threshold=0, estimated=True, fix=_move_fix(l, b, s, margin_x, margin_y)))
     if not known:
-        return _unchecked(r.check, r.label, "EffectCraft did not report the position and size of the text layers.")
+        return _unchecked(r.check, r.label, "The size of the text is not known: EffectCraft does not report it, and MotionCraft only records it for text it created.")
     return _done(r)
 
 
@@ -298,7 +327,7 @@ def text_collisions(s: Scene) -> Result:
     items = [(l, box(l)) for l in _text_layers(s)]
     items = [(l, b) for l, b in items if b is not None]
     if len(_text_layers(s)) > 1 and len(items) < 2:
-        return _unchecked(r.check, r.label, "EffectCraft did not report the position and size of the text layers.")
+        return _unchecked(r.check, r.label, "The size of the text is not known: EffectCraft does not report it, and MotionCraft only records it for text it created.")
     for i, (a, ba) in enumerate(items):
         for b, bb in items[i + 1:]:
             wa, wb = visible_window(a, s), visible_window(b, s)
@@ -323,10 +352,12 @@ def contrast(s: Scene) -> Result:
         return _done(r)
     if not s.frames:
         return _unchecked(r.check, r.label, "No rendered frame was available to measure.")
-    measured_any = False
+    measured_any, had_box, had_frame = False, False, False
     for l in texts:
         fr = s.frames.get(l.id)
         b = box(l)
+        had_box = had_box or b is not None
+        had_frame = had_frame or fr is not None
         if fr is None or b is None:
             continue
         t, png = fr
@@ -348,6 +379,10 @@ def contrast(s: Scene) -> Result:
             r.findings.append(finding(r.check, "warn", f"“{(l.text or '')[:40]}” has a contrast of {ratio:.2f}:1 at {t:.2f}s; {need:g}:1 is the minimum for this size (measured on the rendered frame, in an estimated text area).",
                                       "The text colour is too close to what is behind it.", layer=l.id, time=t, measured=ratio, threshold=need, estimated=True))
     if not measured_any:
+        if not had_box:
+            return _unchecked(r.check, r.label, "The size of the text is not known: EffectCraft does not report it, and MotionCraft only records it for text it created.")
+        if not had_frame:
+            return _unchecked(r.check, r.label, "No rendered frame could be made to measure.")
         return _unchecked(r.check, r.label, "The rendered frames could not be read (an 8-bit RGB or RGBA PNG is needed).")
     return _done(r)
 

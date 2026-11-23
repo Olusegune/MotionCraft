@@ -90,7 +90,35 @@ class Service:
         a = self._need()
         r = a.execute([Command(id="layer.newText", params={"text": text, "size": int(size)})], actor=USER)
         a.save()
+        self._record_text(r.results[0].result["layer"], int(size))
         return {"layer": r.results[0].result["layer"], **self._snapshot()}
+
+    # EffectCraft does not report a text layer's font or size, so MotionCraft writes the size down when it makes the layer. QA uses it
+    # (and says so). Edits made in EffectCraft are not seen, which is why QA findings that rest on it are marked as estimates.
+    def _text_meta_file(self) -> Path | None:
+        return None if self.pkg is None else self.pkg / "logs" / "text-layers.json"
+
+    def _text_meta(self) -> dict:
+        f = self._text_meta_file()
+        try:
+            d = json.loads(f.read_text(encoding="utf-8")) if f else {}
+            return d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _record_text(self, layer: int, size: int) -> None:
+        f = self._text_meta_file()
+        if f is None:
+            return
+        d = self._text_meta()
+        d[str(int(layer))] = {"size": int(size)}
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_suffix(".tmp")
+            tmp.write_text(json.dumps(d), encoding="utf-8")
+            tmp.replace(f)
+        except OSError:
+            pass                                   # QA then says the size is not known; nothing else depends on this file
 
     def set_text(self, layer: int, text: str) -> dict:
         a = self._need()
@@ -188,6 +216,8 @@ class Service:
                         applied.append(an["primitive"])
                     except (prim.PrimitiveError, CommandFailed, AdapterContractError) as e:   # one motion failing does not stop the build
                         warnings.append(f"{L['name']}: {an['primitive']} was not applied. {e}")
+                if L["kind"] == "text":
+                    self._record_text(lid, int(L["size"]))
                 created.append({"key": L["key"], "layer": lid, "kind": L["kind"], "role": L["role"], "name": L["name"], "primitives": applied})
         except Exception as e:
             a.save()
@@ -244,6 +274,7 @@ class Service:
         def pair(v, default):
             return (float(v[0]), float(v[1])) if isinstance(v, (list, tuple)) and len(v) >= 2 else default
 
+        recorded = self._text_meta()
         for l in comp.layers:
             lp = a.layer_props(comp.id, l.id)
             props = lp.get("props") or {}
@@ -253,7 +284,8 @@ class Service:
             op = val(props, ("transform/opacity",))
             qa_checks_layers.append(qa_checks.Layer(
                 id=l.id, name=l.name, kind=l.kind, parent=l.parent, text=txt if isinstance(txt, str) else None,
-                font=font if isinstance(font, str) else None, size=float(size) if isinstance(size, (int, float)) else None,
+                font=font if isinstance(font, str) else None,
+                size=float(size) if isinstance(size, (int, float)) else (float(recorded[str(l.id)]["size"]) if isinstance((recorded.get(str(l.id)) or {}).get("size"), (int, float)) else None),
                 position=pair(pos, None) if isinstance(pos, (list, tuple)) else None,
                 position_z=float(pos[2]) if isinstance(pos, (list, tuple)) and len(pos) > 2 and isinstance(pos[2], (int, float)) else 0.0,
                 position_keyed=bool((props.get("transform/position") or {}).get("keys")), scale=pair(val(props, ("transform/scale",)), (100.0, 100.0)),

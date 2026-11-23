@@ -260,7 +260,7 @@ def test_qa_run_on_the_mock_reports_every_check_and_changes_nothing(svc):
     assert out["total"] == 15 and {r["check"] for r in out["results"]} >= {"missing-assets", "contrast", "orphan-layers"}
     by = {r["check"]: r for r in out["results"]}
     assert by["missing-assets"]["state"] == "findings" and by["frame-rate"]["state"] == "passed" and by["aspect-ratio"]["state"] == "passed"
-    assert by["text-collisions"]["state"] == "not-checked" and "position and size" in by["text-collisions"]["reason"], "the mock reports no text size, so it says so"
+    assert by["text-collisions"]["state"] == "findings", "two identical texts at the same place and time; their size was recorded when they were made"
     assert by["colour-space"]["state"] == "not-checked" and by["missing-fonts"]["state"] == "not-checked"
     assert out["counts"]["error"] >= 1 and out["checked"] == sum(1 for r in out["results"] if r["state"] != "not-checked")
     assert svc.a.hash_layers(None) == before, "QA is read-only"
