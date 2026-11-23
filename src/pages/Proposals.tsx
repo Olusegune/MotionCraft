@@ -88,7 +88,7 @@ export function Proposals() {
     const started = await Promise.all(cards.map(async (c) => {
       try {
         const token = await api.confirmSpend(picked.provider, picked.model);     // one per still, all from the same confirmation click
-        const job = await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt: c.prompt, params: {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath);
+        const job = await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt: c.prompt, params: { aspect_ratio: project.brief.deliverables[0].aspect }, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath);
         return { ...c, job, error: null, asset: undefined };
       } catch (e) { return { ...c, job: null, error: String(e instanceof Error ? e.message : e) }; }
     }));

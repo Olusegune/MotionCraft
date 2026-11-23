@@ -63,7 +63,7 @@ export function GeneratePanel() {
     try {
       const api = await getApi();
       const token = await api.confirmSpend(provider, picked.model);     // only reachable from the confirm click below
-      setJob(await api.engine<GenJob>("generate_start", { provider, model: picked.model, prompt: prompt.trim(), params: {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
+      setJob(await api.engine<GenJob>("generate_start", { provider, model: picked.model, prompt: prompt.trim(), params: kind === "image" ? { aspect_ratio: project.brief.deliverables[0].aspect } : {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
       setConfirming(false);
     } catch (e) { setConfirming(false); setErr(String(e instanceof Error ? e.message : e)); }
   };

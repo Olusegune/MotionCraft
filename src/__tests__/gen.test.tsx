@@ -116,6 +116,7 @@ describe("image and video generation", () => {
     const start = f.log.find((c) => c.method === "generate_start")!;
     expect(f.spend()).toBe(1);
     expect(start.params).toMatchObject({ provider: "byteplus", model: "seedream-4-5-251128", spend_token: "token-1", generative_enabled: true, offline: false });
+    expect(start.params.params).toEqual({ aspect_ratio: "16:9" });   // Kie refused image requests with no aspect ratio ("aspect_ratio cannot be empty"), so the project's own aspect is always sent
     expect(Object.keys(start.params)).not.toContain("api_key"); // keys never pass through the page
     expect(await screen.findByText(/assets\/images\/gen-j1\.png/, {}, { timeout: 6000 })).toBeInTheDocument();
     expect(screen.getByText("Terms apply.")).toBeInTheDocument();
@@ -172,6 +173,7 @@ describe("direction proposals", () => {
     expect(f.spend()).toBe(3);
     const prompts = f.log.filter((c) => c.method === "generate_start").map((c) => String(c.params.prompt));
     expect(new Set(prompts).size).toBe(3);                         // three different starting points
+    expect(f.log.filter((c) => c.method === "generate_start").every((c) => (c.params.params as { aspect_ratio?: string })?.aspect_ratio === "16:9")).toBe(true);     // every still carries the project aspect
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Use this direction" })[0]).toBeEnabled(), { timeout: 8000 });
     await user.click(screen.getAllByRole("button", { name: "Use this direction" })[0]);
     expect((screen.getByLabelText("Typography") as HTMLSelectElement).value).toBe("editorial-minimal");
