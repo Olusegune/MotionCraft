@@ -70,6 +70,15 @@ jobs:
           Copy-Item src-tauri/binaries/motioncraft-engine-*.exe portable/MotionCraft/motioncraft-engine.exe
           Copy-Item -Recurse THIRD_PARTY_NOTICES portable/MotionCraft/
           Compress-Archive -Path portable/MotionCraft -DestinationPath "MotionCraft_portable_windows-x64.zip"
+      - name: Smoke test the built app (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        # Starts the portable build and calls its engine commands from inside its own web view. Not blocking yet: make it required
+        # once it has been seen green on a GitHub runner.
+        continue-on-error: true
+        run: |
+          python -m pip install websockets
+          python scripts/smoke_app.py "portable/MotionCraft/MotionCraft.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: MotionCraft-${{ matrix.name }}

@@ -15,6 +15,8 @@ import tempfile
 import wave
 from pathlib import Path
 
+from .proc import NO_WINDOW
+
 
 class AudioError(Exception):
     pass
@@ -61,7 +63,7 @@ def to_wav(path: Path) -> tuple[Path, bool]:
         raise AudioError("This audio is not a WAV file and ffmpeg is not installed. Convert it to WAV, or install ffmpeg.")
     out = Path(tempfile.mkstemp(suffix=".wav")[1])
     r = subprocess.run([ff, "-v", "error", "-y", "-i", str(path), "-ac", "1", "-ar", "22050", "-t", str(MAX_SECONDS), str(out)],
-                       capture_output=True, timeout=300, shell=False)
+                       capture_output=True, timeout=300, shell=False, **NO_WINDOW)
     if r.returncode != 0:
         out.unlink(missing_ok=True)
         raise AudioError("ffmpeg could not read that audio file.")

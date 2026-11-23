@@ -348,13 +348,16 @@ fn looks_like_cli(p: &Path) -> bool {
 }
 
 fn run_version(cli: &Path) -> Result<String, String> {
-    let mut child = Command::new(cli)
-        .arg("--version")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Could not start {}: {e}", cli.display()))?;
+    let mut cmd = Command::new(cli);
+    cmd.arg("--version").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    // effectcraft-cli is a console program. Without this Windows opens a console window for it, and with Windows Terminal as the
+    // default terminal that is a terminal window flashing over the app every time the engine is checked.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("Could not start {}: {e}", cli.display()))?;
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match child.try_wait().map_err(|e| e.to_string())? {
@@ -998,8 +1001,9 @@ fn show_main(app: &tauri::AppHandle) {
     // Main first, then the splash is hidden (no animation) and only then closed. Closing it in the same instant the main window
     // appeared let Windows 11 play the close animation as a ghost panel, with title-bar buttons, over the main window.
     if let Some(m) = app.get_webview_window("main") {
+        // show() already activates the window. Asking for focus again right afterwards made Windows draw a flickering translucent
+        // copy of the window (with title-bar buttons) for about a second and a half; measured on screen, and gone without it.
         let _ = m.show();
-        let _ = m.set_focus();
     }
     if let Some(sp) = app.get_webview_window("splashscreen") {
         let _ = sp.set_always_on_top(false);
@@ -1167,6 +1171,9 @@ pub fn run() {
     use tauri::Emitter;
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Every command that takes `State<EngineState>` (engine_call, confirm_spend, effectcraft_window_open, ...) fails with "state not
+        // managed" without this. It was lost once and nothing noticed, because the tests call the functions directly.
+        .manage(EngineState::default())
         .on_page_load(|webview, payload| {
             use tauri::webview::PageLoadEvent;
             let app = webview.app_handle().clone();
@@ -1271,6 +1278,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_engine_state_is_registered_with_the_app() {
+        // A command taking State<EngineState> cannot run unless the builder manages it, and the unit tests above never go through the
+        // command layer. Keep this guard in step with `run()`.
+        let src = include_str!("lib.rs");
+        let needle = format!(".{}(EngineState::default())", "manage");   // built at run time so this test's own text is not what it finds
+        assert_eq!(src.lines().filter(|l| l.trim_start().starts_with(&needle)).count(), 1, "run() must register the engine state exactly once");
+        assert!(src.matches("State<EngineState>").count() >= 4, "commands that need the engine state exist");
+    }
 
     #[test]
     fn a_crash_mid_save_loses_nothing_and_a_damaged_file_can_be_restored() {

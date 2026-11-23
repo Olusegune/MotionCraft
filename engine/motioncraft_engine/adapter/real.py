@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from ..proc import NO_WINDOW
 from .base import BaseAdapter, SpendVerifier
 from .errors import (AdapterContractError, EnginePinMismatch, EngineUnavailable, GuiWriteConflict)
 from .models import (Command, CompInfo, CompSettings, DocSnapshot, ExportResult, FinalRenderJob, LayerInfo, MarkerInfo,
@@ -27,7 +28,7 @@ class _Stdio:
     def __init__(self, args: list[str]):
         env = {k: v for k, v in os.environ.items() if k.upper() in _ENV_KEEP}
         self.p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                                  encoding="utf-8", bufsize=1, env=env, shell=False)
+                                  encoding="utf-8", bufsize=1, env=env, shell=False, **NO_WINDOW)
         self.err: list[str] = []
         threading.Thread(target=lambda: [self.err.append(l.rstrip()) for l in self.p.stderr], daemon=True).start()
         self.n = 0
@@ -80,7 +81,7 @@ class EffectCraftAdapter(BaseAdapter):
 
     # ------------------------------------------------------------- process
     def version(self) -> str:
-        out = subprocess.run([str(self.cli), "--version"], capture_output=True, text=True, timeout=10, shell=False).stdout
+        out = subprocess.run([str(self.cli), "--version"], capture_output=True, text=True, timeout=10, shell=False, **NO_WINDOW).stdout
         m = re.search(r"\d+\.\d+\.\d+", out)
         return m.group(0) if m else out.strip()
 

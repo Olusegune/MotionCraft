@@ -21,6 +21,7 @@ import { ReviewPage } from "./pages/ReviewPage";
 import { DeliverPage } from "./pages/DeliverPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { RecoverySheet } from "./shell/RecoverySheet";
+import { shouldRecheckOnFocus } from "./lib/engineCheck";
 import type { ProjectHealth } from "./lib/api";
 
 const AUTOSAVE_MS = 30_000; // PRD target: at most 30 s of work lost
@@ -81,7 +82,9 @@ export default function App() {
     if (!listing && engine && !readyOnce.current) { readyOnce.current = true; getApi().then((a) => a.appReady()).catch(() => undefined); }
   }, [listing, engine]);
 
+  const lastEngineCheck = useRef(0);
   const refreshEngine = useCallback(() => {
+    lastEngineCheck.current = Date.now();
     setEngine(null);
     getApi().then((a) => a.engineStatus(settings.enginePath)).then(setEngine)
       .catch((e) => setEngine({ state: "error", pinned: "0.24.1", detail: String(e) }));
@@ -92,9 +95,9 @@ export default function App() {
     getApi().then((a) => a.engine<{ ready: boolean }>("llm_status", { offline: settings.offline }, "", settings.enginePath))
       .then((s) => updateSettings({ llmReady: s.ready === true })).catch(() => updateSettings({ llmReady: false }));
   }, [settings.offline, settings.enginePath]);
-  // The engine may be installed or started after MotionCraft: look again whenever the window regains focus while it is missing.
+  // The engine may be installed after MotionCraft started: look again when the window regains focus, only while it is missing, at most every 30 s.
   useEffect(() => {
-    const onFocus = () => { if (engine && engine.state !== "connected") refreshEngine(); };
+    const onFocus = () => { if (shouldRecheckOnFocus(engine?.state, lastEngineCheck.current, Date.now())) refreshEngine(); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [engine, refreshEngine]);
