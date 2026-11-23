@@ -139,6 +139,14 @@ export function AudioPanel({ write, disabled, info, onInfo, onStructure }: { wri
   };
   useEffect(() => { if (source !== "estimate") void loadMap(source); }, [source]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The analysis is kept inside the project. When the track is chosen and nothing is showing, bring back what was kept (it never re-analyses).
+  useEffect(() => {
+    if (!chosen || info) return;
+    let live = true;
+    (async () => { try { const a = await (await getApi()).engine<AudioInfo | null>("audio_cached", { rel: chosen.path }, projectPath, enginePath); if (live && a && Array.isArray(a.beats) && Array.isArray(a.peaks)) onInfo(a); } catch { /* older helper or no project open: nothing to restore */ } })();
+    return () => { live = false; };
+  }, [chosen?.path, projectPath]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const analyze = async () => {
     if (!chosen) return;
     setBusy(true); setErr(null); setMsg(null);

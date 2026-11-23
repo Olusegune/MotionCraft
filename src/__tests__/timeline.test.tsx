@@ -107,7 +107,7 @@ const LAYERS = [
 ];
 const SPANS = [{ id: 2, in: 0, out: 20 }, { id: 3, in: 2, out: 9 }, { id: 4, in: 5, out: 14 }];
 
-function fake(project: MotionProject) {
+function fake(project: MotionProject, opts: { cachedAudio?: unknown } = {}) {
   const log = { calls: [] as { method: string; params: Record<string, unknown> }[] };
   const snap = () => ({ path: "x", dirty: false, activeComp: 1, comps: [], layers: LAYERS });
   const api = {
@@ -123,6 +123,7 @@ function fake(project: MotionProject) {
     async engine(method: string, params: Record<string, unknown>) {
       log.calls.push({ method, params });
       if (method === "llm_status") return { ready: false, reason: "none", config: { provider: null, model: "" }, providers: [] } as never;
+      if (method === "audio_cached") return (opts.cachedAudio ?? null) as never;
       if (method === "preview") return { width: 320, height: 180, png: "AAAA" } as never;
       if (method === "timeline_read") return { duration: 20, frameRate: 30, layers: SPANS.map((s) => ({ ...s, name: LAYERS.find((l) => l.id === s.id)!.name })) } as never;
       if (method === "audio_analyze") return { duration: 20, bpm: 120, beats: [0.5, 1], downbeats: [0.5, 2.5], peaks: [0.1], silences: [], estimate: true,
@@ -386,6 +387,26 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     const lane = await within(tl).findByLabelText("Emotional arc curve");
     expect(lane.querySelector("path.tl-arcline")?.getAttribute("d")).toMatch(/^M/);
     expect(lane.querySelector("circle.tl-arcdot")).toBeTruthy();
+  });
+
+  it("an analysis kept in the project comes back by itself, with the waveform in the audio lane", async () => {
+    const user = userEvent.setup();
+    const log = fake(project(), { cachedAudio: { duration: 20, bpm: 120, beats: [0.5, 1], downbeats: [0.5], peaks: [0.2, 0.9, 0.4, 0.7], silences: [], estimate: true } });
+    render(<App />);
+    const tl = await toBuild(user);
+    await waitFor(() => expect(tl.querySelector("canvas.tl-wave")).toBeTruthy());
+    expect(log.calls.some((c) => c.method === "audio_cached" && c.params.rel === "assets/audio/s.wav")).toBe(true);
+    expect(log.calls.some((c) => c.method === "audio_analyze")).toBe(false);          // restoring never analyses
+  });
+
+  it("with nothing kept, the audio lane stays empty and nothing is analysed on its own", async () => {
+    const user = userEvent.setup();
+    const log = fake(project());
+    render(<App />);
+    const tl = await toBuild(user);
+    await waitFor(() => expect(log.calls.some((c) => c.method === "audio_cached")).toBe(true));
+    expect(tl.querySelector("canvas.tl-wave")).toBeNull();
+    expect(log.calls.some((c) => c.method === "audio_analyze")).toBe(false);
   });
 
   it("has no raw colours: the styles use only tokens", async () => {

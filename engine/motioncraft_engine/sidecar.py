@@ -527,12 +527,35 @@ class Service:
         a.execute(cmds, actor=actor)
         return len(cmds)
 
+    def _analysis_file(self, f: Path) -> Path:
+        """Where the analysis of one audio file is kept: inside the project, named by the file and its size and time, so a changed file never reuses it."""
+        st = f.stat()
+        return self._pkg() / "analysis" / f"{f.name}.{st.st_size}-{int(st.st_mtime)}.json"
+
+    def audio_cached(self, rel: str) -> dict | None:
+        """The analysis made earlier for this audio file, or None. Reads only; never analyses."""
+        f = self._asset(rel, ("audio",))
+        try:
+            data = json.loads(self._analysis_file(f).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) and isinstance(data.get("beats"), list) and isinstance(data.get("peaks"), list) else None
+
     def audio_analyze(self, rel: str) -> dict:
         f = self._asset(rel, ("audio",))
         try:
-            return audio_mod.analyze(f)
+            result = audio_mod.analyze(f)
         except audio_mod.AudioError as e:
             raise AdapterError(str(e)) from None
+        try:        # keeping it is a convenience: if the folder cannot be written the analysis is still returned
+            dest = self._analysis_file(f)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            for old in dest.parent.glob(f"{f.name}.*.json"):
+                old.unlink(missing_ok=True)
+            dest.write_text(json.dumps(result), encoding="utf-8")
+        except OSError:
+            pass
+        return result
 
     def sync_markers(self, times: list[float], comment: str = "motioncraft:beat", replace: bool = False) -> dict:
         a = self._need()
