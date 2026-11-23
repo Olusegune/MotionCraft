@@ -249,12 +249,23 @@ class EffectCraftAdapter(BaseAdapter):
         self._run(Command(id="file.checkOutput", params={"path": str(job.output)}))
         params: dict[str, Any] = {"comp": job.comp, "output": str(job.output)}
         params.update({"format": "prores", "proresProfile": "4444", "channels": "rgba"} if job.preset == "prores4444" else {"format": "h264"})
+        if job.start is not None and job.end is not None:
+            params.update({"timeSpan": "custom", "start": float(job.start), "end": float(job.end)})
         self._run(Command(id="renderQueue.add", params=params))
         out = self._run(Command(id="renderQueue.render", params={"wait": True}))
         if isinstance(out, dict) and out.get("failed"):
             raise RuntimeError(f"render failed: {out}")
         frames = sum(i.get("frames", 0) for i in (out or {}).get("items", []))
         return RenderResult(output=job.output, frames=frames, bytes=job.output.stat().st_size if job.output.exists() else 0)
+
+    def abort(self) -> None:
+        """Stops the engine process now, mid-render if need be (used to cancel). The adapter is not usable afterwards."""
+        io = self._io
+        if io is not None:
+            try:
+                io.p.kill()
+            except Exception:  # noqa: BLE001
+                pass
 
     def export(self, kind: str, comp: int | str, path: Path) -> ExportResult:
         if not self._under(path, self.write_roots):

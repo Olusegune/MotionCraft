@@ -314,9 +314,19 @@ class MockAdapter(BaseAdapter):
 
     def _render(self, job: FinalRenderJob) -> RenderResult:
         c = self._comp(job.comp)
+        if self._aborted:
+            raise RuntimeError("the engine was stopped")
+        if self.render_hook is not None:
+            self.render_hook(job)                      # tests: block, fail, or note which part is being rendered
+        if self._aborted:
+            raise RuntimeError("the engine was stopped")
+        span = (job.end - job.start) if job.start is not None and job.end is not None else c["dur"]
         job.output.parent.mkdir(parents=True, exist_ok=True)
-        job.output.write_bytes(b"MOCKRENDER" + str(len(c["layers"])).encode())
-        return RenderResult(output=job.output, frames=int(round(c["dur"] * c["fps"])), bytes=job.output.stat().st_size)
+        job.output.write_bytes(f"MOCKRENDER|{job.preset}|{job.start}|{job.end}|{len(c['layers'])}".encode() + bytes([10]))
+        return RenderResult(output=job.output, frames=int(round(span * c["fps"])), bytes=job.output.stat().st_size)
+
+    def abort(self) -> None:
+        self._aborted = True
 
     def export(self, kind: str, comp: int | str, path: Path) -> ExportResult:
         if kind == "ecproj_copy":
@@ -330,6 +340,9 @@ class MockAdapter(BaseAdapter):
     def _gui_has_unsaved(self) -> bool: return False
 
     # ------------------------------------------------------------- test hooks
+    render_hook = None      # called with the FinalRenderJob before each final render or part
+    _aborted = False
+
     def simulate_user_edit(self, comp: int | str, layer_id: int, path: str, value: Any) -> None:
         """A hand edit in the EffectCraft GUI: changes the layer without going through execute() or the lock check."""
         l = self._layer(self._comp(comp), layer_id)

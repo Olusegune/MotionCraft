@@ -4,7 +4,9 @@ import { getApi } from "../../lib/api";
 import { useSettings } from "../../lib/settings";
 
 
-export interface RenderJob { id: string; kind: "preview" | "final"; state: "running" | "done" | "failed"; detail: string; output: string | null; frames: number | null; bytes: number | null; error: string | null; elapsed: number; preset: string | null }
+export interface RenderJob { id: string; kind: "preview" | "final"; state: "running" | "done" | "failed" | "interrupted"; detail: string; output: string | null; frames: number | null; bytes: number | null; error: string | null; elapsed: number; preset: string | null;
+  /** Final renders are cut into parts when they can be (P5-02): progress, and whether an interrupted one can be resumed, or why not. */
+  resumable?: boolean; reason?: string; parts?: { done: number; total: number } | null; framesDone?: number | null; framesTotal?: number | null; changed?: boolean }
 export type PreviewState = { state: "idle" } | { state: "rendering"; since: number } | { state: "error"; message: string };
 
 /** The draft preview movie of the composition: render it on its own engine process, then play it. */

@@ -12,6 +12,18 @@
       ],
       "title": "Comp"
     },
+    "end": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "End"
+    },
     "estimated_cost_usd": {
       "anyOf": [
         {
@@ -36,6 +48,18 @@
       ],
       "title": "Preset",
       "type": "string"
+    },
+    "start": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Start"
     }
   },
   "required": [

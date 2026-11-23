@@ -3,25 +3,17 @@ import { GitCompare, History, RotateCcw, Save } from "lucide-react";
 import { useApp } from "../../ctx";
 import { Fold } from "../../shell/Fold";
 import { Sheet } from "../../shell/Sheet";
-import { getApi, type Api } from "../../lib/api";
+import { getApi } from "../../lib/api";
+import { openComposition } from "../../lib/openComposition";
 import { useSettings } from "../../lib/settings";
 import { applyRestore, bindingFor, logVersion, restoreOutcome, type EngineSnapshot } from "../../lib/layers";
-import type { MotionProject, RevisionRecord } from "../../types";
+import type { RevisionRecord } from "../../types";
 
 interface DiffItem { id: number; name: string; state: "added" | "changed" | "removed" }
 interface Diff { items: DiffItem[]; unchanged: number; then: { layers: number }; now: { layers: number } }
 interface Shot { width: number; height: number; time: number; png: string }
 
 const ACTOR: Record<RevisionRecord["actor"], string> = { user: "You", "agent:director": "Director", "agent:builder": "Builder", "agent:qa": "QA" };
-
-/** The composition has to be open in the engine before versions can be read. Same call the Build page makes. */
-async function openComposition(project: MotionProject, projectPath: string, enginePath: string): Promise<Api> {
-  const api = await getApi();
-  const d = project.brief.deliverables[0];
-  const locked = (project.layerMap ?? []).filter((b) => b.lock === "approved").map((b) => b.engineLayerId);
-  await api.engine("open", { settings: { name: "Main", width: d.width, height: d.height, frame_rate: d.fps, duration: d.durationSec }, locked }, projectPath, enginePath);
-  return api;
-}
 
 const msg = (e: unknown) => String(e instanceof Error ? e.message : e);
 

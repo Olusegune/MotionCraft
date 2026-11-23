@@ -36,13 +36,13 @@ ECPROJ = "comp.ecproj"
 
 
 class Service:
-    def __init__(self, adapter_factory, data_dir: Path | None = None, jobs: Jobs | None = None):
+    def __init__(self, adapter_factory, data_dir: Path | None = None, jobs: Jobs | None = None, renders: RenderJobs | None = None):
         self._factory = adapter_factory
         base_dir = data_dir or Path.home() / ".motioncraft"
         self.reg = Registry(base_dir / "registry.json")
         self.llm = Llm(base_dir / "llm.json")
         self.jobs = jobs or Jobs(self.reg, Net())
-        self.renders = RenderJobs(adapter_factory)
+        self.renders = renders or RenderJobs(adapter_factory)
         self.snaps = Snapshots(adapter_factory)
         self.a: BaseAdapter | None = None
         self.pkg: Path | None = None
@@ -488,10 +488,25 @@ class Service:
             self.a.save()                                  # the render reads the file on disk
         return self.renders.start_movie(self._pkg())
 
-    def render_start(self, preset: str, name: str = "render", spend_token: str = "") -> dict:
+    def render_start(self, preset: str, name: str = "render", spend_token: str = "", has_audio: bool = False) -> dict:
         if self.a is not None:
             self.a.save()
-        return self.renders.start_final(self._pkg(), preset, name, spend_token)
+        return self.renders.start_final(self._pkg(), preset, name, spend_token, bool(has_audio))
+
+    def render_resume(self, job: str, spend_token: str = "") -> dict:
+        """Continues an interrupted render from its last finished part. Needs a fresh spend token, like any final render."""
+        if self.a is not None:
+            self.a.save()
+        return self.renders.resume_final(self._pkg(), job, spend_token)
+
+    def render_cancel(self, job: str) -> dict:
+        return self.renders.cancel(job, self._pkg())
+
+    def render_discard(self, job: str) -> dict:
+        return self.renders.discard(self._pkg(), job)
+
+    def render_jobs(self) -> dict:
+        return self.renders.list_jobs(self._pkg())
 
     def render_poll(self, job: str) -> dict:
         return self.renders.poll(job, self._pkg())
