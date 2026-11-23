@@ -5,18 +5,7 @@ import { Sheet } from "../shell/Sheet";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
 import { getApi, type GenJob, type ModelEntry, type ModelList, type ProviderId } from "../lib/api";
 import { useSettings } from "../lib/settings";
-import type { AssetReference } from "../types";
-
-function Thumb({ asset, path }: { asset: AssetReference; path: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    if (asset.kind !== "image") return;
-    let live = true;
-    getApi().then((a) => a.assetDataUrl(path, asset.path)).then((u) => live && setSrc(u)).catch(() => undefined);
-    return () => { live = false; };
-  }, [asset, path]);
-  return src ? <img className="thumb" alt={`Generated ${asset.kind}: ${asset.provenance.prompt?.slice(0, 60) ?? ""}`} src={src} /> : <div className="thumb empty" aria-hidden="true">{asset.kind === "video" ? "Video" : "…"}</div>;
-}
+import { Frame } from "../shell/Media";
 
 /** Generate pictures and video from a prompt. Off until enabled in Settings; every call goes through the spend sheet. */
 export function GeneratePanel() {
@@ -101,7 +90,7 @@ export function GeneratePanel() {
       )}
       <ul className="assets" aria-label="Generated assets">
         {(project.assets ?? []).map((a) => (
-          <li key={a.id}><Thumb asset={a} path={projectPath} />
+          <li key={a.id}><Frame asset={a} projectPath={projectPath} ratio="1 / 1" className="thumb" />
             <div><span className="strong">{a.provenance.model}</span> <span className="muted">{PROVIDER_LABEL[a.provenance.provider]}</span>
               <p className="muted">{a.provenance.costValue !== null ? `${a.provenance.costReported ? "Reported" : "Estimate"} ${a.provenance.costValue} ${a.provenance.costUnit ?? ""}` : "Cost unknown"} · <span className="mono">{a.path}</span></p>
               <p className="hint">{a.provenance.licence}</p></div></li>

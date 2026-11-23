@@ -26,10 +26,8 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
         </label>
         <ul id="palette-list" role="listbox" aria-label="Results">
           {list.map((it, n) => (
-            <li key={it.id} role="option" aria-selected={n === i}>
-              <button className={n === i ? "on" : ""} onClick={() => pick(n)}>
-                <Command size={16} aria-hidden="true" /><span>{it.label}</span>{it.hint && <span className="muted">{it.hint}</span>}
-              </button>
+            <li key={it.id} role="option" aria-selected={n === i} className={n === i ? "on" : ""} onClick={() => pick(n)} onMouseEnter={() => setI(n)}>
+              <Command size={16} aria-hidden="true" /><span>{it.label}</span>{it.hint && <span className="muted">{it.hint}</span>}
             </li>
           ))}
           {list.length === 0 && <li className="empty">Nothing matches that search.</li>}

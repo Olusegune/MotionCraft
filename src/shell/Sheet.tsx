@@ -7,12 +7,16 @@ export function Sheet({ title, onClose, children, footer, wide }: {
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // Parents pass a new onClose on every render (the app re-renders each few seconds). Keep it in a ref so the effect below runs
+  // once per sheet: re-running it re-focused the first field and scrolled the sheet back down.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     const first = ref.current?.querySelector<HTMLElement>("input,select,textarea,button:not([data-sheet-close])") ?? ref.current;
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+      if (e.key === "Escape") { e.stopPropagation(); closeRef.current(); return; }
       if (e.key !== "Tab" || !ref.current) return;
       const f = Array.from(ref.current.querySelectorAll<HTMLElement>("a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex='-1'])"));
       if (!f.length) return;
@@ -22,16 +26,16 @@ export function Sheet({ title, onClose, children, footer, wide }: {
     };
     document.addEventListener("keydown", onKey, true);
     return () => { document.removeEventListener("keydown", onKey, true); prev?.focus?.(); };
-  }, [onClose]);
+  }, []);
   return (
     <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`sheet${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} tabIndex={-1}>
-        <header className="sheet-head">
+        <div className="sheet-head">
           <h2 id={titleId}>{title}</h2>
           <button className="icon-btn" data-sheet-close aria-label="Close" onClick={onClose}><X size={18} strokeWidth={1.75} /></button>
-        </header>
+        </div>
         <div className="sheet-body">{children}</div>
-        {footer && <footer className="sheet-foot">{footer}</footer>}
+        {footer && <div className="sheet-foot">{footer}</div>}
       </div>
     </div>
   );

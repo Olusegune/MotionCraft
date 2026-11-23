@@ -3,6 +3,7 @@ import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useApp } from "../ctx";
 import { timecode } from "../lib/time";
 import { STAGE_LABEL } from "../lib/project";
+import { Frame } from "./Media";
 
 export interface MainAction { label: string; onClick: () => void; disabledReason?: string; secondary?: { label: string; onClick: () => void; disabledReason?: string } }
 
@@ -77,7 +78,7 @@ export function Viewer({ aspect = "16 / 9", children }: { aspect?: string; child
 }
 
 export function StoryStrip() {
-  const { project, stage } = useApp();
+  const { project, stage, projectPath } = useApp();
   const fps = project.brief.deliverables[0]?.fps ?? 30;
   const beats = project.intent.arc;
   return (
@@ -86,7 +87,9 @@ export function StoryStrip() {
         <span className="strip-label">Beats</span>
         {beats.length === 0 ? <span className="muted">No beats yet. Add them on the Intent page.</span> : (
           <ol className="beats">{beats.map((b) => (
-            <li key={b.beatId} className="beat"><span className="mono">{timecode(b.startSec, fps)}</span><span>{b.primary || "Untitled beat"}</span></li>
+            <li key={b.beatId} className="beat">
+              <Frame asset={(project.assets ?? []).find((a) => a.id === project.treatment[b.beatId]?.frameAssetId)} projectPath={projectPath} className="strip-frame" />
+              <span className="mono">{timecode(b.startSec, fps)}</span><span>{b.primary || "Untitled beat"}</span></li>
           ))}</ol>
         )}
       </div>

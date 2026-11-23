@@ -1,5 +1,5 @@
 *, *::before, *::after { box-sizing: border-box; }
-html { font-size: calc(16px * var(--mc-scale)); }
+html { zoom: var(--mc-scale); }   /* UI scale (90-250%): every size is in px, so the whole interface is zoomed */
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--mc-bg-app); color: var(--mc-text); font-family: var(--mc-font-ui); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 h1, h2, h3, p, ul, ol, dl, dd { margin: 0; }
@@ -38,7 +38,7 @@ input.narrow { width: 108px; }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 
 /* shell */
-.app { display: grid; grid-template-rows: 48px minmax(0, 1fr) auto; height: 100%; min-width: 1100px; }
+.app { display: grid; grid-template-rows: 48px minmax(0, 1fr) auto; height: 100%; min-width: 0; }
 .app:not(:has(.stagebar)) { grid-template-rows: 48px minmax(0, 1fr); }
 .header { display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--mc-bg-app); border-bottom: 1px solid var(--mc-divider); }
 .brand { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; color: var(--mc-text); font-family: var(--mc-font-head); font-weight: 600; font-size: 16px; padding: 4px 6px; border-radius: var(--mc-r-ctl); }
@@ -182,3 +182,35 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .project-icon { width: 40px; height: 40px; object-fit: contain; }
 
 .notice { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 16px; background: var(--mc-bg-raised); border: 1px solid var(--mc-control-border); border-radius: var(--mc-r-panel); }
+
+/* media, storyboard */
+.frame-slot { width: 100%; background: var(--mc-bg-app); border: 1px solid var(--mc-divider); border-radius: 4px; overflow: hidden; display: grid; place-items: center; }
+.frame-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.frame-slot.big { width: min(100%, 78vh, 860px); border-color: transparent; }
+.frame-kind { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; font-size: 12px; text-align: center; color: var(--mc-text-2); overflow: hidden; }
+.wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 8px; }
+.wall-item { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 6px; background: var(--mc-bg-raised); border: 1px solid var(--mc-divider); border-radius: var(--mc-r-card); text-align: left; cursor: pointer; }
+div.wall-item { cursor: default; }
+.wall li.on .wall-item { border-color: var(--mc-accent); box-shadow: inset 0 0 0 1px var(--mc-accent); }
+.wall-label { font-size: 12px; color: var(--mc-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board { display: flex; flex-direction: column; gap: 12px; }
+.board-card { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 16px; background: var(--mc-bg-raised); border-radius: var(--mc-r-card); padding: 12px; border: 1px solid transparent; }
+.board-card.on { border-color: var(--mc-accent); }
+.frame-btn { padding: 0; background: none; border: 0; cursor: pointer; align-self: start; }
+.board-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.beat .strip-frame { width: 96px; margin-bottom: 2px; }
+.strip { max-height: 190px; }
+.thumb.frame-slot { width: 72px; }
+
+.palette li[role=option] { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 10px; border-radius: var(--mc-r-ctl); cursor: pointer; }
+.palette li[role=option].on { background: var(--mc-bg-panel); box-shadow: inset 0 0 0 1px var(--mc-control-border); }
+
+/* narrow windows, including high UI scale on a normal screen: stack the inspector under the page instead of squeezing it */
+/* Applied by App when the width in CSS pixels after UI scale is under 980 (a viewport media query ignores UI scale). */
+html.narrow .frame { flex-direction: column; overflow: auto; }
+html.narrow .center { flex: none; min-height: 60vh; }
+html.narrow .inspector, html.narrow .inspector.collapsed { width: auto; flex: none; max-height: none; }
+html.narrow .rail { width: auto; }
+html.narrow .header { flex-wrap: wrap; height: auto; min-height: 48px; row-gap: 4px; padding-top: 4px; padding-bottom: 4px; }
+html.narrow .app { grid-template-rows: auto minmax(0, 1fr) auto; }
+html.narrow .stagebar { flex-wrap: wrap; }

@@ -159,7 +159,8 @@ def test_batch_stops_at_the_first_failure_and_reports_each_step(adapter):
 def test_preview_returns_a_png(adapter):
     make_layers(adapter)
     p = adapter.preview(None, [0.0, 1.0], max_side=480)
-    assert p.png[:8] == b"\x89PNG\r\n\x1a\n" and p.contact_sheet
+    assert p.png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert p.contact_sheet or len(p.times) == 1   # a released EffectCraft without contact sheets returns the first frame
 
 
 def test_final_render_needs_a_spend_token(adapter):

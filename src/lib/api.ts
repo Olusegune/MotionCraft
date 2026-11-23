@@ -43,6 +43,8 @@ export interface Api {
   /** The system file/folder picker. Returns null when cancelled. */
   pickPath(kind: "folder" | "engine", startIn?: string): Promise<string | null>;
   appReady(): Promise<void>;
+  pickMedia(): Promise<string[]>;
+  importAsset(path: string, source: string): Promise<{ kind: "image" | "video" | "audio"; path: string; name: string }>;
 }
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -79,6 +81,13 @@ async function tauriApi(): Promise<Api> {
       return typeof r === "string" ? r : null;
     },
     appReady: () => invoke("app_ready"),
+    async pickMedia() {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const r = await open({ multiple: true, directory: false, title: "Add pictures, video or audio",
+        filters: [{ name: "Pictures, video and audio", extensions: ["png", "jpg", "jpeg", "webp", "gif", "mp4", "mov", "webm", "wav", "mp3", "flac"] }] });
+      return Array.isArray(r) ? r : typeof r === "string" ? [r] : [];
+    },
+    importAsset: (path, source) => invoke("import_asset", { path, source }),
   };
 }
 
@@ -125,6 +134,8 @@ function webApi(): Api {
     async onMenu() { return () => undefined; },
     async pickPath() { return null; },
     async appReady() { /* no splash in the browser */ },
+    async pickMedia() { return []; },
+    async importAsset() { throw new Error("Adding media needs the desktop app."); },
   };
 }
 
