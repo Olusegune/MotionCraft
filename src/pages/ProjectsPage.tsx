@@ -3,12 +3,10 @@ import { FilePlus2 } from "lucide-react";
 import type { Deliverable, ProjectSummary } from "../types";
 import { Sheet } from "../shell/Sheet";
 import { BrandMark } from "../shell/BrandMark";
+import { BASE_SIZES, FRAME_RATES, RESOLUTIONS, sizeFor } from "../lib/formats";
 
-const ASPECTS: { aspect: Deliverable["aspect"]; width: number; height: number }[] = [
-  { aspect: "16:9", width: 1920, height: 1080 }, { aspect: "9:16", width: 1080, height: 1920 }, { aspect: "1:1", width: 1080, height: 1080 },
-  { aspect: "4:5", width: 1080, height: 1350 }, { aspect: "2.39:1", width: 2048, height: 858 }, { aspect: "21:9", width: 2560, height: 1080 },
-];
-const FPS: Deliverable["fps"][] = [23.976, 24, 25, 29.97, 30, 50, 60];
+const ASPECTS = BASE_SIZES;
+const FPS = FRAME_RATES;
 
 export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOpen, setNewOpen, onOpenFolder, onReveal }: {
   projects: ProjectSummary[]; loading: boolean; error: string | null; onOpen: (p: ProjectSummary) => void; onCreate: (name: string, d: Deliverable) => Promise<void>;
@@ -38,6 +36,8 @@ export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOp
 function NewProject({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, d: Deliverable) => Promise<void> }) {
   const [name, setName] = useState("");
   const [ai, setAi] = useState(0);
+  const [res, setRes] = useState("hd1080");
+  const scale = RESOLUTIONS.find((r) => r.id === res)?.scale ?? 1;
   const [fps, setFps] = useState<Deliverable["fps"]>(30);
   const [dur, setDur] = useState(15);
   const [alpha, setAlpha] = useState(false);
@@ -47,7 +47,7 @@ function NewProject({ onClose, onCreate }: { onClose: () => void; onCreate: (nam
   const submit = async () => {
     if (bad || busy) return;
     setBusy(true); setErr(null);
-    try { const a = ASPECTS[ai]; await onCreate(name.trim(), { ...a, fps, durationSec: dur, alpha }); }
+    try { const a = ASPECTS[ai]; await onCreate(name.trim(), { aspect: a.aspect, ...sizeFor(a.aspect, scale), fps, durationSec: dur, alpha }); }
     catch (e) { setErr(String(e instanceof Error ? e.message : e)); setBusy(false); }
   };
   return (
@@ -55,11 +55,12 @@ function NewProject({ onClose, onCreate }: { onClose: () => void; onCreate: (nam
       <div className="stack">
         <label className="field"><span className="field-label">Name</span><input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void submit(); }} /></label>
         <div className="row">
-          <label className="field"><span className="field-label">Aspect and size</span><select value={ai} onChange={(e) => setAi(Number(e.target.value))}>{ASPECTS.map((a, i) => <option key={a.aspect} value={i}>{a.aspect}  ({a.width} × {a.height})</option>)}</select></label>
+          <label className="field"><span className="field-label">Aspect and size</span><select value={ai} onChange={(e) => setAi(Number(e.target.value))}>{ASPECTS.map((a, i) => { const z = sizeFor(a.aspect, scale); return <option key={a.aspect} value={i}>{a.aspect}  ({z.width} × {z.height})</option>; })}</select></label>
+          <label className="field"><span className="field-label">Resolution</span><select value={res} onChange={(e) => setRes(e.target.value)}>{RESOLUTIONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label>
           <label className="field"><span className="field-label">Frame rate</span><select value={fps} onChange={(e) => setFps(Number(e.target.value) as Deliverable["fps"])}>{FPS.map((x) => <option key={x} value={x}>{x} fps</option>)}</select></label>
         </div>
         <div className="row">
-          <label className="field"><span className="field-label">Duration (seconds)</span><input type="number" min={1} max={3600} value={dur} aria-invalid={!(dur > 0 && dur <= 3600)} onChange={(e) => setDur(Number(e.target.value))} /></label>
+          <label className="field"><span className="field-label">Duration (seconds)</span><input type="number" min={1} max={3600} value={dur} aria-invalid={!(dur > 0 && dur <= 3600)} onChange={(e) => setDur(Number(e.target.value))} onKeyDown={(e) => { if (e.key === "Enter") void submit(); }} /></label>
           <label className="check"><input type="checkbox" checked={alpha} onChange={(e) => setAlpha(e.target.checked)} />Needs transparency (alpha)</label>
         </div>
         <p className="muted">Colour settings follow what the connected engine supports. They are chosen when the composition is created.</p>

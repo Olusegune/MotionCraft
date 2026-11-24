@@ -68,12 +68,12 @@ export function Viewer({ aspect = "16 / 9", children }: { aspect?: string; child
           <div className="viewer-empty">
             <p className="strong">No preview yet</p>
             <p>{engine?.state === "connected"
-              ? "Preview renders come from the engine through the adapter. The adapter is wired in ticket P1-11."
+              ? "Your first preview appears here once the piece has something in it. Start in Build."
               : "The engine is not connected, so there is nothing to render. Brief to Treatment still work."}</p>
           </div>
         )}
       </div>
-      <p className="viewer-meta"><span className="mono">--:--:--</span> No render yet. Targets: first preview 60 s, small edit 10 s.</p>
+      <p className="viewer-meta"><span className="mono">--:--:--</span> No render yet.</p>
     </div>
   );
 }
@@ -82,6 +82,7 @@ export function StoryStrip() {
   const { project, stage, projectPath } = useApp();
   const fps = project.brief.deliverables[0]?.fps ?? 30;
   const beats = project.intent.arc;
+  const audio = (project.assets ?? []).filter((a) => a.kind === "audio");
   return (
     <div className="strip" role="region" aria-label="Story strip">
       <div className="strip-row">
@@ -94,7 +95,7 @@ export function StoryStrip() {
           ))}</ol>
         )}
       </div>
-      <div className="strip-row"><span className="strip-label">Audio</span><span className="muted">No audio imported. Waveform, beats and word timings appear here after analysis (Phase 3).</span></div>
+      <div className="strip-row"><span className="strip-label">Audio</span><span className="muted">{audio.length ? `${audio.length} audio file${audio.length === 1 ? "" : "s"} imported. The waveform and beats are on the Build timeline.` : "No audio yet. Add music or narration on the Brief page."}</span></div>
       {stage === "intent" && <div className="strip-row"><span className="strip-label">Arc</span><span className="muted">{beats.length ? `${beats.length} beat${beats.length === 1 ? "" : "s"}, energy ${beats.map((b) => b.energy).join(" → ")}` : "Appears once beats exist."}</span></div>}
       <span className="visually-hidden">{STAGE_LABEL[stage]} story strip</span>
     </div>

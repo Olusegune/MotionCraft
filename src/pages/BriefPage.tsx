@@ -178,7 +178,7 @@ export function BriefPage(f: FrameProps) {
         </div>
       </section>
       <Fold title="Media" meta={<span className="count">{assets.length}</span>}><GeneratePanel /></Fold>
-      <Fold title="Audio"><p className="muted">No audio yet. Analysis, sync modes and the restraint slider are in Build, Audio (Phase 3).</p></Fold>
+      <Fold title="Audio"><p className="muted">No audio yet. Add music or narration under Start with audio; it is analysed in Build.</p></Fold>
     </>
   );
 

@@ -79,7 +79,7 @@ export function TreatmentPage(f: FrameProps) {
       action={{
         label: state === "approved" ? "Treatment approved" : "Approve treatment", onClick: () => approveGate("C"),
         disabledReason: state === "approved" ? "Already approved. Unlock to change it." : beats.length === 0 ? "Add beats on the Intent page first." : missing.length ? `Write a plan for ${missing.length} more beat${missing.length === 1 ? "" : "s"}.` : undefined,
-        secondary: { label: "Preview animatic", onClick: () => undefined, disabledReason: "Needs audio (Phase 3)." },
+        secondary: { label: "Preview animatic", onClick: () => undefined, disabledReason: "Needs audio. Add some on the Brief page." },
       }} />
   );
 }
