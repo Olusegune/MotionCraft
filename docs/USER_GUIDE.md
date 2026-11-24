@@ -41,21 +41,21 @@ creates a revision, so nothing is lost.
 
 ### Step 1. Projects
 
-![The project list: each project shows a picture of the piece, its length and shape](guide/01-projects.png)
+![The project list: each project shows a picture of the piece, its length and shape](guide/01-projects.jpg)
 
 The first screen lists your projects. A card shows a picture from the piece (or a title card when it has none yet), its length and shape, and when
 it was last edited. Press **New project**.
 
 ### Step 2. New project
 
-![The New project dialog with name, aspect and size, resolution, frame rate and duration](guide/02-new-project.png)
+![The New project dialog with name, aspect and size, resolution, frame rate and duration](guide/02-new-project.jpg)
 
 Choose a name, the aspect ratio, the resolution (720p, Full HD or **UHD 4K**), the frame rate and the length. You can change size, length and frame
 rate on the Brief page until the first layer exists. Press **Enter** to create the project.
 
 ### Step 3. Brief: say what you want
 
-![The Brief page with a typed brief and the "Found in your brief" card](guide/03-brief-found.png)
+![The Brief page with a typed brief and the "Found in your brief" card](guide/03-brief-found.jpg)
 
 Write the brief, paste a script, or start with audio. If your text says "10 seconds, 16:9, 4K, 24 fps", or contains a **timed script table**, the
 **Found in your brief** card offers to use it: the length and shape, one scene per row, and the sound notes as markers on the timeline. Nothing is
@@ -71,7 +71,7 @@ Other things on this page:
 
 ### Step 4. Make it
 
-![The plan sheet: the intent, the scenes, the look, and one approval](guide/04-make-it-plan.png)
+![The plan sheet: the intent, the scenes, the look, and one approval](guide/04-make-it-plan.jpg)
 
 Press **Make it**. The Director reads your brief and drafts the intent. A look that fits what the piece is about is chosen, and every scene gets a
 plan taken from your script. You then see **one review sheet**. **Looks right, continue to Build** approves the intent, direction and treatment
@@ -81,7 +81,7 @@ together; **Edit first** takes you to the Intent page instead. A local model cos
 
 ### Step 5. Treatment: a picture for every scene
 
-![The Treatment page: a card for each scene with its picture, time and plan](guide/05-treatment.png)
+![The Treatment page: a card for each scene with its picture, time and plan](guide/05-treatment.jpg)
 
 Each scene is a card: a picture, its name and time range, and one line saying what happens. Three ways to fill a picture:
 
@@ -95,7 +95,7 @@ automatically. Words belong on text layers, where they stay editable.
 
 ### Step 6. Build: the composition
 
-![The Build page: a large preview, the scene strip and the timeline](guide/06-build.png)
+![The Build page: a large preview, the scene strip and the timeline](guide/06-build.jpg)
 
 Build is the studio. The large picture is the composition; under it, the **scene strip** and the **timeline**.
 
@@ -106,14 +106,14 @@ Build is the studio. The large picture is the composition; under it, the **scene
 3. **Click a scene** to move the playhead there. **Film strip** shows the scenes; **Edit** shows every layer as a bar you can drag to move or trim.
    Alt and the arrow keys nudge a layer. Approved layers stay put.
 
-![Edit view: every layer is a bar on the timeline, under the scene strip](guide/07-timeline-edit.png)
+![Edit view: every layer is a bar on the timeline, under the scene strip](guide/07-timeline-edit.jpg)
 
 **Sound.** Add music or narration on the Brief page or in the Audio panel. It is analysed by itself: you get the waveform, tempo and beats, and
 **Write markers to composition** puts the beats on the timeline. **Add audio to composition** makes renders include the sound.
 
 ### Step 7. Review: checks, notes, versions
 
-![Review: the technical findings, history and versions, and notes at the playhead](guide/08-review.png)
+![Review: the technical findings, history and versions, and notes at the playhead](guide/08-review.jpg)
 
 - **Run checks** runs the technical checks. Each ends as *Passed*, *Findings* or *Not checked, with the reason*; nothing unchecked is ever called
   a pass. Examples: text overlapping, text outside the safe area, low contrast, missing media, and **fonts the brief asks for that are not
@@ -125,15 +125,19 @@ Build is the studio. The large picture is the composition; under it, the **scene
 
 ### Step 8. Deliver: the finished piece
 
-![Deliver: the output cards, the render queue and the finished video](guide/09-deliver.png)
+![Deliver: the output cards, the render queue and the finished video](guide/09-deliver.jpg)
 
 Choose an output: **H.264 video**, **ProRes 4444 with alpha**, or the **collected editable project** (the `.ecproj`, assets, renders and font
 manifest, with relative paths). **Render** shows what will happen and what it costs (nothing from a provider; it renders on your computer) and waits
-for your confirmation. When it finishes the video plays on the page and you get **Show the projects folder** and **Open in EffectCraft**.
+for your confirmation.
+
+![The final render sheet: output, size, sign-off, cost, and one confirmation](guide/09a-render-confirm.jpg)
+
+When it finishes the video plays on the page and you get **Show the projects folder** and **Open in EffectCraft**.
 
 ### Settings
 
-![Settings: working mode, offline mode, engine, image and video providers, language model](guide/10-settings.png)
+![Settings: working mode, offline mode, engine, image and video providers, language model](guide/10-settings.jpg)
 
 - **Offline mode** blocks every cloud call.
 - **Engine** shows the EffectCraft that was found; **Browse** points to another.
@@ -143,7 +147,7 @@ for your confirmation. When it finishes the video plays on the page and you get 
 
 ### Command search
 
-![Command search: type to find any page or action](guide/11-command-palette.png)
+![Command search: type to find any page or action](guide/11-command-palette.jpg)
 
 Press **Ctrl+K** to find any page or action.
 
@@ -179,7 +183,7 @@ Press **Ctrl+K** to find any page or action.
 
 | You see | Why and what to do |
 |---|---|
-| **"MotionCraft closed unexpectedly"** | The last session did not end cleanly. Work is saved a second after each change; choose **Open** to continue. |
+| **"MotionCraft closed unexpectedly"** (below) | The last session did not end cleanly. Work is saved a second after each change; choose **Open** to continue. |
 | **Make it is greyed out** | It names the reason: no language model chosen, no brief yet, or the intent is approved (unlock it on the Intent page to start over). |
 | **Build buttons are greyed out** | The engine is not connected, or an EffectCraft window has the project open. Close that window. |
 | **"Draft ... Out of date"** on the preview | The composition changed since the draft. Press **Build preview**. |
@@ -188,6 +192,8 @@ Press **Ctrl+K** to find any page or action.
 | **Image providers off** | Turn them on in Settings, add a key, and the Make picture buttons light up. |
 | **Spending stopped** | The limit was reached. Raise it in Brief, Budget limit. |
 | **The window went blank** | A safety net now shows a message and a **Reload MotionCraft** button. Your project is saved. |
+
+![The recovery dialog after an unclean close: choose Open to continue where you were](guide/12-recovery.jpg)
 
 ## 6. Words used in the app
 
