@@ -237,7 +237,7 @@ export function BriefPage(f: FrameProps) {
     <PageFrame {...f} title="Brief" intro="" inspector={inspector}
       action={{
         label: mk.busy ? "Making it…" : "Make it",
-        disabledReason: !hasAnyProvider() ? noAi : !canMake ? "Write a brief first." : mk.busy ? "The Director is drafting." : undefined,
+        disabledReason: !hasAnyProvider() ? noAi : !canMake ? "Write a brief first." : intentLocked ? "The intent is approved, so it will not be redrafted. Unlock it on the Intent page to start over." : mk.busy ? "The Director is drafting." : undefined,
         onClick: () => void makeIt(false),
         secondary: { label: "Start with a blank project", onClick: () => go("intent") },
       }}

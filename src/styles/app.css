@@ -512,3 +512,19 @@ main, .page, .stack { animation: rise var(--mc-t-panel) ease-out both; }
 /* a project with no picture yet is shown as a title card, not an icon */
 .project-card .poster .poster-title::before { content: attr(data-title); }
 .project-card .poster .poster-title { padding: 12px; text-align: center; font-family: var(--mc-font-head); font-size: 18px; line-height: 1.2; color: var(--mc-text); background: radial-gradient(80% 90% at 20% 10%, var(--mc-glow-indigo), transparent 70%), radial-gradient(70% 80% at 90% 100%, var(--mc-glow-cyan), transparent 70%); width: 100%; height: 100%; display: grid; place-items: center; }
+
+/* each tool's icon has its own colour; the label and the current state stay quiet and consistent */
+.rail-item[data-tool="project"] svg { color: var(--mc-tool-project); }
+.rail-item[data-tool="media"] svg { color: var(--mc-tool-media); }
+.rail-item[data-tool="direction"] svg { color: var(--mc-tool-direction); }
+.rail-item[data-tool="versions"] svg { color: var(--mc-tool-versions); }
+.rail-item[data-tool="settings"] svg { color: var(--mc-tool-settings); }
+.stage[data-tool="brief"] svg { color: var(--mc-tool-brief); }
+.stage[data-tool="intent"] svg { color: var(--mc-tool-intent); }
+.stage[data-tool="direction"] svg { color: var(--mc-tool-direction-stage); }
+.stage[data-tool="treatment"] svg { color: var(--mc-tool-treatment); }
+.stage[data-tool="build"] svg { color: var(--mc-tool-build); }
+.stage[data-tool="review"] svg { color: var(--mc-tool-review); }
+.stage[data-tool="deliver"] svg { color: var(--mc-tool-deliver); }
+.rail-item svg, .stage svg { filter: drop-shadow(0 0 6px currentColor); transition: filter var(--mc-t-panel); }
+.rail-item:not(:hover):not(.on) svg, .stage:not(:hover):not(.current) svg { filter: none; }

@@ -30,7 +30,7 @@ export function StageBar({ project, stage, onStage, onGate }: {
         const st = g ? gateState(project, g) : null;
         return (
           <div className="stage-cell" key={s}>
-            <button data-stop className={`stage${stage === s ? " current" : ""}`} aria-current={stage === s ? "page" : undefined} onClick={() => onStage(s)}>
+            <button data-stop data-tool={s} className={`stage${stage === s ? " current" : ""}`} aria-current={stage === s ? "page" : undefined} onClick={() => onStage(s)}>
               <Icon size={18} strokeWidth={1.75} aria-hidden="true" /><span>{STAGE_LABEL[s]}</span>
             </button>
             {g && st && (

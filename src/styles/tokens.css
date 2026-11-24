@@ -6,10 +6,13 @@
   --mc-control-border: #7A8086;    /* inputs, segmented controls, gate outlines */
   --mc-text: #F2F3F4;  --mc-text-2: #B8BDC2;  --mc-text-3: #92999F;
   --mc-brand-gold: #E3C48F;   /* brand mark only; never a UI state colour */
-  --mc-accent: #48DCE5;  --mc-on-accent: #181A1C;
+  --mc-accent: #F6C945;  --mc-on-accent: #181A1C;
   --mc-success: #83C5A0; --mc-warning: #E5BB72; --mc-error: #E68C88;
-  --mc-glow-cyan: rgba(72, 220, 229, 0.18); --mc-glow-cyan-strong: rgba(72, 220, 229, 0.45); --mc-glow-indigo: rgba(92, 84, 214, 0.20);
+  --mc-glow-cyan: rgba(246, 201, 69, 0.14); --mc-glow-cyan-strong: rgba(246, 201, 69, 0.42); --mc-glow-indigo: rgba(92, 84, 214, 0.20);
   --mc-glass: rgba(24, 28, 33, 0.72); --mc-glass-edge: rgba(242, 243, 244, 0.07);
+  /* one soft colour for each tool's icon, so the places read apart at a glance (never used for states: success, warning and error keep their own) */
+  --mc-tool-project: #7FB2FF; --mc-tool-media: #FF8FB8; --mc-tool-direction: #B79CFF; --mc-tool-versions: #5FD6C4; --mc-tool-settings: #A9B4C2;
+  --mc-tool-brief: #7FB2FF; --mc-tool-intent: #FFA66B; --mc-tool-direction-stage: #B79CFF; --mc-tool-treatment: #FF8FB8; --mc-tool-build: #6FD39A; --mc-tool-review: #5FD6C4; --mc-tool-deliver: #F6C945;
   --mc-r-ctl: 10px; --mc-r-panel: 16px; --mc-r-card: 14px;
   --mc-ctl-h: 40px;
   --mc-focus: 0 0 0 2px var(--mc-bg-app), 0 0 0 4px var(--mc-accent);

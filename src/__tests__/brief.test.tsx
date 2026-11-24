@@ -4,9 +4,10 @@ import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { setApiForTests, type Api } from "../lib/api";
 import { approve, createProject } from "../lib/project";
+import { updateSettings } from "../lib/settings";
 import type { MotionProject } from "../types";
 
-function fake(project: MotionProject) {
+function fake(project: MotionProject, llmReady = false) {
   const saved: MotionProject[] = [];
   const api = {
     async list() { return [{ id: project.id, name: project.name, path: "mem:1", updatedAt: project.updatedAt }]; },
@@ -19,7 +20,7 @@ function fake(project: MotionProject) {
     async appReady() { /* unused */ }, async startupStep() { /* unused */ }, async uncleanSession() { return null; }, async sessionBegin() { /* unused */ }, async sessionEnd() { /* unused */ },
     async fileUrl() { return "asset://x"; },
     async engine(method: string) {
-      if (method === "llm_status") return { ready: false, reason: "none", config: { provider: null, model: "" }, providers: [] } as never;
+      if (method === "llm_status") return (llmReady ? { ready: true, reason: "", config: { provider: "ollama", model: "m" }, providers: [{ id: "ollama", label: "Ollama", local: true }] } : { ready: false, reason: "none", config: { provider: null, model: "" }, providers: [] }) as never;
       return { path: "x", dirty: false, activeComp: 1, comps: [], layers: [] } as never;
     },
   };
@@ -181,5 +182,21 @@ describe("the Brief page", () => {
     await user.click(screen.getByRole("button", { name: "Got it" }));
     expect(screen.queryByRole("note")).toBeNull();
     expect(localStorage.getItem("mc.coach.brief")).toBe("1");
+  });
+
+  it("Make it will not redraft an intent that is approved, and says why", async () => {
+    updateSettings({ llmReady: true });
+    try {
+      const user = userEvent.setup();
+      const base = demo();
+      base.intent.purpose = "inform"; base.intent.summary = "One idea, clearly."; base.intent.arc = [{ beatId: "a", startSec: 0, endSec: 5, primary: "one", intensity: 2, energy: 2 }];
+      const p0 = approve(base, "A");
+      p0.brief.text = "A short piece about one idea.";
+      fake(p0, true);
+      render(<App />);
+      await toBrief(user);
+      expect(screen.getByRole("button", { name: "Make it" })).toBeDisabled();
+      expect(screen.getByText(/The intent is approved, so it will not be redrafted/)).toBeInTheDocument();
+    } finally { updateSettings({ llmReady: false }); }
   });
 });

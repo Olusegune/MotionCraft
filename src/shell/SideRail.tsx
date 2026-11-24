@@ -13,7 +13,7 @@ export function SideRail({ stage, onHome, onStage, onSettings }: { stage: Stage;
   return (
     <nav className="side-rail" aria-label="Quick access">
       {items.map(({ id, label, aria, Icon, on, current }) => (
-        <button key={id} className={`rail-item${current ? " on" : ""}`} aria-label={aria} aria-current={current ? "page" : undefined} onClick={on}>
+        <button key={id} data-tool={id} className={`rail-item${current ? " on" : ""}`} aria-label={aria} aria-current={current ? "page" : undefined} onClick={on}>
           <Icon size={24} strokeWidth={1.6} aria-hidden="true" /><span aria-hidden="true">{label}</span>
         </button>
       ))}
