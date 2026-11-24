@@ -143,7 +143,9 @@ export function AudioPanel({ write, disabled, info, onInfo, onStructure }: { wri
   useEffect(() => {
     if (!chosen || info || disabled) return;
     let live = true;
-    (async () => { try { const a = await (await getApi()).engine<AudioInfo | null>("audio_cached", { rel: chosen.path }, projectPath, enginePath); if (live && a && Array.isArray(a.beats) && Array.isArray(a.peaks)) onInfo(a); } catch { /* older helper or no project open: nothing to restore */ } })();
+    (async () => { try { const a = await (await getApi()).engine<AudioInfo | null>("audio_cached", { rel: chosen.path }, projectPath, enginePath); if (live && a && Array.isArray(a.beats) && Array.isArray(a.peaks)) { onInfo(a); return; } } catch { /* older helper or no project open: nothing to restore */ }
+      // Nothing kept yet: look at the sound now, so the waveform and beats are there without a button press (it is local and quick).
+      try { const fresh = await (await getApi()).engine<AudioInfo>("audio_analyze", { rel: chosen.path }, projectPath, enginePath); if (live) onInfo(fresh); } catch { /* the Analyse button still reports why */ } })();
     return () => { live = false; };
   }, [chosen?.path, projectPath, disabled]);   // eslint-disable-line react-hooks/exhaustive-deps  (asked again once the composition is open: it is not open yet when the page first draws)
 

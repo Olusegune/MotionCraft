@@ -498,3 +498,10 @@ main, .page, .stack { animation: rise var(--mc-t-panel) ease-out both; }
 
 .frame-slot { position: relative; }
 .frame-flag { position: absolute; top: 8px; left: 8px; z-index: 2; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--mc-glass); color: var(--mc-warning); border: 1px solid var(--mc-warning); }
+
+/* the first run and the finish line */
+.first-run { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; list-style: none; padding: 0; margin: 8px 0 16px; max-width: 760px; }
+.first-run li { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: var(--mc-r-card); background: var(--mc-glass); border: 1px solid var(--mc-glass-edge); text-align: left; }
+.first-run .n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--mc-glow-cyan); color: var(--mc-accent); font-weight: 600; font-size: 13px; }
+.finish { margin-top: 12px; padding: 14px 16px; border-radius: var(--mc-r-card); border: 1px solid var(--mc-glow-cyan-strong); background: var(--mc-glow-cyan); }
+.finish p { margin: 0 0 6px; }

@@ -155,6 +155,16 @@ export function DeliverPage(f: FrameProps) {
             <button className="btn primary" onClick={() => setResumeFor(job)}><Play size={16} aria-hidden="true" />Resume render</button>
             <button className="btn quiet" onClick={() => setDiscardFor(job)}><Trash2 size={16} aria-hidden="true" />Discard</button></div>}
           {job.state === "done" && <p className="mono">{job.output} · {job.frames} frames · {kb(job.bytes)}</p>}
+          {job.state === "done" && (
+            <div className="finish" aria-label="Your piece is ready">
+              <p className="strong">Your piece is ready.</p>
+              <p className="muted">It plays above. The file is in this project's renders folder.</p>
+              <div className="row-actions">
+                <button className="btn" onClick={() => void (async () => (await getApi()).revealProjectsFolder())().catch(() => undefined)}><FolderArchive size={16} aria-hidden="true" />Show the projects folder</button>
+                <button className="btn" onClick={() => void (async () => (await getApi()).openEffectCraft(projectPath, enginePath))().catch(() => undefined)}>Open in EffectCraft</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       </div>

@@ -23,7 +23,12 @@ export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOp
       {error && <p className="error-text" role="alert">{error}</p>}
       {loading ? <p className="muted" role="status">Loading projects…</p> : projects.length === 0 ? (
         <div className="empty-page"><BrandMark size={48} /><p className="strong">No projects yet</p><p>A project holds your brief, your decisions and your approvals. The composition itself lives in an EffectCraft file inside it.</p>
-          <button className="btn primary" onClick={() => setSheet(true)}>New project</button></div>
+          <ol className="first-run" aria-label="How it works">
+            <li><span className="n">1</span><span><strong>Write a brief</strong> or paste a script. Say how long, what shape.</span></li>
+            <li><span className="n">2</span><span><strong>Press Make it.</strong> Review the plan once.</span></li>
+            <li><span className="n">3</span><span><strong>Refine and deliver.</strong> Pictures, sound, a final render.</span></li>
+          </ol>
+          <button className="btn primary" onClick={() => setSheet(true)}>Start your first project</button></div>
       ) : (
         <ul className="project-grid">{projects.map((p) => (
           <li key={p.path}><ProjectCard p={p} onOpen={onOpen} /></li>))}</ul>

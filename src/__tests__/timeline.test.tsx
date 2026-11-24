@@ -229,11 +229,7 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(within(tl).getByText(/30 px per second/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Zoom out" }));
     expect(within(tl).getByText(/24 px per second/)).toBeInTheDocument();
-    expect(within(tl).getByLabelText("Audio structure")).toHaveTextContent("No audio analysed yet");
-    const fold = screen.getAllByRole("button", { name: /^Audio/ }).find((b) => b.hasAttribute("aria-expanded"))!;
-    await user.click(fold);
-    await user.click(await screen.findByRole("button", { name: /Analyse/ }));
-    await waitFor(() => expect(within(tl).getByLabelText("Audio structure")).toHaveTextContent("VERSE"));
+    await waitFor(() => expect(within(tl).getByLabelText("Audio structure")).toHaveTextContent("VERSE"));       // analysed on its own: nothing was kept, nobody pressed Analyse
     expect(within(tl).getByLabelText("Audio structure")).toHaveTextContent("CHORUS");
   });
 
@@ -402,14 +398,15 @@ describe("the director's timeline on Build (ADR-0007, T1)", () => {
     expect(log.calls.some((c) => c.method === "audio_analyze")).toBe(false);          // restoring never analyses
   });
 
-  it("with nothing kept, the audio lane stays empty and nothing is analysed on its own", async () => {
+  it("with nothing kept, the sound is looked at on its own, once the kept result has been asked for", async () => {
     const user = userEvent.setup();
     const log = fake(project());
     render(<App />);
-    const tl = await toBuild(user);
+    await toBuild(user);
     await waitFor(() => expect(log.calls.some((c) => c.method === "audio_cached")).toBe(true));
-    expect(tl.querySelector("canvas.tl-wave")).toBeNull();
-    expect(log.calls.some((c) => c.method === "audio_analyze")).toBe(false);
+    await waitFor(() => expect(log.calls.some((c) => c.method === "audio_analyze")).toBe(true));
+    const cached = log.calls.findIndex((c) => c.method === "audio_cached"), analysed = log.calls.findIndex((c) => c.method === "audio_analyze");
+    expect(cached).toBeLessThan(analysed);                     // what was kept comes first; analysing is the fallback
   });
 
   it("Build preview and Review changes sit in the header on Build (no second Build preview in the inspector), and Review changes opens Review", async () => {
