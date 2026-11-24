@@ -264,7 +264,7 @@ def test_qa_run_on_the_mock_reports_every_check_and_changes_nothing(svc):
     assert by["colour-space"]["state"] == "not-checked" and by["missing-fonts"]["state"] == "not-checked"
     assert out["counts"]["error"] >= 1 and out["checked"] == sum(1 for r in out["results"] if r["state"] != "not-checked")
     assert svc.a.hash_layers(None) == before, "QA is read-only"
-    assert svc.handle("qa_run", {"facts": {**facts, "deliverable": {**DELIV, "fps": 24}}})["results"][3]["state"] == "findings"
+    assert {r["check"]: r for r in svc.handle("qa_run", {"facts": {**facts, "deliverable": {**DELIV, "fps": 24}}})["results"]}["frame-rate"]["state"] == "findings"
 
 
 def test_qa_run_reads_wav_audio_and_checks_the_beat_markers(svc, tmp_path):
