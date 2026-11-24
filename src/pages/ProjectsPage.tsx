@@ -59,7 +59,7 @@ function ProjectCard({ p, onOpen }: { p: ProjectSummary; onOpen: (p: ProjectSumm
   }, [p.path]);
   return (
     <button className="project-card" onClick={() => onOpen(p)}>
-      <span className="poster" aria-hidden="true">{info?.poster ? <img src={info.poster} alt="" /> : <img className="project-icon" src="project-icon.png" alt="" />}</span>
+      <span className="poster" aria-hidden="true">{info?.poster ? <img src={info.poster} alt="" /> : <span className="poster-title" data-title={p.name} />}</span>
       <span className="strong">{p.name}</span>
       <span className="muted">{info?.meta ? `${info.meta} · ` : ""}Edited {new Date(p.updatedAt).toLocaleString()}</span>
     </button>

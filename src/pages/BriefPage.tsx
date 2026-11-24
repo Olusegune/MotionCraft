@@ -40,6 +40,12 @@ const TONES: { id: Tone; label: string }[] = [
   { id: "instructional", label: "Instructional" }, { id: "provocative", label: "Provocative" }, { id: "restrained", label: "Restrained" },
 ];
 
+/** The three looks shown on Brief: the one in use first (so the chosen look is always visible), then the usual quick picks. */
+function quickLooks(current: string | null): string[] {
+  const base = ["bauhaus", "cut-paper", "neon-light"];
+  return current && !base.includes(current) ? [current, ...base.slice(0, 2)] : base;
+}
+
 export function BriefPage(f: FrameProps) {
   const { project, update, go, approveGate } = useApp();
   const imp = useImportMedia();
@@ -169,9 +175,12 @@ export function BriefPage(f: FrameProps) {
             <button className="btn" onClick={() => go("direction")}><LayoutGrid size={16} aria-hidden="true" />Browse styles</button>
           </div>
           <div className="style-row" role="group" aria-label="Quick style picks">
-            {["bauhaus", "cut-paper", "neon-light"].map((id) => <StyleCard key={id} id={id} compact on={currentLook(project) === id} disabled={styleLocked} onPick={() => update((p) => applyLook(p, id))} />)}
+            {quickLooks(currentLook(project)).map((id) => <StyleCard key={id} id={id} compact on={currentLook(project) === id} disabled={styleLocked} onPick={() => update((p) => applyLook(p, id))} />)}
           </div>
-          <button className="btn quiet link-btn" onClick={() => go("direction")}>Explore all styles →</button>
+          {styleLocked
+            ? <p className="hint">The direction is approved, so the look is locked. <button className="btn quiet link-btn" onClick={() => go("direction")}>Change it in Direction →</button></p>
+            : <p className="hint">Pick a look and it is used for type, motion, colour and camera. You can refine each later.</p>}
+          {!styleLocked && <button className="btn quiet link-btn" onClick={() => go("direction")}>Explore all styles →</button>}
         </div>
         {settingsLocked ? (
           <div className="pref">
