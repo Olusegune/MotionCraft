@@ -9,6 +9,7 @@ import { rankModels, rankProviders } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { FAMILIES } from "../lib/styles";
 import { nowIso } from "../lib/project";
+import { capBlock, recordSpend } from "../lib/spend";
 import type { AssetReference, Dimension, Intensity } from "../types";
 
 /** Three deliberately different starting points. They are prompts you can edit, not a house style. */
@@ -55,6 +56,7 @@ export function Proposals() {
   const running = cards.some((c) => c.job && (c.job.state === "running" || c.job.state === "queued"));
   const reason = !generative ? "Generative models are off. Turn them on in Settings." : offline ? "Offline mode is on." : !picked ? "Add an image provider key in Settings." : running ? "Stills are being made." : undefined;
   const each = picked?.price.known ? picked.price.value : null;
+  const capped = capBlock(project, each, 3);
 
   // poll running jobs
   useEffect(() => {
@@ -95,6 +97,8 @@ export function Proposals() {
       } catch (e) { return { ...c, job: null, error: String(e instanceof Error ? e.message : e) }; }
     }));
     setCards(started);
+    const made = started.filter((c) => c.job).length;
+    if (made) update((p) => { let q = p; for (let i = 0; i < made; i++) q = recordSpend(q, { provider: picked.provider, model: picked.model, what: "still", usd: each }); return q; });
   };
 
   const use = (c: Card) => update((p) => {
@@ -116,9 +120,9 @@ export function Proposals() {
         <label className="field"><span className="field-label">Image model</span>
           <select value={model} disabled={!choices.length} onChange={(e) => setModel(e.target.value)}>
             {choices.length === 0 ? <option value="">No provider key yet</option> : choices.map((m) => <option key={`${m.provider}/${m.model}`} value={m.model}>{m.name}</option>)}</select></label>
-        <button className="btn" disabled={!!reason} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />Make 3 stills…</button>
+        <button className="btn" disabled={!!reason || !!capped} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />Make 3 stills…</button>
       </div>
-      {reason && <p className="why">{reason}</p>}
+      {(reason || capped) && <p className="why">{reason ?? capped}</p>}
       {err && <p className="error-text" role="alert">{err}</p>}
       <ul className="proposal-cards">
         {cards.map((c) => (

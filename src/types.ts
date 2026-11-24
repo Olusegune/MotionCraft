@@ -75,10 +75,13 @@ export interface MotionProject {
   layerMap?: LayerBinding[];   // optional so projects made before P1-11 still open
   approvals: ApprovalRecord[];
   revisions: RevisionRecord[];
-  budget: { capUsd: number; approvalThresholdUsd: number };
+  budget: { capUsd: number; approvalThresholdUsd: number; maxCalls?: number; ledger?: SpendEntry[] };
   createdAt: string; updatedAt: string;
 }
 export interface ProjectSummary { id: string; name: string; path: string; updatedAt: string }
 
 export const PINNED_COMMIT = "7e2d0256209974ffb92a29d8bdb6f2a49078f51f";
 export const PINNED_VERSION = "0.24.1";
+
+/** One paid generation that was started. `usd` is null when the provider published no price. */
+export interface SpendEntry { at: string; provider: string; model: string; what: string; usd: number | null }

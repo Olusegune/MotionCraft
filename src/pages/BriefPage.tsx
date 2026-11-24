@@ -13,6 +13,7 @@ import { firedRules } from "../lib/rules";
 import { getApi } from "../lib/api";
 import { useSettings } from "../lib/settings";
 import { Sheet } from "../shell/Sheet";
+import { spendLine } from "../lib/spend";
 import { StyleCard } from "../shell/StyleArt";
 import { GeneratePanel } from "./GeneratePanel";
 import type { Deliverable, Tone } from "../types";
@@ -204,7 +205,7 @@ export function BriefPage(f: FrameProps) {
               onChange={(e) => { setBudgetText(e.target.value); const n = Number(e.target.value); if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0) touch((p) => ({ ...p, budget: { ...p.budget, capUsd: n } })); }}
               onBlur={() => setBudgetText(String(project.budget.capUsd))} />
           </div>
-          <p className="hint" id="budget-h">Most you will approve for paid generation in this project.</p>
+          <p className="hint" id="budget-h">Most you will approve for paid generation in this project. {spendLine(project)}</p>
         </div>
         <div className="pref">
           <span className="pref-label" id="tone-l">Emotional direction <span className="muted">(optional)</span></span>
