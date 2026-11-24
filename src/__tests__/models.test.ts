@@ -24,7 +24,8 @@ describe("which model is offered first", () => {
     expect(rankProviders([], { kie: true })).toEqual([]);
     // a catalogue provider listed first (fal, all discovered) must not beat a keyed provider that has curated models
     const mixed = [m("fal", "Age Modify", "discovered"), m("fal", "AuraSR", "discovered"), m("google", "Imagen"), m("kie", "Midjourney v7"), m("kie", "Imagen 4 Fast", "discovered")];
-    expect(rankProviders(mixed, { fal: true, google: true, kie: true })).toEqual(["google", "kie", "fal"]);
+    expect(rankProviders(mixed, { fal: true, google: true, kie: true })).toEqual(["kie", "google", "fal"]);       // the owner's preferred provider first when it has a key
+    expect(rankProviders(mixed, { fal: true, google: true })).toEqual(["google", "fal", "kie"]);                    // without its key, curated models decide
     expect(rankModels(mixed.filter((x) => x.provider === "kie")).map((x) => x.name)).toEqual(["Midjourney v7", "Imagen 4 Fast"]);
   });
 });

@@ -59,4 +59,14 @@ describe("Make it: a look and a plan proposed from the intent", () => {
     expect(scenePictureItems(p)).toEqual([{ rel: "assets/images/i1.png", t_in: 2, t_out: 5, name: "two" }]);
     expect(scenePictureItems(createProject("y"))).toEqual([]);
   });
+
+  it("uses what the timed script says happens in a scene as its plan, and falls back to a general line", () => {
+    const p = createProject("x");
+    p.brief.text = ["| 0:00-0:02 | A tiny white point emerges from black. | BEYOND | pulse |", "| 0:02-0:05 | The point expands into a sphere. | | swell |"].join("\n");
+    p.intent.arc = [beat("a", 0, 2, "curiosity"), beat("b", 2, 5, "awe"), beat("c", 5, 10, "peace")];
+    const q = fillTreatment(p);
+    expect(q.treatment.a.plan).toBe("A tiny white point emerges from black. On screen: BEYOND");
+    expect(q.treatment.b.plan).toBe("The point expands into a sphere.");
+    expect(q.treatment.c.plan).toMatch(/^peace \(5 seconds\)/);
+  });
 });

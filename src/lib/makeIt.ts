@@ -1,4 +1,5 @@
 import type { Beat, MotionProject, Tone } from "../types";
+import { parseTimedScript } from "./briefParse";
 
 /**
  * "Make it": the Director's draft turned into a starting look and a plan for every scene, so nobody fills three pages before seeing anything.
@@ -39,10 +40,14 @@ function planFor(b: Beat): string {
 /** One plan and one motion note per scene that has none yet, written from the scene's own name, length and energy. Never overwrites what a person wrote. */
 export function fillTreatment(p: MotionProject): MotionProject {
   const treatment = { ...p.treatment };
+  const segs = parseTimedScript(`${p.brief.text}
+${p.brief.script ?? ""}`, p.brief.deliverables[0]?.durationSec);
   for (const b of p.intent.arc) {
     const cur = treatment[b.beatId];
     if ((cur?.plan ?? "").trim()) continue;
-    treatment[b.beatId] = { ...cur, plan: planFor(b), motion: cur?.motion?.trim() ? cur.motion : `${PACE[b.energy - 1]}, building to intensity ${b.intensity} of 5` };
+    const mid = (b.startSec + b.endSec) / 2;
+    const seg = segs.find((x) => mid >= x.start && mid < x.end);              // what the script itself says happens in this scene
+    treatment[b.beatId] = { ...cur, plan: seg?.visual ? `${seg.visual}${seg.onScreen ? ` On screen: ${seg.onScreen}` : ""}` : planFor(b), motion: cur?.motion?.trim() ? cur.motion : `${PACE[b.energy - 1]}, building to intensity ${b.intensity} of 5` };
   }
   return { ...p, treatment };
 }
