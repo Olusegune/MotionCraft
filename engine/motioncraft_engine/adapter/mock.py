@@ -24,7 +24,7 @@ ACCEPT: dict[str, set[str]] = {
     "file.checkOutput": {"path"}, "file.exportLottie": {"comp", "path", "includeExpressions", "textAsShapes"},
     "comp.new": {"name", "width", "height", "frameRate", "duration"}, "comp.open": {"comp"}, "comp.info": {"comp"},
     "comp.addMarker": {"time", "comment"}, "comp.deleteAllMarkers": {"comp"},
-    "layer.newText": {"text", "name", "size", "position", "font", "direction"}, "layer.newShape": {"kind", "name", "size", "fill"},
+    "layer.newText": {"text", "name", "size", "position", "font", "direction"}, "layer.newShape": {"kind", "name", "size", "fill", "fillType", "fillBlend", "fillOpacity", "stroke", "strokeType", "strokeBlend", "strokeOpacity", "strokeWidth", "position"},
     "layer.newSolid": {"name", "color", "size"}, "layer.newNull": {"name"}, "layer.newCamera": {"name"},
     "layer.tree": {"layer", "comp", "depth", "time"}, "prop.get": {"layer", "path", "comp", "time"},
     "prop.set": {"layer", "path", "value", "time", "timeBase"}, "prop.addKey": {"layer", "path", "time", "value", "timeBase"},

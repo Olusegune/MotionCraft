@@ -8,6 +8,8 @@
   --mc-brand-gold: #E3C48F;   /* brand mark only; never a UI state colour */
   --mc-accent: #48DCE5;  --mc-on-accent: #181A1C;
   --mc-success: #83C5A0; --mc-warning: #E5BB72; --mc-error: #E68C88;
+  --mc-glow-cyan: rgba(72, 220, 229, 0.18); --mc-glow-cyan-strong: rgba(72, 220, 229, 0.45); --mc-glow-indigo: rgba(92, 84, 214, 0.20);
+  --mc-glass: rgba(24, 28, 33, 0.72); --mc-glass-edge: rgba(242, 243, 244, 0.07);
   --mc-r-ctl: 10px; --mc-r-panel: 16px; --mc-r-card: 14px;
   --mc-ctl-h: 40px;
   --mc-focus: 0 0 0 2px var(--mc-bg-app), 0 0 0 4px var(--mc-accent);

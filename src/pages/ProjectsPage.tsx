@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FilePlus2 } from "lucide-react";
-import type { Deliverable, ProjectSummary } from "../types";
+import type { Deliverable, MotionProject, ProjectSummary } from "../types";
+import { getApi } from "../lib/api";
 import { Sheet } from "../shell/Sheet";
 import { BrandMark } from "../shell/BrandMark";
 import { BASE_SIZES, FRAME_RATES, RESOLUTIONS, sizeFor } from "../lib/formats";
@@ -25,11 +26,38 @@ export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOp
           <button className="btn primary" onClick={() => setSheet(true)}>New project</button></div>
       ) : (
         <ul className="project-grid">{projects.map((p) => (
-          <li key={p.path}><button className="project-card" onClick={() => onOpen(p)}><img className="project-icon" src="project-icon.png" alt="" />
-            <span className="strong">{p.name}</span><span className="muted">Edited {new Date(p.updatedAt).toLocaleString()}</span></button></li>))}</ul>
+          <li key={p.path}><ProjectCard p={p} onOpen={onOpen} /></li>))}</ul>
       )}
       {sheet && <NewProject onClose={() => setSheet(false)} onCreate={async (n, d) => { await onCreate(n, d); setSheet(false); }} />}
     </main>
+  );
+}
+
+/** A project as its piece: the first scene's picture (or the first picture made or added), with the length and shape underneath. */
+function ProjectCard({ p, onOpen }: { p: ProjectSummary; onOpen: (p: ProjectSummary) => void }) {
+  const [info, setInfo] = useState<{ poster: string | null; meta: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const api = await getApi();
+        const proj = (await api.load(p.path)) as MotionProject;
+        const d = proj.brief.deliverables[0];
+        const imgs = (proj.assets ?? []).filter((a) => a.kind === "image");
+        const first = proj.intent.arc.map((b) => imgs.find((a) => a.id === proj.treatment[b.beatId]?.frameAssetId)).find(Boolean) ?? imgs[0];
+        let poster: string | null = null;
+        if (first) { try { poster = await api.assetDataUrl(p.path, first.path); } catch { /* no picture to show */ } }
+        if (live) setInfo({ poster, meta: `${d.durationSec} s · ${d.aspect}` });
+      } catch { if (live) setInfo({ poster: null, meta: "" }); }
+    })();
+    return () => { live = false; };
+  }, [p.path]);
+  return (
+    <button className="project-card" onClick={() => onOpen(p)}>
+      <span className="poster" aria-hidden="true">{info?.poster ? <img src={info.poster} alt="" /> : <img className="project-icon" src="project-icon.png" alt="" />}</span>
+      <span className="strong">{p.name}</span>
+      <span className="muted">{info?.meta ? `${info.meta} · ` : ""}Edited {new Date(p.updatedAt).toLocaleString()}</span>
+    </button>
   );
 }
 

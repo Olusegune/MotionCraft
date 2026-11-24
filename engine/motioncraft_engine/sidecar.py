@@ -259,12 +259,14 @@ class Service:
         created: list[dict] = []
         warnings = list(checked["warnings"])
         before = self._try_snapshot(warnings)         # so the build can be undone: restoring this version is the undo
+        round_names = [L["name"] for L in checked["plan"]["layers"] if L["kind"] == "shape" and builder.shape_role(L["name"], L["shape"]) == "round"]
         try:
             for L in checked["plan"]["layers"]:
                 if L["kind"] == "text":
                     cmd = Command(id="layer.newText", params={"text": L["text"], "size": L["size"], "name": L["name"]})
                 elif L["kind"] == "shape":
-                    cmd = Command(id="layer.newShape", params={"kind": L["shape"], "name": L["name"], "size": [320, 320] if L["shape"] != "rect" else [480, 270]})
+                    nth = round_names.index(L["name"]) if L["name"] in round_names else 0
+                    cmd = Command(id="layer.newShape", params=builder.shape_params(L, comp.width, comp.height, nth, len(round_names)))
                 else:
                     cmd = Command(id="layer.newSolid", params={"name": L["name"], "color": L["color"]})
                 lid = int(a.execute([cmd], actor=BUILDER).results[0].result["layer"])

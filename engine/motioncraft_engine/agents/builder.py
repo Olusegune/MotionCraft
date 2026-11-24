@@ -234,3 +234,42 @@ def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = 
     out = validate(raw, duration_sec=_num(d.get("durationSec"), 15), fps=_num(d.get("fps"), 30))
     spread_text(out, [b.get("startSec") for b in ((ctx.get("intent") or {}).get("arc") or []) if isinstance(b.get("startSec"), (int, float))], _num(d.get("durationSec"), 15))
     return {**out, "provider": provider, "model": model, "usage": r.get("usage") or {}}
+
+
+# ---------------------------------------------------------------- art direction for shapes
+# The model names shapes ("universe_sphere_2", "connection_path_1") but a bare shape layer is a blue box in the middle of the frame. These
+# turn a name into a considered object: translucent rimmed spheres spread across the frame, a hairline for a connection, a small bright point.
+ROUND = ("sphere", "orb", "universe", "planet", "circle", "globe", "bubble", "node")
+POINT = ("point", "dot", "genesis", "spark", "star")
+LINK = ("path", "line", "connection", "link", "beam", "thread", "axis")
+_INDIGO, _CYAN, _PLATINUM = [0.16, 0.18, 0.55], [0.28, 0.86, 0.9], [0.92, 0.94, 0.97]
+
+
+def shape_role(name: str, kind: str) -> str:
+    """round, point, link or plain, from the layer's name and the shape the model chose."""
+    n = name.lower()
+    if any(w in n for w in POINT):
+        return "point"
+    if any(w in n for w in LINK):
+        return "link"
+    if any(w in n for w in ROUND) or kind == "ellipse":
+        return "round"
+    return "plain"
+
+
+def shape_params(L: dict, width: int, height: int, nth: int = 0, of: int = 1) -> dict:
+    """Parameters for layer.newShape. `nth` of `of` is this layer's place among the round shapes, so several spheres spread across the frame."""
+    role = shape_role(L["name"], L["shape"])
+    m = min(width, height)
+    if role == "point":
+        d = max(12, round(m * 0.03))
+        return {"kind": "ellipse", "name": L["name"], "size": [d, d], "fill": _PLATINUM, "fillOpacity": 100, "position": [width / 2, height / 2]}
+    if role == "link":
+        return {"kind": "rect", "name": L["name"], "size": [round(width * 0.46), max(2, round(m / 450))], "fill": _CYAN, "fillOpacity": 85, "position": [width / 2, height / 2]}
+    if role == "round":
+        scale = (1.0, 0.72, 1.18, 0.58, 0.9)[nth % 5]
+        d = round(m * 0.34 * scale)
+        x = width * (0.5 if of < 2 else 0.24 + 0.52 * nth / (of - 1))
+        y = height * (0.5 if of < 2 else 0.5 + (0.1 if nth % 2 else -0.08))
+        return {"kind": "ellipse", "name": L["name"], "size": [d, d], "fill": _INDIGO, "fillOpacity": 38, "stroke": _CYAN, "strokeWidth": max(2, round(m / 300)), "position": [round(x), round(y)]}
+    return {"kind": L["shape"], "name": L["name"], "size": [320, 320] if L["shape"] != "rect" else [480, 270], "fill": _INDIGO, "fillOpacity": 60}

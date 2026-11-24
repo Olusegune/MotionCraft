@@ -231,6 +231,7 @@ export function BriefPage(f: FrameProps) {
       }}
       main={
         <div className="stack brief">
+          {mk.busy && <p className="magic-status" role="status"><span className="orb" aria-hidden="true" />The Director is reading your brief and drafting the intent…</p>}
           {mk.error && <p className="error-text" role="alert">{mk.error}</p>}
           {mk.ask && (
             <Sheet title="Confirm spending" onClose={closeMk}
