@@ -50,3 +50,16 @@ Layer timing against the script, audio analysis and markers, QA run and fixes, s
 6. OPEN: the Director replaced the scene names read from the script (curiosity / awe / quiet mastery) with its own (curiosity / awe / serenity / acceptance), and chose "Clean broadcast" for a sci-fi piece.
 7. OPEN: Missing fonts and Font licence checks are "Not checked" because EffectCraft does not report each text layer's font.
 8. OPEN: the Builder omitted the "CIVILIZATION" title line from the script.
+
+## Run 2 and 3, later in the session (new engine helper, rebuilt with PyInstaller)
+The first helper in the "make-it" package was stale: PyInstaller was not installed and the build step hid the failure, so the 23 November helper shipped. Rebuilt and checked by exit code.
+
+Verified in the app on the corrected build:
+- Write markers: 25 markers written, no crash. Audio analysis is cached in the project (`analysis/`), analysis shows on Build again after the composition opens.
+- Audio added to the composition; draft render includes the sound.
+- Versions: saved a named version, Compare showed before and after frames. Review: a note at the playhead added next to the 4 script sound cues. Sign-off ("Approve for final render") recorded.
+- Deliver: final H.264 render, 3840 x 2160, 24 fps, 10.0 s, with AAC audio (ffprobe), 1.2 MB, 21 s to render; project package exported to a folder. The page shows the saved path with a raw `\?\` prefix (cosmetic, open).
+- Paid stills (Kie, Google imagen4-fast, 3 images): one confirmation sheet, stills arrived and joined the moodboard. The spend line now reads "3 paid calls so far, no known prices, 3 with no published price". Kie publishes no price, so the real cost could not be read from the app; at the usual rate for this model it is a few cents, far under the 5 USD limit.
+- One of the three stills still drew lettering ("TypeVV") although the prompt begins with the no-lettering rule: the instruction is not enough on its own. Open: a check that flags text in a generated picture.
+
+New bug found by the run and fixed: the Builder lost its layer timing. The page shows the checked plan (with `in`/`out`) and sends it back to build; building checked it again, read only `start`/`end`, and dropped the timing, so every layer spanned the whole piece even when the model had timed them. Fixed, with a unit test and a real-engine test (both failed before). The text-spreading fallback and this fix together mean titles no longer pile up.
