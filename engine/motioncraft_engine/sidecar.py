@@ -597,6 +597,31 @@ class Service:
                    Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(t0, 4), "value": [round(cover, 3), round(cover, 3), 100.0]}),
                    Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(max(t1 - 1.0 / comp.frame_rate, t0), 4), "value": [round(end, 3), round(end, 3), 100.0]})], actor=USER)
 
+    def picture_check(self, rel: str, provider: str, model: str, offline: bool = False) -> dict:
+        """Asks a language model on this computer whether a picture contains lettering (words, numbers, logos). Pictures never go to a cloud model.
+        Returns {has_text, text}. A picture that cannot be read, or a model that cannot see, raises an error the page turns into "not checked"."""
+        f = self._asset(rel, ("images",))
+        try:
+            from PIL import Image
+        except ImportError:
+            raise AdapterError("Checking pictures needs the Pillow library, which is not in this build.") from None
+        import io
+        try:
+            with Image.open(f) as im:
+                im = im.convert("RGB")
+                im.thumbnail((768, 768))
+                buf = io.BytesIO()
+                im.save(buf, "PNG")
+        except Exception as e:  # noqa: BLE001 - any unreadable picture is simply not checked
+            raise AdapterError(f"The picture could not be read: {e}") from None
+        schema = {"type": "object", "additionalProperties": False, "required": ["has_text", "text"],
+                  "properties": {"has_text": {"type": "boolean"}, "text": {"type": "string"}}}
+        r = self.llm.complete(provider=provider, model=model, offline=offline, schema=schema, images=[base64.b64encode(buf.getvalue()).decode("ascii")],
+                              messages=[{"role": "system", "content": "You inspect pictures. Answer with JSON only."},
+                                        {"role": "user", "content": "Does this picture contain any letters, words, numbers, logos or watermarks drawn in it? Set has_text to true if yes, and put the text you can read (or your best guess) in text; otherwise false and an empty string."}])
+        j = r.get("json") or {}
+        return {"has_text": bool(j.get("has_text")), "text": str(j.get("text") or "")[:120]}
+
     def primitives(self) -> dict:
         return {"primitives": prim.describe()}
 

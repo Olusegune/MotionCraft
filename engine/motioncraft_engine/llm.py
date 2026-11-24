@@ -143,7 +143,7 @@ class Llm:
         return {"models": sorted(m["id"] for m in (data or {}).get("data", []) if isinstance(m, dict) and isinstance(m.get("id"), str))}
 
     def complete(self, *, provider: str, model: str, messages: list[dict], schema: dict | None = None, api_key: str = "",
-                 spend_token: str = "", offline: bool = False, max_tokens: int = 4096) -> dict:
+                 spend_token: str = "", offline: bool = False, max_tokens: int = 4096, images: list[str] | None = None) -> dict:
         if provider not in PROVIDERS:
             raise LlmRefused(f"Unknown language-model provider {provider!r}.")
         p = PROVIDERS[provider]
@@ -151,6 +151,12 @@ class Llm:
             raise LlmRefused("Messages must be a list of {role, content} with text content.")
         if not model:
             raise LlmRefused("No model chosen.")
+        if images and not p["local"]:
+            raise LlmRefused("Pictures are only shown to a language model that runs on this computer.")
+        if images:
+            last = max(i for i, m in enumerate(messages) if m["role"] == "user")
+            messages = [dict(m) for m in messages]
+            messages[last]["content"] = [{"type": "text", "text": messages[last]["content"]}] + [{"type": "image_url", "image_url": {"url": "data:image/png;base64," + b}} for b in images[:4]]
         if not p["local"]:
             if offline:
                 raise LlmRefused(f"Offline mode is on, so {p['label']} is disabled.")

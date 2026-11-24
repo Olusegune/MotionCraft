@@ -103,6 +103,30 @@ export default function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, [engine, refreshEngine]);
 
+  // New pictures are looked at once by the language model, when it runs on this computer and is ready: lettering in a picture is flagged.
+  const checking = useRef(false);
+  const updateRef = useRef<(fn: (p: MotionProject) => MotionProject) => void>(() => undefined);
+  useEffect(() => {
+    if (!project || !settings.llmReady || checking.current) return;
+    const next = (project.assets ?? []).find((a) => a.kind === "image" && !a.check);
+    if (!next) return;
+    checking.current = true;
+    (async () => {
+      let check: { lettering: boolean | null; text?: string } = { lettering: null };
+      try {
+        const api = await getApi();
+        const st = await api.engine<{ ready: boolean; config: { provider: string | null; model: string }; providers: { id: string; local: boolean }[] }>("llm_status", { offline: settings.offline }, "", settings.enginePath);
+        const { provider, model } = st.config;
+        if (st.ready && provider && st.providers.find((x) => x.id === provider)?.local) {
+          const r = await api.engine<{ has_text: boolean; text: string }>("picture_check", { rel: next.path, provider, model, offline: settings.offline }, pathRef.current, settings.enginePath);
+          check = { lettering: r.has_text, text: r.text };
+        } else { checking.current = false; return; }          // no local model: leave it unchecked, try again when there is one
+      } catch { /* the model cannot see pictures, or the picture could not be read: recorded as not checked */ }
+      updateRef.current((cur) => ({ ...cur, assets: (cur.assets ?? []).map((a) => (a.id === next.id ? { ...a, check } : a)) }));
+      checking.current = false;
+    })();
+  }, [project, settings.llmReady, settings.offline, settings.enginePath]);
+
   const flush = useCallback(async () => {
     const p = latest.current;
     if (!p || !dirty.current) return;
@@ -124,6 +148,7 @@ export default function App() {
     window.clearTimeout(debounce.current);
     debounce.current = window.setTimeout(() => void flush(), saveNow ? 0 : DEBOUNCE_MS);   // a gate change is saved at once
   }, [flush]);
+  updateRef.current = update;
 
   useEffect(() => {
     const t = window.setInterval(() => { setNow(Date.now()); void flush(); }, AUTOSAVE_MS / 6);

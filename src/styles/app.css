@@ -495,3 +495,6 @@ html.narrow .stagebar { flex-wrap: wrap; }
 main, .page, .stack { animation: rise var(--mc-t-panel) ease-out both; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .orb, main, .page, .stack { animation: none; } .project-card:hover, .btn.primary:not(:disabled):hover { transform: none; } }
+
+.frame-slot { position: relative; }
+.frame-flag { position: absolute; top: 8px; left: 8px; z-index: 2; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--mc-glass); color: var(--mc-warning); border: 1px solid var(--mc-warning); }

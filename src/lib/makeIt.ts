@@ -41,7 +41,7 @@ export function fillTreatment(p: MotionProject): MotionProject {
  * Never replaces a picture a person chose, and never reuses one while there are unused ones left.
  */
 export function fillFrames(p: MotionProject): MotionProject {
-  const images = (p.assets ?? []).filter((a) => a.kind === "image");
+  const images = (p.assets ?? []).filter((a) => a.kind === "image" && a.check?.lettering !== true);   // a picture with lettering in it is not given out
   const used = new Set(p.intent.arc.map((b) => p.treatment[b.beatId]?.frameAssetId).filter(Boolean) as string[]);
   const free = images.filter((a) => !used.has(a.id));
   if (!free.length) return p;

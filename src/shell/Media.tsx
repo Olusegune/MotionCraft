@@ -28,6 +28,7 @@ export function Frame({ asset, projectPath, ratio = "16 / 9", className = "" }: 
   const url = useAssetUrl(projectPath, asset);
   return (
     <div className={`frame-slot ${className}`} style={{ aspectRatio: ratio }}>
+      {asset?.check?.lettering && <span className="frame-flag" title={asset.check.text ? `Lettering found: ${asset.check.text}` : "Lettering found"}>Has lettering</span>}
       {asset && url ? <img src={url} alt={assetLabel(asset)} />
         : asset ? <span className="frame-kind">{asset.kind === "video" ? <Film size={22} aria-hidden="true" /> : asset.kind === "audio" ? <AudioLines size={22} aria-hidden="true" /> : "…"}<span>{assetLabel(asset)}</span></span>
           : <span className="frame-kind muted"><ImagePlus size={22} aria-hidden="true" />No picture yet</span>}
