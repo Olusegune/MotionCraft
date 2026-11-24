@@ -2,16 +2,14 @@ import { useState } from "react";
 import { Images } from "lucide-react";
 import { useApp } from "../../ctx";
 import { Fold } from "../../shell/Fold";
+import { scenePictureItems } from "../../lib/makeIt";
 import type { Write } from "./Panels";
 
 /** Puts each scene's picture into the composition behind that scene, timed to it: the frames chosen in Treatment become what the viewer sees. */
 export function ScenePictures({ write, disabled }: { write: Write; disabled: boolean }) {
   const { project } = useApp();
   const [msg, setMsg] = useState<string | null>(null);
-  const items = project.intent.arc.flatMap((b) => {
-    const a = (project.assets ?? []).find((x) => x.kind === "image" && x.id === project.treatment[b.beatId]?.frameAssetId);
-    return a ? [{ rel: a.path, t_in: b.startSec, t_out: b.endSec, name: b.primary }] : [];
-  }).slice(0, 16);
+  const items = scenePictureItems(project);
   const reason = disabled ? "Needs a connected engine and no EffectCraft window open." : !items.length ? "Choose a picture for a scene in Treatment first." : undefined;
   return (
     <Fold title="Scene pictures" meta={<span className="count">{items.length}</span>}>

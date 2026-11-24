@@ -53,3 +53,11 @@ export function fillFrames(p: MotionProject): MotionProject {
   }
   return n ? { ...p, treatment } : p;
 }
+
+/** The pictures to put behind the scenes: one per scene that has a picture chosen, with the scene's time range. At most 16. */
+export function scenePictureItems(p: MotionProject): { rel: string; t_in: number; t_out: number; name: string }[] {
+  return p.intent.arc.flatMap((b) => {
+    const a = (p.assets ?? []).find((x) => x.kind === "image" && x.id === p.treatment[b.beatId]?.frameAssetId);
+    return a ? [{ rel: a.path, t_in: b.startSec, t_out: b.endSec, name: b.primary }] : [];
+  }).slice(0, 16);
+}

@@ -17,7 +17,7 @@ type PlanResult = { plan: BuilderPlan; warnings: string[]; cost: { usd: number; 
 type LlmStatus = { ready: boolean; reason: string; config: { provider: string | null; model: string }; providers: { id: string; label: string; local: boolean }[] };
 
 /** The Builder agent: plan the layers and motion from the approved intent, show them with their cost, build only when you confirm. */
-export function BuilderPanel({ write, disabled, onBuilt }: { write: Write; disabled: boolean; onBuilt: (created: Created[], versions?: Versions) => void }) {
+export function BuilderPanel({ write, disabled, onBuilt, afterBuild }: { write: Write; disabled: boolean; onBuilt: (created: Created[], versions?: Versions) => void; afterBuild?: () => Promise<number> }) {
   const { project } = useApp();
   const { offline, enginePath } = useSettings();
   const [st, setSt] = useState<{ busy: boolean; error?: string; result?: PlanResult; ask?: { provider: string; model: string; label: string }; built?: { n: number; warnings: string[] } }>({ busy: false });
@@ -48,7 +48,11 @@ export function BuilderPanel({ write, disabled, onBuilt }: { write: Write; disab
     const r = st.result; if (!r) return;
     setSt((s) => ({ ...s, busy: true, error: undefined }));
     const res = await write("build plan", "builder_execute", { plan: r.plan }) as unknown as { created?: Created[]; warnings?: string[]; versions?: Versions } | undefined;
-    if (res?.created) { onBuilt(res.created, res.versions); setSt({ busy: false, built: { n: res.created.length, warnings: res.warnings ?? [] } }); }
+    if (res?.created) {
+      onBuilt(res.created, res.versions);
+      const pics = afterBuild ? await afterBuild() : 0;       // the scenes' pictures go in with the layers: one action
+      setSt({ busy: false, built: { n: res.created.length, warnings: [...(res.warnings ?? []), ...(pics ? [`${pics} scene picture${pics === 1 ? "" : "s"} placed behind the scenes.`] : [])] } });
+    }
     else setSt((s) => ({ ...s, busy: false, error: "The build did not finish. See the message above; layers made before the problem are kept." }));
   };
 

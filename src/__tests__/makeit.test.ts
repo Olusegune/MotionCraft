@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProject } from "../lib/project";
-import { fillFrames, fillTreatment, suggestLook } from "../lib/makeIt";
+import { fillFrames, fillTreatment, scenePictureItems, suggestLook } from "../lib/makeIt";
 import { FAMILIES } from "../lib/styles";
 import type { Beat } from "../types";
 
@@ -44,5 +44,15 @@ describe("Make it: a look and a plan proposed from the intent", () => {
     expect(q.treatment.b.frameAssetId).toBe("i1");
     expect(q.treatment.c.frameAssetId).toBe("i3");
     expect(fillFrames(q)).toBe(q);                                        // nothing left to give: unchanged
+  });
+
+  it("lists a picture and its time range for each scene that has one, at most sixteen", () => {
+    const p = createProject("x");
+    const img = (id: string) => ({ id, kind: "image" as const, path: `assets/images/${id}.png`, provenance: { actor: "user", provider: "none", model: "none", at: "t", licence: "own", costReported: false, costValue: null, costUnit: null } });
+    p.assets = [img("i1")];
+    p.intent.arc = [beat("a", 0, 2, "one"), beat("b", 2, 5, "two")];
+    p.treatment = { b: { plan: "", motion: "", frameAssetId: "i1" } };
+    expect(scenePictureItems(p)).toEqual([{ rel: "assets/images/i1.png", t_in: 2, t_out: 5, name: "two" }]);
+    expect(scenePictureItems(createProject("y"))).toEqual([]);
   });
 });
