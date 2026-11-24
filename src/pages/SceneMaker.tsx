@@ -17,7 +17,10 @@ export function scenePrompt(p: MotionProject, b: Beat): string {
   const look = fam ? `${familyLabel(fam).toLowerCase()} look` : "restrained, precise look";
   const plan = (p.treatment[b.beatId]?.plan ?? "").replace(/\(\d+(\.\d+)? seconds\):/, ":").trim();
   const mood = (p.intent.summary || p.brief.text).trim().slice(0, 220);
-  return `${NO_LETTERING} ${look}, 16:9 film still with generous negative space. Scene: ${b.primary}. ${plan} Mood: ${mood}`.slice(0, 900);
+  // The colours the brief asks for, in its own words: a picture of a "black cosmos" must not come back beige.
+  const colourSentence = `${p.brief.text}`.split(/(?<=[.!?])\s+/).find((x) => /\b(palette|colou?rs?|obsidian|indigo|cyan|crimson|gold|black|white|blue|red|green|orange|purple|pink)\b/i.test(x) && x.length < 220);
+  const palette = colourSentence ? ` Palette: ${colourSentence.replace(/\s+/g, " ").trim()}` : "";
+  return `${NO_LETTERING} ${look}, ${p.brief.deliverables[0]?.aspect ?? "16:9"} film still with generous negative space. Scene: ${b.primary}. ${plan} Mood: ${mood}${palette}`.slice(0, 900);
 }
 
 /** One button on a scene card: make a picture for that scene with the best image model that has a key. One confirmation, one picture, then it is the scene's frame. */
