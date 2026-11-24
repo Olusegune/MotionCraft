@@ -135,3 +135,20 @@ export function beatsFromScript(segments: ScriptSegment[], journey: string[] = [
 export function cuesFromScript(segments: ScriptSegment[]): { t: number; text: string }[] {
   return segments.filter((s) => s.audio.trim()).map((s) => ({ t: s.start, text: `Sound at ${clock(s.start)}: ${s.audio.trim().replace(/\.$/, "")}` }));
 }
+
+const WEIGHT = "(?:Thin|Light|Regular|Medium|SemiBold|Semibold|Bold|ExtraBold|Black|Italic)";
+const ROLE = "(?:title|headline|heading|supporting|body|subtitle|caption|text|line|type|wordmark)";
+const FONT_RE = new RegExp(String.raw`\b([A-Z][A-Za-z0-9]*(?: [A-Z][A-Za-z0-9]*){0,2})(?: ${WEIGHT})? for (?:the |its |all |every )?${ROLE}`, "g");
+const NOT_FONTS = new Set(["The", "This", "That", "Use", "Set", "Make", "It", "We", "And", "Text", "Titles", "Body"]);
+
+/** The typefaces a brief asks for: "Use Space Grotesk Medium for the title and Inter for the supporting line" gives ["Space Grotesk", "Inter"]. */
+export function parseFonts(text: string): string[] {
+  const out: string[] = [];
+  for (const m of String(text || "").matchAll(FONT_RE)) {
+    let name = m[1].replace(new RegExp(String.raw`\s+${WEIGHT}$`), "").trim();
+    name = name.replace(/^(?:Use|Set|Type|Typeset|In|With)\s+/, "").trim();
+    if (!name || NOT_FONTS.has(name) || out.some((x) => x.toLowerCase() === name.toLowerCase())) continue;
+    out.push(name);
+  }
+  return out.slice(0, 12);
+}

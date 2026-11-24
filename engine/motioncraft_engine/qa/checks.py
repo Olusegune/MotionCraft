@@ -85,6 +85,7 @@ class Scene:
     renders: list[dict[str, Any]] = field(default_factory=list)      # [{preset}]
     installed_fonts: set[str] | None = None                          # None: the engine could not list them
     font_manifest: list[dict[str, Any]] | None = None                # fonts/manifest.json; None: unreadable
+    requested_fonts: list[str] = field(default_factory=list)         # font families the brief asks for, in its own words
     markers: list[dict[str, Any]] | None = None                      # [{time, comment}]; None: not readable from this engine
     audio: list[dict[str, Any]] = field(default_factory=list)        # [{path, duration, beats}] for analysable audio
     audio_skipped: list[str] = field(default_factory=list)           # audio assets that could not be analysed, with why
@@ -201,6 +202,23 @@ def missing_fonts(s: Scene) -> Result:
 
 
 # ------------------------------------------------------------------------------------------------------------------ 3
+def requested_fonts(s: Scene) -> Result:
+    """The brief names typefaces ("Space Grotesk for the title"). EffectCraft cannot say which font each layer uses, but it can list the installed
+    fonts, so the fonts the brief asks for can be checked against them. A font that is not installed would be drawn in a substitute."""
+    r = Result("requested-fonts", "Fonts the brief asks for")
+    if not s.requested_fonts:
+        return _done(r)
+    if s.installed_fonts is None:
+        return _unchecked(r.check, r.label, "The list of installed fonts could not be read from EffectCraft.")
+    have = [f.lower() for f in s.installed_fonts]
+    for fam in s.requested_fonts:
+        want = fam.lower().strip()
+        if want and not any(h == want or h.startswith(want + " ") or want.startswith(h + " ") for h in have):
+            r.findings.append(finding(r.check, "warn", f"{fam} is named in the brief but is not installed.",
+                                      "Text would be drawn in a substitute font. Install the font (many are free) or pick one that is installed."))
+    return _done(r)
+
+
 def font_licence(s: Scene) -> Result:
     r = Result("font-licence", "Font licence for video use")
     used = _fonts_used(s)
@@ -466,7 +484,7 @@ def orphan_layers(s: Scene) -> Result:
 
 
 CHECKS: list[Callable[[Scene], Result]] = [
-    missing_assets, missing_fonts, font_licence, frame_rate, aspect_ratio, low_resolution, safe_title, text_collisions, contrast, audio_drift,
+    missing_assets, missing_fonts, requested_fonts, font_licence, frame_rate, aspect_ratio, low_resolution, safe_title, text_collisions, contrast, audio_drift,
     beat_misalignment, alpha_errors, colour_space, unsupported_effects, orphan_layers,
 ]
 

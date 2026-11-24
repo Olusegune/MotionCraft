@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { beatsFromScript, cuesFromScript, describeSettings, parseEmotionArc, parseSettings, parseTimedScript } from "../lib/briefParse";
+import { beatsFromScript, cuesFromScript, describeSettings, parseEmotionArc, parseFonts, parseSettings, parseTimedScript } from "../lib/briefParse";
 import { nearestFps, resolutionOf, sizeFor } from "../lib/formats";
 
 const TYPE_V = readFileSync("docs/stress-test/type-v-civilization-brief.md", "utf-8");
@@ -89,5 +89,14 @@ describe("reading a timed script", () => {
     expect(cues).toHaveLength(4);
     expect(cues[2]).toEqual({ t: 5, text: expect.stringMatching(/^Sound at 0:05: A restrained bass impact/) });
     expect(cuesFromScript(parseTimedScript("0:00-0:05 | visual only | text |"))).toEqual([]);
+  });
+});
+
+describe("fonts named in a brief", () => {
+  it("reads the families, drops weights and leading verbs, and ignores ordinary words", () => {
+    expect(parseFonts("Use Space Grotesk Medium for the title and Inter for the supporting line.")).toEqual(["Space Grotesk", "Inter"]);
+    expect(parseFonts("Set in Playfair Display for headlines. Make it for the team.")).toEqual(["Playfair Display"]);
+    expect(parseFonts("Nothing about type here.")).toEqual([]);
+    expect(parseFonts("Inter for the body, Inter for the caption")).toEqual(["Inter"]);
   });
 });

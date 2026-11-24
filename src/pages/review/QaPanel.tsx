@@ -6,6 +6,7 @@ import { Fold } from "../../shell/Fold";
 import { getApi } from "../../lib/api";
 import { useSettings } from "../../lib/settings";
 import { timecode } from "../../lib/time";
+import { parseFonts } from "../../lib/briefParse";
 import { bindingFor, logQaFix, reconcile, relinkAsset, type EngineSnapshot, type Versions } from "../../lib/layers";
 
 export interface QaFinding {
@@ -28,6 +29,7 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
     deliverable: { aspect: d.aspect, width: d.width, height: d.height, fps: d.fps, durationSec: d.durationSec, alpha: d.alpha },
     assets: (project.assets ?? []).map((a) => ({ id: a.id, kind: a.kind, path: a.path })),
     renders: (project.renders ?? []).map((r) => ({ preset: r.preset })),
+    requestedFonts: parseFonts(`${project.brief.text}\n${project.brief.script ?? ""}`),
   });
   const check = async (note?: string) => {
     const api = await getApi();

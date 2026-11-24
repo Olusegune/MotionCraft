@@ -505,7 +505,7 @@ class Service:
         markers = None if real else [{"time": m.time, "comment": m.comment} for m in comp.markers]   # the real engine does not report markers in get_comp
         scene = qa_checks.Scene(width=comp.width, height=comp.height, fps=comp.frame_rate, duration=comp.duration, layers=qa_checks_layers,
                                 deliverable=facts.get("deliverable") or {}, assets=assets, package=self.pkg, renders=[x for x in (facts.get("renders") or []) if isinstance(x, dict)],
-                                installed_fonts=fonts, font_manifest=manifest, markers=markers, audio=audio, audio_skipped=skipped, frames=frames)
+                                installed_fonts=fonts, font_manifest=manifest, requested_fonts=[str(x)[:80] for x in (facts.get("requestedFonts") or []) if isinstance(x, str)][:12], markers=markers, audio=audio, audio_skipped=skipped, frames=frames)
         return scene
 
     def generate_poll(self, job: str) -> dict:
