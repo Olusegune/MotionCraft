@@ -30,7 +30,8 @@ SINGLE = {"prop.set", "prop.addKey", "layer.setText", "layer.rename", "text.anim
           "layer.addTextSelector", "layer.addTextAnimatorProperty"}
 # Commands that take a list in `layers` and fall back to the selection when it is omitted.
 LISTED = {"layer.setTransform", "layer.setBlendMode", "layer.setParent", "layer.setComment", "layer.addMarker",
-          "layer.arrange", "layer.setSwitch", "edit.clear", "edit.duplicate", "layer.style.dropShadow"}
+          "layer.arrange", "layer.setSwitch", "edit.clear", "edit.duplicate", "layer.style.dropShadow",
+          "layer.timing"}      # when a layer is on screen (the Builder times the layers it makes; a locked layer is still refused)
 # Commands that must also never run for an agent while any layer of the comp is locked (they can reach every layer).
 COMP_WIDE_WHEN_ANY_LOCKED: set[str] = set()
 

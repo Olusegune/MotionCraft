@@ -161,3 +161,53 @@ def test_sidecar_exposes_the_methods_and_without_a_project_open_it_says_so(tmp_p
         s.handle("builder_execute", {"plan": PLAN})
     with pytest.raises(builder.PlanError):
         s.handle("builder_plan", {"provider": "ollama", "model": "m", "context": {}})
+
+
+# ---- when a layer is on screen (found in the TYPE V stress test: the Builder gave every layer the whole piece, so all the text overlapped)
+TIMED = {"summary": "Titles in turn.", "layers": [
+    {"kind": "solid", "name": "Background"},                                                       # no times: the whole piece
+    {"kind": "text", "name": "First line", "text": "BEYOND A SINGLE UNIVERSE", "start": 0, "end": 2},
+    {"kind": "text", "name": "Title", "text": "TYPE V", "start": 5, "end": 10},
+    {"kind": "shape", "name": "Sphere 1", "shape": "ellipse", "start": 2, "end": 10},
+    {"kind": "shape", "name": "Sphere 2", "shape": "ellipse", "start": 3, "end": 10},
+    {"kind": "shape", "name": "Sphere 3", "shape": "ellipse", "start": 3.5, "end": 10},
+]}
+
+
+def test_the_plan_keeps_when_each_layer_is_on_screen_and_omits_it_for_the_whole_piece():
+    r = builder.validate(TIMED, duration_sec=10)
+    by = {l["name"]: l for l in r["plan"]["layers"]}
+    assert "in" not in by["Background"]
+    assert (by["First line"]["in"], by["First line"]["out"]) == (0.0, 2.0) or (by["First line"].get("in", 0.0), by["First line"]["out"]) == (0.0, 2.0)
+    assert (by["Title"]["in"], by["Title"]["out"]) == (5.0, 10.0) or by["Title"]["in"] == 5.0
+    assert by["Sphere 3"]["in"] == 3.5 and r["warnings"] == []
+
+
+def test_times_outside_the_piece_are_clamped_and_reported():
+    r = builder.validate({"layers": [{"kind": "text", "name": "A", "text": "a", "start": -3, "end": 99},
+                                     {"kind": "text", "name": "B", "text": "b", "start": 9, "end": 4},
+                                     {"kind": "text", "name": "C", "text": "c", "start": 40, "end": 50}]}, duration_sec=10, fps=30)
+    by = {l["name"]: l for l in r["plan"]["layers"]}
+    assert "in" not in by["A"]                                           # clamped to the whole piece, so nothing to apply
+    assert 0 <= by["B"]["in"] < by["B"]["out"] <= 10 and 0 <= by["C"]["in"] < by["C"]["out"] <= 10
+    assert len(r["warnings"]) == 3
+
+
+def test_the_prompt_asks_for_timing_and_for_several_distinct_things():
+    sys_msg = builder.messages(CONTEXT)[0]["content"]
+    assert "start and end" in sys_msg and "at least three" in sys_msg and "must not overlap" in sys_msg
+    assert "start, end" in sys_msg
+
+
+def test_building_applies_each_layers_in_and_out_points(tmp_path):
+    s = Service(lambda pkg: MockAdapter(), data_dir=tmp_path / "d")
+    pkg = tmp_path / "P.motioncraft"
+    (pkg / "assets" / "images").mkdir(parents=True)
+    s.handle("open", {"package": str(pkg), "settings": {"width": 640, "height": 360, "frame_rate": 30, "duration": 10}})
+    r = s.handle("builder_execute", {"plan": TIMED})
+    spans = {l["name"]: l for l in s.handle("timeline_read", {})["layers"]}
+    assert (spans["First line"]["in"], spans["First line"]["out"]) == (0.0, 2.0)
+    assert (spans["Title"]["in"], spans["Title"]["out"]) == (5.0, 10.0)
+    assert spans["Sphere 2"]["in"] == 3.0 and spans["Background"]["out"] == 10.0
+    assert next(c for c in r["created"] if c["name"] == "Title")["in"] == 5.0
+    assert not any("timing was not applied" in w for w in r["warnings"])

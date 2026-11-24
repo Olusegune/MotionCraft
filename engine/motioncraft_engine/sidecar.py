@@ -213,6 +213,11 @@ class Service:
                 else:
                     cmd = Command(id="layer.newSolid", params={"name": L["name"], "color": L["color"]})
                 lid = int(a.execute([cmd], actor=BUILDER).results[0].result["layer"])
+                if "in" in L:       # when the layer is on screen, from the plan (absolute in and out points; keyframes stay where they are)
+                    try:
+                        a.execute([Command(id="layer.timing", params={"layers": [lid], "in": float(L["in"]), "out": float(L["out"])})], actor=BUILDER)
+                    except (CommandFailed, AdapterContractError) as e:
+                        warnings.append(f"{L['name']}: its timing was not applied. {e}")
                 applied: list[str] = []
                 for an in L["animations"]:
                     try:
@@ -222,7 +227,8 @@ class Service:
                         warnings.append(f"{L['name']}: {an['primitive']} was not applied. {e}")
                 if L["kind"] == "text":
                     self._record_text(lid, int(L["size"]))
-                created.append({"key": L["key"], "layer": lid, "kind": L["kind"], "role": L["role"], "name": L["name"], "primitives": applied})
+                created.append({"key": L["key"], "layer": lid, "kind": L["kind"], "role": L["role"], "name": L["name"], "primitives": applied,
+                                **({"in": L["in"], "out": L["out"]} if "in" in L else {})})
         except Exception as e:
             a.save()
             raise AdapterError(f"The build stopped after {len(created)} of {len(checked['plan']['layers'])} layers: {e}") from None
