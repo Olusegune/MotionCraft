@@ -462,3 +462,6 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .found-list label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .found-list input[type=checkbox] { margin-top: 3px; }
 .pref-two { flex-direction: row; gap: 10px; } .pref-two > .pref { flex: 1 1 0; min-width: 0; }
+
+/* QA findings sit under their check, in the wide column (they were squeezed into the icon column) */
+.status-line > ul, .status-line > .hint { grid-column: 2; min-width: 0; }

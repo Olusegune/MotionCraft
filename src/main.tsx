@@ -10,5 +10,6 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "./styles/tokens.css";
 import "./styles/app.css";
 import App from "./App";
+import { ErrorBoundary } from "./shell/ErrorBoundary";
 
-createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><ErrorBoundary><App /></ErrorBoundary></StrictMode>);

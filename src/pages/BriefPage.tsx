@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, ImagePlus, Music, PencilLine, Sparkles, Upload, LayoutGrid } from "lucide-react";
 import { MediaWall, useImportMedia } from "../shell/Media";
 import { useApp } from "../ctx";
@@ -104,6 +104,8 @@ export function BriefPage(f: FrameProps) {
   const resId = resolutionOf(d);
   const scaleOf = (id: string | null) => RESOLUTIONS.find((r) => r.id === id)?.scale ?? 1;
   const [durText, setDurText] = useState(() => String(d.durationSec));
+  // The length can also change from outside the field (the "Found in your brief" card): show it.
+  useEffect(() => { setDurText((cur) => (Number(cur) === d.durationSec ? cur : String(d.durationSec))); }, [d.durationSec]);
 
   // What the brief already says: size, length, rate, and a timed script. Shown before anything is used.
   const intentLocked = useLocked("A");

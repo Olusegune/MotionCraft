@@ -211,3 +211,24 @@ def test_building_applies_each_layers_in_and_out_points(tmp_path):
     assert spans["Sphere 2"]["in"] == 3.0 and spans["Background"]["out"] == 10.0
     assert next(c for c in r["created"] if c["name"] == "Title")["in"] == 5.0
     assert not any("timing was not applied" in w for w in r["warnings"])
+
+
+def test_untimed_text_lines_are_spread_across_scenes_instead_of_piling_up():
+    from motioncraft_engine.agents.builder import spread_text
+    def t(name, role="title"):
+        return {"kind": "text", "name": name, "role": role, "animations": []}
+    out = {"plan": {"layers": [{"kind": "solid", "name": "bg", "role": "background", "animations": []}, t("title_1"), t("title_2"), t("supporting_text", "supporting line")]}, "warnings": []}
+    spread_text(out, [0, 2, 5, 8], 10)
+    l = {x["name"]: x for x in out["plan"]["layers"]}
+    assert "in" not in l["bg"]
+    assert (l["title_1"]["in"], l["title_1"]["out"]) == (0, 5)
+    assert (l["title_2"]["in"], l["title_2"]["out"]) == (5, 10)
+    assert (l["supporting_text"]["in"], l["supporting_text"]["out"]) == (5, 10)     # shares the line before it
+    assert out["warnings"]
+
+
+def test_text_that_was_already_timed_is_left_alone():
+    from motioncraft_engine.agents.builder import spread_text
+    out = {"plan": {"layers": [{"kind": "text", "name": "a", "role": "t", "animations": [], "in": 1.0, "out": 3.0}, {"kind": "text", "name": "b", "role": "t", "animations": []}]}, "warnings": []}
+    spread_text(out, [0, 5], 10)
+    assert "in" not in out["plan"]["layers"][1] and not out["warnings"]

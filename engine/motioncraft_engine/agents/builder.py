@@ -183,6 +183,40 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
     return {"plan": {"summary": _clean(raw.get("summary"), 400), "layers": layers}, "warnings": warnings, "cost": dict(COST)}
 
 
+_SUPPORT = ("support", "subtitle", "caption", "tagline", "subhead")
+
+
+def spread_text(out: dict, beat_starts: list[float], duration: float) -> None:
+    """Small models often leave every line on screen for the whole piece, so the words pile up. When two or more text lines all span the whole piece,
+    give each its own stretch, starting where a scene starts. A supporting line shares the stretch of the line before it. The plan says so."""
+    layers = out["plan"]["layers"]
+    texts = [l for l in layers if l["kind"] == "text"]
+    if len(texts) < 2 or any("in" in l or "out" in l for l in texts):
+        return
+    groups: list[list[dict]] = []
+    for l in texts:
+        if groups and any(w in l["name"].lower() or w in l["role"].lower() for w in _SUPPORT):
+            groups[-1].append(l)
+        else:
+            groups.append([l])
+    if len(groups) < 2:
+        return
+    starts = sorted({float(b) for b in beat_starts if 0 <= b < duration}) or [duration * k / len(groups) for k in range(len(groups))]
+    picks: list[float] = []
+    for k in range(len(groups)):
+        want = duration * k / len(groups)
+        best = min(starts, key=lambda t: abs(t - want)) if k else 0.0
+        picks.append(best if (not picks or best > picks[-1] + 1e-6) else picks[-1] + duration / (len(groups) * 4))
+    for k, g in enumerate(groups):
+        t0 = picks[k]
+        t1 = picks[k + 1] if k + 1 < len(groups) else duration
+        if t1 <= t0:
+            continue
+        for l in g:
+            l["in"], l["out"] = round(t0, 3), round(t1, 3)
+    out["warnings"].append("The model did not time the text lines, so each now has its own stretch of the piece, starting at a scene. Retime them on the timeline.")
+
+
 def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = "", spend_token: str = "", offline: bool = False) -> dict:
     ctx = context or {}
     has_material = any(str(ctx.get(k) or "").strip() for k in ("brief", "script")) or bool((ctx.get("intent") or {}).get("summary"))
@@ -194,4 +228,5 @@ def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = 
     if not isinstance(raw, dict):
         raise PlanError("The model did not return a plan.")
     out = validate(raw, duration_sec=_num(d.get("durationSec"), 15), fps=_num(d.get("fps"), 30))
+    spread_text(out, [b.get("startSec") for b in ((ctx.get("intent") or {}).get("arc") or []) if isinstance(b.get("startSec"), (int, float))], _num(d.get("durationSec"), 15))
     return {**out, "provider": provider, "model": model, "usage": r.get("usage") or {}}

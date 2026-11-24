@@ -39,7 +39,7 @@ function fake(project: MotionProject, o: { connected?: boolean } = {}) {
         case "llm_status": return { ready: false, reason: "none", config: { provider: null, model: "" }, providers: [] } as never;
         case "audio_analyze": return ANALYSIS as never;
         case "songmap_import": return SONGMAP as never;
-        case "sync_markers": case "sync_labelled_markers": return { path: "x", dirty: false, activeComp: 1, comps: [], layers: [], markers: 1 } as never;
+        case "sync_markers": case "sync_labelled_markers": return { markers: 1, replaced: true } as never;   // the real engine answers with this short note, not the composition
         default: return { path: "x", dirty: false, activeComp: 1, comps: [], layers: [] } as never;
       }
     },

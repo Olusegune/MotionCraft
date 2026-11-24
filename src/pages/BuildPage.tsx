@@ -103,6 +103,8 @@ export function BuildPage(f: FrameProps) {
     setBusy(label); setErr(null); errRef.current = null;
     try {
       const r = await call<EngineSnapshot & { layer?: number; created?: { layer: number }[] }>(method, params);
+      // Some writes (markers) answer with a short note, not the composition. The composition is unchanged, so keep what is shown.
+      if (!Array.isArray(r.layers)) return r;
       const own = [...(r.layer !== undefined ? [r.layer] : []), ...targets, ...(r.created ?? []).map((c) => c.layer)];
       setSnap(r); update((p) => reconcile(p, r, own));
       return r;
