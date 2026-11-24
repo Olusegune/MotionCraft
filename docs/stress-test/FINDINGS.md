@@ -30,3 +30,23 @@ Layer timing against the script, audio analysis and markers, QA run and fixes, s
 10. Space Grotesk and Inter are not installed system-wide, so EffectCraft cannot use them (QA font check not reached).
 11. Kie prices are always "Unknown"; the 5 USD budget cannot be tracked from the app. Treat generation as capped by count.
 12. The Treatment frame (a chosen still) is not used as the scene card picture on Build.
+
+---
+
+# Run 2 (2026-11-24): fresh project "TYPE V stress run 2", portable build of 0.1.5 "make-it", Ollama `gemma3:12b`, no paid calls made
+
+## What worked
+- New project dialog now offers Resolution and Enter submits. The brief typed in: "Found in your brief" read 10 s, 16:9, 24 fps, 3840 x 2160, 4 scenes and 4 sound cues; "Use these" applied them.
+- Make it: the Director drafted the intent, a look was proposed, one review sheet, one approval; Build opened and the Builder planned 9 layers (3 spheres) on its own. Mode stayed "Together".
+- Builder built 9 layers; QA ran (9 of 15 checks ran) and caught 3 text collisions, which were real; Review showed the 4 script sound cues as notes.
+- Audio: imported through the file chooser, Analyse found 149.7 BPM, 25 beats.
+
+## Bugs this run revealed
+1. FIXED: "Write markers to composition" blanked the whole window (the engine answers with `{markers, replaced}`, the UI treated it as a composition). Guarded; the test mock now uses the real reply shape (it failed before the fix). An error boundary now shows a message and a Reload button instead of an empty window.
+2. FIXED: the duration field kept showing the old length after "Use these" (the project had the right value).
+3. FIXED: QA findings were squeezed into a one-word-per-line column.
+4. FIXED (fallback): gemma3:12b gave no timing, so every text layer spanned the whole piece. The engine now spreads untimed text lines over the scenes and says so. A model that gives timing is unaffected.
+5. OPEN: the audio analysis is not restored when a project is reopened (Build says "No audio analysed yet" until Analyse is pressed again, although the result is cached).
+6. OPEN: the Director replaced the scene names read from the script (curiosity / awe / quiet mastery) with its own (curiosity / awe / serenity / acceptance), and chose "Clean broadcast" for a sci-fi piece.
+7. OPEN: Missing fonts and Font licence checks are "Not checked" because EffectCraft does not report each text layer's font.
+8. OPEN: the Builder omitted the "CIVILIZATION" title line from the script.
