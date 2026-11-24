@@ -35,3 +35,14 @@ def test_a_built_plan_puts_each_layer_on_screen_when_the_plan_says(svc):
     assert (spans["Title"]["in"], spans["Title"]["out"]) == (5.0, 10.0)
     assert (spans["Sphere 3"]["in"], spans["Sphere 3"]["out"]) == (3.5, 10.0)
     assert spans["Background"]["in"] == 0.0 and spans["Background"]["out"] == 10.0
+
+
+def test_the_plan_the_page_sends_back_still_builds_with_its_timing(svc):
+    """The page shows a checked plan (in and out) and sends that same plan to build. It was being checked again and the timing lost."""
+    from motioncraft_engine.agents.builder import validate
+    shown = validate({"layers": [{"kind": "solid", "name": "Bg", "role": "background"},
+                                 {"kind": "text", "name": "T1", "role": "title", "text": "A", "start": 0, "end": 4},
+                                 {"kind": "text", "name": "T2", "role": "title", "text": "B", "start": 4, "end": 10}]}, duration_sec=10, fps=24)
+    svc.handle("builder_execute", {"plan": shown["plan"]})
+    spans = {l["name"]: (l["in"], l["out"]) for l in svc.handle("timeline_read", {})["layers"]}
+    assert spans["T1"] == (0.0, 4.0) and spans["T2"] == (4.0, 10.0) and spans["Bg"] == (0.0, 10.0)

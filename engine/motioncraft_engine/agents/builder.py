@@ -169,6 +169,10 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
                 kept.append(a)
             anims = kept
         layer["animations"] = anims
+        # A plan that was already checked carries "in" and "out" (what the page sends back to build); a model's raw reply says "start" and "end".
+        s_raw = r.get("start") if r.get("start") is not None else r.get("in")
+        e_raw = r.get("end") if r.get("end") is not None else r.get("out")
+        r = {**r, "start": s_raw, "end": e_raw}
         raw0, raw1 = _num(r.get("start"), 0.0), _num(r.get("end"), dur)
         t0 = min(max(0.0, raw0), dur - frame)
         t1 = min(max(t0 + frame, raw1), dur)

@@ -232,3 +232,11 @@ def test_text_that_was_already_timed_is_left_alone():
     out = {"plan": {"layers": [{"kind": "text", "name": "a", "role": "t", "animations": [], "in": 1.0, "out": 3.0}, {"kind": "text", "name": "b", "role": "t", "animations": []}]}, "warnings": []}
     spread_text(out, [0, 5], 10)
     assert "in" not in out["plan"]["layers"][1] and not out["warnings"]
+
+
+def test_a_checked_plan_keeps_its_timing_when_it_is_checked_again_to_build():
+    """The page sends back the plan it was shown, which carries in and out. Building checks it again and must not lose them."""
+    from motioncraft_engine.agents.builder import validate
+    first = validate({"layers": [{"kind": "text", "name": "A", "role": "t", "text": "x", "start": 2, "end": 5}]}, duration_sec=10)
+    again = validate(first["plan"], duration_sec=10)
+    assert (again["plan"]["layers"][0]["in"], again["plan"]["layers"][0]["out"]) == (2.0, 5.0)
