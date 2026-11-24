@@ -170,4 +170,16 @@ describe("the Brief page", () => {
     await user.click(screen.getByRole("button", { name: /Browse styles/ }));
     expect(await screen.findByRole("heading", { name: "Direction" })).toBeInTheDocument();
   });
+
+  it("a first-time hint shows on an empty brief, goes when dismissed, and does not come back", async () => {
+    try { localStorage.removeItem("mc.coach.brief"); } catch { /* none */ }
+    const user = userEvent.setup();
+    fake(demo());
+    render(<App />);
+    await toBrief(user);
+    expect(screen.getByRole("note")).toHaveTextContent("Start here");
+    await user.click(screen.getByRole("button", { name: "Got it" }));
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(localStorage.getItem("mc.coach.brief")).toBe("1");
+  });
 });

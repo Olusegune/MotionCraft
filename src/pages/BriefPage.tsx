@@ -53,6 +53,9 @@ export function BriefPage(f: FrameProps) {
   const { offline, enginePath } = useSettings();
   const [mk, setMk] = useState<{ busy: boolean; error?: string; ask?: { provider: string; model: string; label: string }; review?: boolean; notes: string[] }>({ busy: false, notes: [] });
   const canMake = !!project.brief.text.trim() || !!project.brief.script?.trim();
+  // A first-time hint, shown on an empty brief until it is dismissed (remembered on this computer; works without storage).
+  const [coachGone, setCoachGone] = useState(() => { try { return localStorage.getItem("mc.coach.brief") === "1"; } catch { return false; } });
+  const dismissCoach = () => { setCoachGone(true); try { localStorage.setItem("mc.coach.brief", "1"); } catch { /* no storage: it comes back next time */ } };
   const closeMk = () => setMk({ busy: false, notes: [] });
   /** One button: the Director drafts the intent, a look and a plan for each scene are proposed, and you review it all once. */
   const makeIt = async (confirmed: boolean) => {
@@ -248,6 +251,12 @@ export function BriefPage(f: FrameProps) {
               <dl className="facts"><dt>Look</dt><dd>{currentLook(project) ? familyLabel(currentLook(project)!) : "Mixed"}</dd><dt>Approves</dt><dd>Intent, direction and treatment together. You can unlock any of them later.</dd></dl>
               {mk.notes.length > 0 && <ul className="plain" role="status">{mk.notes.map((n, i) => <li key={i} className="why">{n}</li>)}</ul>}
             </Sheet>
+          )}
+          {!canMake && !coachGone && (
+            <div className="coach" role="note">
+              <p><strong>Start here.</strong> Write what you want, paste a script, or pick a starting point below. Then press <strong>Make it</strong> on the right: it drafts the plan and you review it once.</p>
+              <button className="btn quiet" onClick={dismissCoach}>Got it</button>
+            </div>
           )}
           <div>
             <h2 className="brief-q">What would you like to bring to life?</h2>

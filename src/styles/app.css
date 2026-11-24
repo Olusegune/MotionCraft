@@ -505,3 +505,6 @@ main, .page, .stack { animation: rise var(--mc-t-panel) ease-out both; }
 .first-run .n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--mc-glow-cyan); color: var(--mc-accent); font-weight: 600; font-size: 13px; }
 .finish { margin-top: 12px; padding: 14px 16px; border-radius: var(--mc-r-card); border: 1px solid var(--mc-glow-cyan-strong); background: var(--mc-glow-cyan); }
 .finish p { margin: 0 0 6px; }
+
+.coach { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border-radius: var(--mc-r-card); border: 1px solid var(--mc-glow-cyan-strong); background: var(--mc-glow-cyan); }
+.coach p { margin: 0; }
