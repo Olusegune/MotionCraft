@@ -12,10 +12,12 @@ import { nowIso } from "../lib/project";
 import type { AssetReference, Dimension, Intensity } from "../types";
 
 /** Three deliberately different starting points. They are prompts you can edit, not a house style. */
+/** First in every prompt: image models draw words they are given, and the words go on the layers, never in the picture. */
+export const NO_LETTERING = "A purely visual still image with no lettering, words, numbers, symbols, logos or watermarks anywhere in it.";
 const STARTS: { family: string; title: string; look: string }[] = [
-  { family: "editorial-minimal", title: "Quiet and editorial", look: "restrained editorial style frame, generous negative space, refined serif type feeling, muted palette, calm and precise" },
-  { family: "bold-kinetic", title: "Bold and kinetic", look: "bold kinetic typography style frame, heavy contrasty shapes, dense layout, saturated colour, energy and motion blur" },
-  { family: "cinematic-title", title: "Cinematic", look: "cinematic title sequence style frame, shallow depth of field, dramatic light and shadow, slow and atmospheric" },
+  { family: "editorial-minimal", title: "Quiet and editorial", look: "restrained editorial composition, generous negative space, muted palette, calm and precise" },
+  { family: "bold-kinetic", title: "Bold and kinetic", look: "bold dynamic composition, heavy contrasty shapes, dense layout, saturated colour, energy and motion blur" },
+  { family: "cinematic-title", title: "Cinematic", look: "cinematic still, shallow depth of field, dramatic light and shadow, slow and atmospheric" },
 ];
 const DIMS: Dimension[] = ["typography", "motion", "composition"];
 
@@ -35,7 +37,7 @@ export function Proposals() {
 
   const base = (project.intent.summary || project.brief.text).trim().slice(0, 300);
   useEffect(() => {
-    setCards((cur) => STARTS.map((s) => cur.find((c) => c.family === s.family) ?? { key: s.family, family: s.family, title: s.title, prompt: `${base || "A motion graphics piece"}. ${s.look}. No text, no watermark.`, job: null, error: null }));
+    setCards((cur) => STARTS.map((s) => cur.find((c) => c.family === s.family) ?? { key: s.family, family: s.family, title: s.title, prompt: `${NO_LETTERING} ${s.look}. Mood and subject: ${base || "an abstract motion graphics piece"}.`, job: null, error: null }));
   }, [base]);
 
   const load = useCallback(async () => {

@@ -173,6 +173,8 @@ describe("direction proposals", () => {
     expect(f.spend()).toBe(3);
     const prompts = f.log.filter((c) => c.method === "generate_start").map((c) => String(c.params.prompt));
     expect(new Set(prompts).size).toBe(3);                         // three different starting points
+    expect(prompts.every((p) => p.startsWith("A purely visual still image with no lettering"))).toBe(true);     // the stress test showed stills with words drawn in
+    expect(prompts.some((p) => /typograph|serif|type feeling/i.test(p.split("Mood and subject:")[0]))).toBe(false);
     expect(f.log.filter((c) => c.method === "generate_start").every((c) => (c.params.params as { aspect_ratio?: string })?.aspect_ratio === "16:9")).toBe(true);     // every still carries the project aspect
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Use this direction" })[0]).toBeEnabled(), { timeout: 8000 });
     await user.click(screen.getAllByRole("button", { name: "Use this direction" })[0]);
