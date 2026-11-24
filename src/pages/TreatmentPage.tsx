@@ -6,6 +6,7 @@ import { Fold } from "../shell/Fold";
 import { Frame, assetLabel, useImportMedia } from "../shell/Media";
 import { gateState } from "../lib/project";
 import { fillFrames } from "../lib/makeIt";
+import { MakePicture } from "./SceneMaker";
 import { timecode } from "../lib/time";
 import { LockBar, useLocked, type FrameProps } from "./common";
 
@@ -48,6 +49,7 @@ export function TreatmentPage(f: FrameProps) {
                 <div className="tile-head"><span className="strong">{b.primary || `Scene ${n + 1}`}</span><span className="time-chip mono">{timecode(b.startSec, fps)} to {timecode(b.endSec, fps)}</span></div>
                 <label className="field"><span className="visually-hidden">Sequence plan</span>
                   <textarea rows={2} value={project.treatment[b.beatId]?.plan ?? ""} placeholder="What happens on screen in this scene?" onChange={(e) => setT(b.beatId, { plan: e.target.value })} /></label>
+                {!frameOf(b.beatId) && <MakePicture beat={b} disabled={locked} />}
                 <details className="more">
                   <summary>Picture and motion</summary>
                   <label className="field"><span className="field-label">Frame for beat {n + 1}</span>
