@@ -37,6 +37,7 @@ ACCEPT: dict[str, set[str]] = {
     "text.fonts": {"query"}, "text.fontFeatures": {"font"},
     "file.import": {"paths", "sequence", "alphabetical", "frameRate"},
     "layer.timing": {"layers", "in", "out", "delta", "start", "inDelta", "outDelta", "op", "merge"},
+    "comp.settings": {"comp", "name", "width", "height", "anchor", "frameRate", "duration", "startTime"},
     "layer.addItem": {"item", "time", "index", "position", "duration", "in", "out", "anchor"},
 }
 
@@ -241,6 +242,12 @@ class MockAdapter(BaseAdapter):
             for k in ("font", "size", "fill", "tracking", "variations"):
                 if k in p:
                     l["props"].setdefault(f"text/style/{k}", {"value": None, "keys": []})["value"] = p[k]
+            self._dirty = True; return None
+        if cid == "comp.settings":
+            if "width" in p: c["w"] = int(p["width"])
+            if "height" in p: c["h"] = int(p["height"])
+            if "frameRate" in p: c["fps"] = float(p["frameRate"])
+            if "duration" in p: c["dur"] = float(p["duration"])
             self._dirty = True; return None
         if cid == "layer.rename":
             self._layer(c, int(p["layer"]))["name"] = p["name"]; self._dirty = True; return None

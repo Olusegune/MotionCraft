@@ -80,11 +80,30 @@ class Service:
         ecproj = pkg / ECPROJ
         if ecproj.is_file():
             self.a.open(ecproj)
+            self._follow_settings(settings)
         else:
             self.a.create(pkg, CompSettings(**(settings or {})))
         if locked:
             self.a.load_locks(None, [int(i) for i in locked])
         return self._snapshot()
+
+    def _follow_settings(self, settings: dict | None) -> None:
+        """The brief can change the size, frame rate or length until the first layer exists. A composition with no layers takes the project's
+        current settings; once it has layers they are left alone (resizing under existing work is EffectCraft's job, not an automatic one)."""
+        if not settings:
+            return
+        try:
+            want = CompSettings(**settings)
+            comp = self.a.inspect().comp(None)
+        except Exception:  # noqa: BLE001 - settings that do not validate are simply not applied
+            return
+        if comp.layers:
+            return
+        same = comp.width == want.width and comp.height == want.height and abs(comp.frame_rate - want.frame_rate) < 1e-6 and abs(comp.duration - want.duration) < 1e-6
+        if same:
+            return
+        self.a.execute([Command(id="comp.settings", params={"width": want.width, "height": want.height, "frameRate": want.frame_rate, "duration": want.duration})], actor=USER)
+        self.a.save()
 
     def inspect(self) -> dict:
         return self._snapshot()
