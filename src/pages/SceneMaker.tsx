@@ -24,7 +24,7 @@ export function scenePrompt(p: MotionProject, b: Beat): string {
 }
 
 /** One button on a scene card: make a picture for that scene with the best image model that has a key. One confirmation, one picture, then it is the scene's frame. */
-export function MakePicture({ beat, disabled }: { beat: Beat; disabled?: boolean }) {
+export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: boolean; again?: boolean }) {
   const { project, projectPath, update } = useApp();
   const { generative, offline, enginePath } = useSettings();
   const [models, setModels] = useState<ModelEntry[]>([]);
@@ -77,7 +77,7 @@ export function MakePicture({ beat, disabled }: { beat: Beat; disabled?: boolean
 
   return (
     <div className="make-picture">
-      <button className="btn" disabled={!!reason} title={reason} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />{running ? "Making…" : "Make picture"}</button>
+      <button className="btn" disabled={!!reason} title={reason} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />{running ? "Making…" : again ? "Try another" : "Make picture"}</button>
       {err && <p className="error-text" role="alert">{err}</p>}
       {confirming && picked && (
         <Sheet title="Confirm spending" onClose={() => setConfirming(false)}

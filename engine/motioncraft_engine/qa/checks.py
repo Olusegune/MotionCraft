@@ -215,7 +215,7 @@ def requested_fonts(s: Scene) -> Result:
         want = fam.lower().strip()
         if want and not any(h == want or h.startswith(want + " ") or want.startswith(h + " ") for h in have):
             r.findings.append(finding(r.check, "warn", f"{fam} is named in the brief but is not installed.",
-                                      "Text would be drawn in a substitute font. Install the font (many are free) or pick one that is installed."))
+                                      "Text would be drawn in a substitute font. Install the font (many are free, for example from fonts.google.com) and restart EffectCraft, or pick one that is installed."))
     return _done(r)
 
 
