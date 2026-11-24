@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FileText, ImagePlus, Music, PencilLine, Sparkles, Upload, LayoutGrid } from "lucide-react";
 import { MediaWall, useImportMedia } from "../shell/Media";
 import { useApp } from "../ctx";
@@ -10,7 +10,10 @@ import { hasAnyProvider } from "../lib/project";
 import { applyLook, currentLook } from "../lib/styles";
 import { StyleCard } from "../shell/StyleArt";
 import { GeneratePanel } from "./GeneratePanel";
-import type { Tone } from "../types";
+import type { Deliverable, Tone } from "../types";
+import { beatsFromScript, cuesFromScript, describeSettings, parseEmotionArc, parseSettings, parseTimedScript } from "../lib/briefParse";
+import { FRAME_RATES, RESOLUTIONS, fpsLabel, resolutionOf, sizeFor } from "../lib/formats";
+import { newId, nowIso } from "../lib/project";
 
 type Tab = "brief" | "script" | "audio";
 const TABS: { id: Tab; label: string; Icon: typeof FileText }[] = [
@@ -58,10 +61,65 @@ export function BriefPage(f: FrameProps) {
   const toggleTone = (t: Tone) => touch((p) => ({ ...p, intent: { ...p.intent, tone: p.intent.tone.includes(t) ? p.intent.tone.filter((x) => x !== t) : [...p.intent.tone, t] } }));
   const assets = project.assets ?? [];
 
+  // Size, length and frame rate can be changed until the first layer exists; after that the composition has work in it.
+  const settingsLocked = (project.layerMap ?? []).length > 0 || (project.revisions ?? []).length > 0;
+  const setDeliverable = (patch: Partial<Deliverable>) => touch((p) => ({ ...p, brief: { ...p.brief, deliverables: [{ ...p.brief.deliverables[0], ...patch }, ...p.brief.deliverables.slice(1)] } }));
+  const resId = resolutionOf(d);
+  const scaleOf = (id: string | null) => RESOLUTIONS.find((r) => r.id === id)?.scale ?? 1;
+  const [durText, setDurText] = useState(() => String(d.durationSec));
+
+  // What the brief already says: size, length, rate, and a timed script. Shown before anything is used.
+  const intentLocked = useLocked("A");
+  const text = `${project.brief.text}\n${project.brief.script ?? ""}`;
+  const found = useMemo(() => parseSettings(text), [text]);
+  const segments = useMemo(() => parseTimedScript(text, found.durationSec ?? d.durationSec), [text, found.durationSec, d.durationSec]);
+  const beats = useMemo(() => beatsFromScript(segments, parseEmotionArc(text), found.durationSec ?? d.durationSec), [segments, text, found.durationSec, d.durationSec]);
+  const cues = useMemo(() => cuesFromScript(segments), [segments]);
+  const settingsDiff = useMemo(() => {
+    const out: Partial<Deliverable> = {};
+    if (found.aspect && found.aspect !== d.aspect) out.aspect = found.aspect;
+    if (found.durationSec !== undefined && found.durationSec !== d.durationSec) out.durationSec = found.durationSec;
+    if (found.fps && found.fps !== d.fps) out.fps = found.fps;
+    if (found.width && found.height && (found.width !== d.width || found.height !== d.height)) { out.width = found.width; out.height = found.height; }
+    return out;
+  }, [found, d]);
+  const sameBeats = beats.length === project.intent.arc.length && beats.every((b, i) => b.startSec === project.intent.arc[i].startSec && b.endSec === project.intent.arc[i].endSec);
+  const haveCues = (t: string) => project.review.comments.some((c) => c.text === t);
+  const newCues = cues.filter((q) => !haveCues(q.text));
+  const showSettings = Object.keys(settingsDiff).length > 0 && !settingsLocked;
+  const showScenes = beats.length > 0 && !sameBeats && !intentLocked;
+  const showCues = newCues.length > 0;
+  const [take, setTake] = useState({ settings: true, scenes: true, cues: true });
+  const [ignored, setIgnored] = useState("");
+  const sig = JSON.stringify([settingsDiff, beats.length, newCues.length]);
+  const useFound = () => touch((p) => {
+    let q = p;
+    if (showSettings && take.settings) {
+      const base = { ...p.brief.deliverables[0], ...settingsDiff };
+      if (settingsDiff.aspect && !(settingsDiff.width && settingsDiff.height)) { const res = resolutionOf(p.brief.deliverables[0]); Object.assign(base, sizeFor(settingsDiff.aspect, scaleOf(res))); }
+      q = { ...q, brief: { ...q.brief, deliverables: [base, ...q.brief.deliverables.slice(1)] } };
+    }
+    if (showScenes && take.scenes) q = { ...q, intent: { ...q.intent, arc: beats } };
+    if (showCues && take.cues) q = { ...q, review: { ...q.review, comments: [...q.review.comments, ...newCues.map((cue) => ({ id: newId().slice(0, 8), atSec: cue.t, text: cue.text, at: nowIso() }))].sort((a, b) => a.atSec - b.atSec) } };
+    return q;
+  });
+
   const inspector = (
     <>
       <section className="prefs" aria-labelledby="prefs-h">
         <h2 id="prefs-h">Project preferences</h2>
+        {(showSettings || showScenes || showCues) && ignored !== sig && (
+          <div className="found" role="region" aria-label="Found in your brief">
+            <p className="found-title"><Sparkles size={16} aria-hidden="true" />Found in your brief</p>
+            <ul className="found-list">
+              {showSettings && <li><label><input type="checkbox" checked={take.settings} onChange={(e) => setTake({ ...take, settings: e.target.checked })} /> <span><strong>Settings</strong> {describeSettings({ ...found, ...settingsDiff }).join(" · ")}</span></label></li>}
+              {showScenes && <li><label><input type="checkbox" checked={take.scenes} onChange={(e) => setTake({ ...take, scenes: e.target.checked })} /> <span><strong>{beats.length} scenes</strong> from the timed script: {beats.map((b) => b.primary).join(", ")}</span></label></li>}
+              {showCues && <li><label><input type="checkbox" checked={take.cues} onChange={(e) => setTake({ ...take, cues: e.target.checked })} /> <span><strong>{newCues.length} sound cue{newCues.length === 1 ? "" : "s"}</strong> as markers on the timeline</span></label></li>}
+            </ul>
+            {settingsLocked && Object.keys(settingsDiff).length > 0 && <p className="hint">Settings are fixed once layers exist.</p>}
+            <div className="row-actions"><button className="btn primary" disabled={!(take.settings && showSettings) && !(take.scenes && showScenes) && !(take.cues && showCues)} onClick={useFound}>Use these</button><button className="btn quiet" onClick={() => setIgnored(sig)}>Not now</button></div>
+          </div>
+        )}
         <div className="pref">
           <span className="pref-label" id="vd-l">Visual direction</span>
           <div className="pref-row" role="group" aria-labelledby="vd-l">
@@ -73,16 +131,35 @@ export function BriefPage(f: FrameProps) {
           </div>
           <button className="btn quiet link-btn" onClick={() => go("direction")}>Explore all styles →</button>
         </div>
-        <div className="pref">
-          <span className="pref-label">Duration</span>
-          <span className="mono">{d.durationSec} seconds</span>
-        </div>
-        <div className="pref">
-          <span className="pref-label">Aspect ratio</span>
-          <Segmented label="Aspect ratio" value={d.aspect} onChange={() => undefined}
-            options={(["16:9", "9:16", "1:1", "4:5", "21:9"] as const).map((a) => ({ value: a, label: a, disabled: a !== d.aspect, why: "Set when the project is created." }))} />
-          <p className="hint">{d.width} × {d.height} at {d.fps} fps. Duration and size are set when the project is created.</p>
-        </div>
+        {settingsLocked ? (
+          <div className="pref">
+            <span className="pref-label">Size and length</span>
+            <span className="mono">{d.width} × {d.height} · {fpsLabel(d.fps)} fps · {d.durationSec} seconds · {d.aspect}</span>
+            <p className="hint">Fixed now that the composition has layers. Start a new project to change them.</p>
+          </div>
+        ) : (
+          <>
+            <div className="pref">
+              <label className="pref-label" htmlFor="dur">Duration (seconds)</label>
+              <input id="dur" type="number" min={1} max={600} step={0.5} value={durText}
+                onChange={(e) => { setDurText(e.target.value); const n = Number(e.target.value); if (e.target.value.trim() !== "" && n >= 1 && n <= 600) setDeliverable({ durationSec: n }); }}
+                onBlur={() => setDurText(String(d.durationSec))} />
+            </div>
+            <div className="pref">
+              <span className="pref-label">Aspect ratio</span>
+              <Segmented label="Aspect ratio" value={d.aspect} onChange={(a) => setDeliverable({ aspect: a, ...sizeFor(a, scaleOf(resId)) })}
+                options={(["16:9", "9:16", "1:1", "4:5", "21:9"] as const).map((a) => ({ value: a, label: a }))} />
+            </div>
+            <div className="pref pref-two">
+              <div className="pref"><label className="pref-label" htmlFor="res">Resolution</label>
+                <select id="res" value={resId ?? "custom"} onChange={(e) => { if (e.target.value !== "custom") setDeliverable(sizeFor(d.aspect, scaleOf(e.target.value))); }}>
+                  {RESOLUTIONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}{resId === null && <option value="custom">{d.width} × {d.height}</option>}</select></div>
+              <div className="pref"><label className="pref-label" htmlFor="fps">Frame rate</label>
+                <select id="fps" value={d.fps} onChange={(e) => setDeliverable({ fps: Number(e.target.value) as Deliverable["fps"] })}>{FRAME_RATES.map((f) => <option key={f} value={f}>{fpsLabel(f)} fps</option>)}</select></div>
+            </div>
+            <p className="hint">{d.width} × {d.height}. These can change until you add the first layer.</p>
+          </>
+        )}
         <div className="pref">
           <label className="pref-label" htmlFor="budget">Budget limit</label>
           <div className="pref-row">

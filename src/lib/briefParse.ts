@@ -69,7 +69,9 @@ export function parseTimedScript(text: string, maxSec?: number): ScriptSegment[]
   for (const line of String(text || "").split(/\r?\n/)) {
     if (!line.includes("|") && !line.includes("\t")) continue;
     if (/^[\s|:\-]+$/.test(line)) continue;                                   // a table's separator row
-    const cells = line.split(/\||\t/).map(strip).filter((c) => c.length);
+    const cells = line.split(/\||\t/).map(strip);
+    while (cells.length && !cells[0]) cells.shift();                          // a table's outer borders, not its empty cells
+    while (cells.length && !cells[cells.length - 1]) cells.pop();
     if (cells.length < 2) continue;
     const m = RANGE.exec(cells[0]);
     if (!m) continue;

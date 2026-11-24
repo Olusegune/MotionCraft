@@ -454,3 +454,11 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .fold .fold { border-bottom: 1px solid var(--mc-divider); }
 .fold .fold-head { font-size: 15px; }
 .header .mode-chip { width: 36px; padding: 0; justify-content: center; }
+
+/* Brief: what was found in the text, and two settings side by side */
+.found { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--mc-accent); border-radius: var(--mc-r-card); background: color-mix(in srgb, var(--mc-accent) 8%, transparent); }
+.found-title { display: flex; align-items: center; gap: 8px; font-weight: 600; margin: 0; }
+.found-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.found-list label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.found-list input[type=checkbox] { margin-top: 3px; }
+.pref-two { flex-direction: row; gap: 10px; } .pref-two > .pref { flex: 1 1 0; min-width: 0; }

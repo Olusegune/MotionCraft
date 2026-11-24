@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { setApiForTests, type Api } from "../lib/api";
-import { createProject } from "../lib/project";
+import { approve, createProject } from "../lib/project";
 import type { MotionProject } from "../types";
 
 function fake(project: MotionProject) {
@@ -87,10 +87,76 @@ describe("the Brief page", () => {
     const last = saved[saved.length - 1];
     expect(last?.budget.capUsd).toBe(30);
     expect(last?.intent.tone).toEqual(["elegant"]);
-    const sixteenNine = within(prefs).getByRole("radio", { name: "16:9" });
-    expect(sixteenNine).toBeChecked();
-    expect(within(prefs).getByRole("radio", { name: "9:16" })).toBeDisabled();
-    expect(within(prefs).getByText("15 seconds")).toBeInTheDocument();
+    expect(within(prefs).getByRole("radio", { name: "16:9" })).toBeChecked();
+    expect((within(prefs).getByLabelText("Duration (seconds)") as HTMLInputElement).value).toBe("15");
+  });
+
+  it("size, length and frame rate can be changed before the first layer, and are fixed after it", async () => {
+    const user = userEvent.setup();
+    const saved = fake(demo());
+    render(<App />);
+    await toBrief(user);
+    const prefs = screen.getByRole("region", { name: "Project preferences" });
+    const dur = within(prefs).getByLabelText("Duration (seconds)") as HTMLInputElement;
+    await user.clear(dur); await user.type(dur, "10");
+    expect(dur.value).toBe("10");
+    await user.click(within(prefs).getByRole("radio", { name: "9:16" }));
+    await user.selectOptions(within(prefs).getByLabelText("Resolution"), "uhd4k");
+    await user.selectOptions(within(prefs).getByLabelText("Frame rate"), "24");
+    expect(within(prefs).getByText(/2160 × 3840/)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 1400));
+    const d = saved[saved.length - 1].brief.deliverables[0];
+    expect(d).toMatchObject({ aspect: "9:16", width: 2160, height: 3840, fps: 24, durationSec: 10 });
+  });
+
+  it("with layers the size is shown as fixed, not editable", async () => {
+    const user = userEvent.setup();
+    const p = demo();
+    p.revisions = [{ id: "r1", at: "t", actor: "agent:builder", kind: "agent_edit", layers: [2], summary: "Builder made 1 layer" }];
+    fake(p);
+    render(<App />);
+    await toBrief(user);
+    const prefs = screen.getByRole("region", { name: "Project preferences" });
+    expect(within(prefs).queryByLabelText("Duration (seconds)")).toBeNull();
+    expect(within(prefs).getByText(/1920 × 1080 · 30 fps · 15 seconds · 16:9/)).toBeInTheDocument();
+    expect(within(prefs).getByText(/Fixed now that the composition has layers/)).toBeInTheDocument();
+  });
+
+  it("found in your brief: settings, scenes and sound cues are offered, and used only when asked", async () => {
+    const user = userEvent.setup();
+    const saved = fake(demo());
+    render(<App />);
+    await toBrief(user);
+    const box = screen.getByPlaceholderText(/Describe the piece/);
+    await user.click(box);
+    await user.paste("A 10-second piece, 16:9, 4K, 24 fps. The emotional journey is curiosity → awe → quiet mastery.\n\n| Time | Visual | Text | Audio |\n|---|---|---|---|\n| 0:00–0:02 | A point appears | HELLO | a quiet pulse |\n| 0:02–0:05 | It grows | | a deep swell |\n| 0:05–0:10 | Lines connect | WORLD | a bass impact |");
+    const card = await screen.findByRole("region", { name: "Found in your brief" });
+    expect(card).toHaveTextContent("10 seconds · 16:9 · 24 fps · 3840 × 2160");
+    expect(card).toHaveTextContent("3 scenes from the timed script: curiosity, awe, quiet mastery");
+    expect(card).toHaveTextContent("3 sound cues");
+    await new Promise((r) => setTimeout(r, 1400));
+    expect(saved[saved.length - 1].intent.arc).toEqual([]);                      // nothing is used until asked
+    await user.click(within(card).getByRole("button", { name: "Use these" }));
+    await new Promise((r) => setTimeout(r, 1400));
+    const p = saved[saved.length - 1];
+    expect(p.brief.deliverables[0]).toMatchObject({ durationSec: 10, aspect: "16:9", fps: 24, width: 3840, height: 2160 });
+    expect(p.intent.arc.map((b) => [b.startSec, b.endSec, b.primary])).toEqual([[0, 2, "curiosity"], [2, 5, "awe"], [5, 10, "quiet mastery"]]);
+    expect(p.review.comments.map((c) => [c.atSec, c.text])).toEqual([[0, "Sound at 0:00: a quiet pulse"], [2, "Sound at 0:02: a deep swell"], [5, "Sound at 0:05: a bass impact"]]);
+    expect(screen.queryByRole("region", { name: "Found in your brief" })).toBeNull();      // used, so nothing more to offer
+  });
+
+  it("found in your brief: Not now hides the card, and an approved intent keeps its scenes", async () => {
+    const user = userEvent.setup();
+    const p0 = approve(demo(), "A");
+    fake(p0);
+    render(<App />);
+    await toBrief(user);
+    await user.click(screen.getByPlaceholderText(/Describe the piece/));
+    await user.paste("20 seconds\n| 0:00–0:10 | one | A | x |\n| 0:10–0:20 | two | B | y |");
+    const card = await screen.findByRole("region", { name: "Found in your brief" });
+    expect(card).not.toHaveTextContent("scenes");                                 // Gate A is approved: the scenes are not offered
+    await user.click(within(card).getByRole("button", { name: "Not now" }));
+    expect(screen.queryByRole("region", { name: "Found in your brief" })).toBeNull();
   });
 
   it("Auto suggest needs a provider and says so; Browse styles opens Direction", async () => {
