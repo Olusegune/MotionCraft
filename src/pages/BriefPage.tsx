@@ -7,7 +7,12 @@ import { PageFrame } from "../shell/PageFrame";
 import { Segmented } from "../shell/Segmented";
 import { Field, useLocked, type FrameProps } from "./common";
 import { hasAnyProvider } from "../lib/project";
-import { applyLook, currentLook } from "../lib/styles";
+import { fillTreatment, suggestLook } from "../lib/makeIt";
+import { applyLook, currentLook, familyLabel } from "../lib/styles";
+import { firedRules } from "../lib/rules";
+import { getApi } from "../lib/api";
+import { useSettings } from "../lib/settings";
+import { Sheet } from "../shell/Sheet";
 import { StyleCard } from "../shell/StyleArt";
 import { GeneratePanel } from "./GeneratePanel";
 import type { Deliverable, Tone } from "../types";
@@ -35,7 +40,7 @@ const TONES: { id: Tone; label: string }[] = [
 ];
 
 export function BriefPage(f: FrameProps) {
-  const { project, update, go } = useApp();
+  const { project, update, go, approveGate } = useApp();
   const imp = useImportMedia();
   const styleLocked = useLocked("B");
   const [tab, setTab] = useState<Tab>("brief");
@@ -44,6 +49,37 @@ export function BriefPage(f: FrameProps) {
   const chars = project.brief.text.length;
   const d = project.brief.deliverables[0];
   const touch = (fn: (p: typeof project) => typeof project) => update((p) => ({ ...fn(p), updatedAt: new Date().toISOString() }));
+  const { offline, enginePath } = useSettings();
+  const [mk, setMk] = useState<{ busy: boolean; error?: string; ask?: { provider: string; model: string; label: string }; review?: boolean; notes: string[] }>({ busy: false, notes: [] });
+  const canMake = !!project.brief.text.trim() || !!project.brief.script?.trim();
+  const closeMk = () => setMk({ busy: false, notes: [] });
+  /** One button: the Director drafts the intent, a look and a plan for each scene are proposed, and you review it all once. */
+  const makeIt = async (confirmed: boolean) => {
+    setMk({ busy: true, notes: [] });
+    try {
+      const api = await getApi();
+      const st = await api.engine<{ ready: boolean; reason: string; config: { provider: string | null; model: string }; providers: { id: string; label: string; local: boolean }[] }>("llm_status", { offline }, "", enginePath);
+      const { provider, model } = st.config;
+      const info = st.providers.find((x) => x.id === provider);
+      if (!st.ready || !provider || !info) { setMk({ busy: false, notes: [], error: st.reason || "Choose a language model in Settings first. You can write the intent yourself instead." }); return; }
+      if (!info.local && !confirmed) { setMk({ busy: false, notes: [], ask: { provider, model, label: info.label } }); return; }
+      const params: Record<string, unknown> = { provider, model, brief: project.brief.text, script: project.brief.script ?? "", duration_sec: d.durationSec, offline };
+      if (!info.local) params.spend_token = await api.confirmSpend(provider, model);   // only reachable from the confirm click
+      const r = await api.engine<{ intent: typeof project.intent; warnings: string[] }>("director_intent", params, "", enginePath);
+      update((p) => {
+        let q: typeof p = { ...p, intent: r.intent, updatedAt: nowIso() };
+        q = { ...q, intent: { ...r.intent, firedRules: firedRules(q).map((x) => x.id) } };
+        if (!currentLook(q) && Object.keys(q.style.dimensions).length === 0) q = applyLook(q, suggestLook(q));
+        return fillTreatment(q);
+      });
+      setMk({ busy: false, notes: r.warnings, review: true });
+    } catch (e) { setMk({ busy: false, notes: [], error: String(e instanceof Error ? e.message : e) }); }
+  };
+  const approveAll = () => {
+    approveGate("A"); approveGate("B"); approveGate("C");
+    try { sessionStorage.setItem("mc.autoplan", "1"); } catch { /* no storage: the plan is one click away in Build */ }
+    closeMk(); go("build");
+  };
   const noAi = "Needs an AI provider (Settings, Providers). You can write the intent yourself instead.";
 
   const start = (text: string) => {
@@ -185,13 +221,30 @@ export function BriefPage(f: FrameProps) {
   return (
     <PageFrame {...f} title="Brief" intro="" inspector={inspector}
       action={{
-        label: "Interpret brief",
-        disabledReason: hasAnyProvider() ? undefined : noAi,
-        onClick: () => go("intent"),
+        label: mk.busy ? "Making it…" : "Make it",
+        disabledReason: !hasAnyProvider() ? noAi : !canMake ? "Write a brief first." : mk.busy ? "The Director is drafting." : undefined,
+        onClick: () => void makeIt(false),
         secondary: { label: "Start with a blank project", onClick: () => go("intent") },
       }}
       main={
         <div className="stack brief">
+          {mk.error && <p className="error-text" role="alert">{mk.error}</p>}
+          {mk.ask && (
+            <Sheet title="Confirm spending" onClose={closeMk}
+              footer={<><button className="btn" onClick={closeMk}>Cancel</button><button className="btn primary" onClick={() => void makeIt(true)}>Confirm and make it</button></>}>
+              <dl className="facts"><dt>Model</dt><dd>{mk.ask.model}</dd><dt>Provider</dt><dd>{mk.ask.label}</dd><dt>Charged to</dt><dd>Your {mk.ask.label} account</dd></dl>
+              <p className="muted">One call to the Director drafts the intent. Nothing else is sent, and nothing is built until you approve.</p>
+            </Sheet>
+          )}
+          {mk.review && (
+            <Sheet title="Here is the plan" onClose={closeMk}
+              footer={<><button className="btn" onClick={() => { closeMk(); go("intent"); }}>Edit first</button><button className="btn primary" onClick={approveAll}>Looks right, continue to Build</button></>}>
+              <p>{project.intent.summary}</p>
+              <ol className="layers">{project.intent.arc.map((b) => <li key={b.beatId}><span className="strong">{b.primary}</span> <span className="muted">{b.startSec}–{b.endSec} s</span></li>)}</ol>
+              <dl className="facts"><dt>Look</dt><dd>{currentLook(project) ? familyLabel(currentLook(project)!) : "Mixed"}</dd><dt>Approves</dt><dd>Intent, direction and treatment together. You can unlock any of them later.</dd></dl>
+              {mk.notes.length > 0 && <ul className="plain" role="status">{mk.notes.map((n, i) => <li key={i} className="why">{n}</li>)}</ul>}
+            </Sheet>
+          )}
           <div>
             <h2 className="brief-q">What would you like to bring to life?</h2>
             <p className="brief-sub">Start with a brief, script, music track, or visual reference.</p>

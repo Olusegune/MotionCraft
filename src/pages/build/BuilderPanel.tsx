@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useApp } from "../../ctx";
 import { Fold } from "../../shell/Fold";
@@ -51,6 +51,14 @@ export function BuilderPanel({ write, disabled, onBuilt }: { write: Write; disab
     if (res?.created) { onBuilt(res.created, res.versions); setSt({ busy: false, built: { n: res.created.length, warnings: res.warnings ?? [] } }); }
     else setSt((s) => ({ ...s, busy: false, error: "The build did not finish. See the message above; layers made before the problem are kept." }));
   };
+
+  // "Make it" on the Brief page asks for the plan to start as soon as Build opens. The spending confirmation still comes first.
+  useEffect(() => {
+    let go = false;
+    try { go = sessionStorage.getItem("mc.autoplan") === "1"; sessionStorage.removeItem("mc.autoplan"); } catch { /* no storage */ }
+    if (go && !reason) void plan(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const r = st.result;
   return (
