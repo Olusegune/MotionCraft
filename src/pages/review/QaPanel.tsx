@@ -67,6 +67,9 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
     } catch (e) { setSt((s) => ({ ...s, busy: false, error: String(e instanceof Error ? e.message : e) })); }
   };
   const lockedLayer = (id?: number) => id !== undefined && bindingFor(project, id)?.lock === "approved";
+  /** Every fix that is safe and not on an approved layer, one after another. Each is still its own revision in History. */
+  const fixable = (st.report?.results ?? []).flatMap((x) => x.findings).filter((f) => f.fix?.safe && (f.fix.kind === "move" || f.fix.kind === "relink") && !lockedLayer(f.at?.layerId));
+  const fixAll = async () => { for (const f of fixable) await fix(f); };
 
   const r = st.report;
   const raised = r ? r.counts.error + r.counts.warn + r.counts.info : 0;
@@ -75,6 +78,7 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
       <p className="muted">Deterministic checks (tier 1). Each finding shows where it is, the evidence, the likely cause and what to do. A check that could not run says so; it is never counted as a pass.</p>
       <div className="row-actions">
         <button className="btn" disabled={!!disabledReason || st.busy} onClick={() => void run()}><Play size={16} aria-hidden="true" />{st.busy ? "Checking…" : r ? "Run checks again" : "Run checks"}</button>
+        {fixable.length > 1 && <button className="btn primary" disabled={st.busy || !!disabledReason} onClick={() => void fixAll()}><Wrench size={16} aria-hidden="true" />Fix all {fixable.length} safe issues</button>}
       </div>
       {disabledReason && <p className="why">{disabledReason}</p>}
       {st.error && <p className="error-text" role="alert">{st.error}</p>}
