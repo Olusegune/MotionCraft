@@ -53,7 +53,7 @@ The director layer for motion design. A person writes a brief, script or music, 
 | What | Command | Expect |
 |---|---|---|
 | Types | `npx tsc --noEmit` | no output |
-| UI tests | `npx vitest run` | 179 pass (this includes a check that every link and picture in the README and user guide exists) |
+| UI tests | `npx vitest run` | 181 pass (this includes a check that every link and picture in the README and user guide exists) |
 | Engine tests (mock) | `cd engine; python -m pytest -q` | 229 pass, 59 deselected |
 | Engine tests (real EffectCraft) | `cd engine; $env:EFFECTCRAFT_CLI="C:\Program Files\ArtCraft\EffectCraft\effectcraft-cli.exe"; python -m pytest -q -m real_engine` | 59 pass. A skip means NOT CHECKED. |
 | Rust tests and lints | `cd src-tauri; cargo test; cargo clippy --all-targets -- -D warnings` | 20 pass, clippy clean |
