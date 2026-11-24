@@ -11,7 +11,7 @@ function links(file: string): { target: string; from: string }[] {
 }
 
 describe("the documentation", () => {
-  for (const file of ["README.md", "docs/USER_GUIDE.md"]) {
+  for (const file of ["README.md", "AGENTS.md", "docs/USER_GUIDE.md", "docs/HANDOVER.md"]) {
     it(`${file}: every relative link and picture exists`, () => {
       const missing = links(file).filter((l) => !existsSync(resolve(root, dirname(l.from), l.target))).map((l) => l.target);
       expect(missing).toEqual([]);

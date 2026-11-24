@@ -5,6 +5,7 @@ import { STAGES } from "./types";
 import { Ctx, type AppCtx } from "./ctx";
 import { getApi, type EngineStatus } from "./lib/api";
 import { updateSettings, useSettings } from "./lib/settings";
+import { nextStep } from "./lib/nextStep";
 import { approve, createProject, GATE_AFTER, newId, nowIso, reviseApproved, setMode, STAGE_LABEL, STAGE_MODE } from "./lib/project";
 import { matches } from "./lib/shortcuts";
 import { Header, type SaveState } from "./shell/Header";
@@ -300,6 +301,9 @@ export default function App() {
           </div>
           </div>
           {viewerOnly && <button className="btn viewer-exit" onClick={() => setViewerOnly(false)}>Exit viewer-only (Esc)</button>}
+          {!viewerOnly && (() => { const ns = nextStep(project); return ns ? (
+            <div className="next-step" role="region" aria-label="Next step"><span className="next-label">Next</span><span>{ns.text}</span>{ns.stage !== stage && <button className="btn quiet" onClick={() => setStage(ns.stage)}>{ns.label}</button>}</div>
+          ) : null; })()}
           <StageBar project={project} stage={stage} onStage={setStage} onGate={(g) => { const s = Object.entries(GATE_AFTER).find(([, v]) => v === g)?.[0] as Stage | undefined; if (s) setStage(s); setOverlay({ kind: "gate", gate: g }); }} />
         </Ctx.Provider>
       )}

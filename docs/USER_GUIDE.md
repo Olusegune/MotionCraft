@@ -25,6 +25,8 @@ from the app.
 **Install.** Run `MotionCraft_0.1.5_x64-setup.exe` (or the `.msi`), or unzip the portable build and start `MotionCraft.exe`. Projects are kept in
 `Documents\MotionCraft`. Nothing is sent anywhere until you add a provider and confirm a call.
 
+**Always know what is next.** A line above the stage bar says what to do next ("Press Make it...", "Review the draft...", "Render the final video") and has a button that takes you there. It disappears when the project is finished.
+
 **Three ways to work.** The switch at the top of a project sets how much the app does for you:
 
 | Mode | What happens |

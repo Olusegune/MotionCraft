@@ -527,3 +527,8 @@ main, .page, .stack { animation: rise var(--mc-t-panel) ease-out both; }
 .stage[data-tool="deliver"] svg { color: var(--mc-tool-deliver); }
 .rail-item svg, .stage svg { filter: drop-shadow(0 0 6px currentColor); transition: filter var(--mc-t-panel); }
 .rail-item:not(:hover):not(.on) svg, .stage:not(:hover):not(.current) svg { filter: none; }
+
+/* the one thing to do next, just above the stages */
+.next-step { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 4px 12px; font-size: 13px; color: var(--mc-text-2); }
+.next-step .next-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mc-accent); }
+.next-step .btn { min-height: 28px; padding: 0 10px; }
