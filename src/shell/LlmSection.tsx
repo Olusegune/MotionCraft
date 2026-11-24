@@ -44,7 +44,7 @@ export function LlmSection() {
 
   return (
     <section><h3>Language model</h3>
-      <p className="muted">Powers the Director, Builder and QA in Assisted and Agent-led modes. Optional: Manual mode needs none. Cloud models ask for your confirmation on each call; local ones (Ollama, LM Studio, Inkling) run on this computer, free.</p>
+      <p className="muted">Powers the Director, Builder and QA when you choose Together or It does it. Optional: You do it needs none. Cloud models ask for your confirmation on each call; local ones (Ollama, LM Studio, Inkling) run on this computer, free.</p>
       <label className="field"><span className="field-label">Provider</span>
         <select value={prov} onChange={(e) => { setProv(e.target.value); setUrl(st.providers.find((p) => p.id === e.target.value)?.base_url ?? ""); }}>
           <option value="">None (Manual mode)</option>

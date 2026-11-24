@@ -50,9 +50,9 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
           <Bot size={16} aria-hidden="true" />
           <Segmented label="Stage mode" value={effectiveMode(project, key)} onChange={onSetMode}
             options={[
-              { value: "manual", label: "Manual" },
-              { value: "assisted", label: "Assisted", disabled: !hasAnyProvider(), why },
-              { value: "agent-led", label: "Agent-led", disabled: !hasAnyProvider(), why },
+              { value: "manual", label: "You do it" },
+              { value: "assisted", label: "Together", disabled: !hasAnyProvider(), why },
+              { value: "agent-led", label: "It does it", disabled: !hasAnyProvider(), why },
             ]} />
         </div>
       )}

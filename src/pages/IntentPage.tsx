@@ -1,7 +1,7 @@
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Beat, Purpose, Scale5, Tone } from "../types";
 import { useApp } from "../ctx";
-import { PageFrame, Viewer } from "../shell/PageFrame";
+import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { ENERGY_ANCHORS, INTENSITY_ANCHORS } from "../lib/anchors";
 import { firedRules } from "../lib/rules";
@@ -152,7 +152,7 @@ export function IntentPage(f: FrameProps) {
   );
   return (
     <PageFrame {...f} title="Intent" intro="The interpretation everything else follows. Edit it until it is right, then approve it." strip
-      main={<div className="split-main"><Viewer />{main}</div>} inspector={inspector}
+      main={<div className="split-main">{main}</div>} inspector={inspector}
       action={{ label: state === "approved" ? "Intent approved" : "Approve intent", onClick: () => approveGate("A"), disabledReason: state === "approved" ? "Already approved. Unlock to change it." : reason ?? (complete ? undefined : "Complete the card first.") }} />
   );
 }

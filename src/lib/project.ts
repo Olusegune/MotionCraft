@@ -4,7 +4,7 @@ import { getSettings } from "./settings";
 
 export const DEFAULT_MODES: Record<ModeKey, ControlMode> = {
   intent: "assisted", style: "assisted", treatment: "assisted", sound: "assisted",
-  build: "agent-led", "audio-sync": "assisted", "qa-fixes": "assisted",
+  build: "assisted", "audio-sync": "assisted", "qa-fixes": "assisted",
 };
 /** Which control-mode key each page carries (UI_UX 4.3). Brief and Deliver have none. */
 export const STAGE_MODE: Partial<Record<Stage, ModeKey>> = {

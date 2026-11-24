@@ -61,7 +61,7 @@ html, body { overflow: hidden; }      /* the page never scrolls: every screen sc
 .segmented button { min-height: 34px; padding: 0 18px; background: transparent; border: 0; border-radius: 999px; cursor: pointer; color: var(--mc-text-2); }
 .segmented button:hover:not(:disabled):not(.on) { color: var(--mc-text); }
 .segmented button.on { background: color-mix(in srgb, var(--mc-accent) 16%, transparent); box-shadow: inset 0 0 0 1.5px var(--mc-accent); color: var(--mc-text); font-weight: 600; }
-.segmented button:disabled { color: var(--mc-text-3); cursor: not-allowed; text-decoration: line-through; }
+.segmented button:disabled { color: var(--mc-text-3); cursor: not-allowed;  }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

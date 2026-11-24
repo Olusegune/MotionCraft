@@ -23,7 +23,7 @@ describe("finding Settings and working manually", () => {
     await user.click(chip);
     expect(await screen.findByRole("dialog", { name: "Working manually" })).toHaveTextContent("Every page works without an AI account");
     await user.click(screen.getByRole("button", { name: "Open Settings" }));
-    expect(await screen.findByRole("dialog", { name: "Settings" })).toHaveTextContent("Manual.");
+    expect(await screen.findByRole("dialog", { name: "Settings" })).toHaveTextContent("You do it.");
   });
 
   it("Settings offers Browse and automatic detection for EffectCraft", async () => {

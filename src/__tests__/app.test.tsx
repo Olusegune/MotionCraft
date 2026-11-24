@@ -36,15 +36,15 @@ describe("shell", () => {
     expect(gates[0]).toHaveAccessibleName("Gate A, Intent: not reached");
   });
 
-  it("disables Assisted and Agent-led with a reason when no provider exists", async () => {
+  it("disables Together and It does it with a reason when no provider exists", async () => {
     const user = userEvent.setup();
     render(<App />);
     await newProject(user);
     await user.click(nav("Intent"));
-    const assisted = await screen.findByRole("radio", { name: "Assisted" });
+    const assisted = await screen.findByRole("radio", { name: "Together" });
     expect(assisted).toBeDisabled();
     expect(assisted).toHaveAttribute("title", expect.stringContaining("AI provider"));
-    expect(screen.getByRole("radio", { name: "Manual" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "You do it" })).toBeChecked();
   });
 
   it("completes gate A manually, locks the card, and unlocking needs confirmation", async () => {

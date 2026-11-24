@@ -18,10 +18,10 @@ function ready(): MotionProject {
 afterEach(() => updateSettings({ llmReady: false }));
 
 describe("project model", () => {
-  it("uses the PRD default control modes", () => {
+  it("starts every stage in Assisted, so nothing changes by itself when a language model is added", () => {
     const p = createProject("T");
     expect(p.controlModes).toEqual(DEFAULT_MODES);
-    expect(p.controlModes.build).toBe("agent-led");
+    expect(p.controlModes.build).toBe("assisted");
     expect(p.schemaVersion).toBe("1.0");
   });
   it("forces Manual while no provider is configured, keeping the stored choice", () => {
