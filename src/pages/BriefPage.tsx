@@ -7,7 +7,7 @@ import { PageFrame } from "../shell/PageFrame";
 import { Segmented } from "../shell/Segmented";
 import { Field, useLocked, type FrameProps } from "./common";
 import { hasAnyProvider } from "../lib/project";
-import { fillTreatment, suggestLook } from "../lib/makeIt";
+import { fillFrames, fillTreatment, suggestLook } from "../lib/makeIt";
 import { applyLook, currentLook, familyLabel } from "../lib/styles";
 import { firedRules } from "../lib/rules";
 import { getApi } from "../lib/api";
@@ -71,7 +71,7 @@ export function BriefPage(f: FrameProps) {
         let q: typeof p = { ...p, intent: r.intent, updatedAt: nowIso() };
         q = { ...q, intent: { ...r.intent, firedRules: firedRules(q).map((x) => x.id) } };
         if (!currentLook(q) && Object.keys(q.style.dimensions).length === 0) q = applyLook(q, suggestLook(q));
-        return fillTreatment(q);
+        return fillFrames(fillTreatment(q));
       });
       setMk({ busy: false, notes: r.warnings, review: true });
     } catch (e) { setMk({ busy: false, notes: [], error: String(e instanceof Error ? e.message : e) }); }

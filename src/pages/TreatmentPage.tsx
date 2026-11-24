@@ -5,6 +5,7 @@ import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Frame, assetLabel, useImportMedia } from "../shell/Media";
 import { gateState } from "../lib/project";
+import { fillFrames } from "../lib/makeIt";
 import { timecode } from "../lib/time";
 import { LockBar, useLocked, type FrameProps } from "./common";
 
@@ -48,17 +49,19 @@ export function TreatmentPage(f: FrameProps) {
                 <Frame asset={frameOf(b.beatId)} projectPath={projectPath} ratio={ratio} />
               </button>
               <div className="board-body">
-                <div className="beat-top"><span className="beat-n">Beat {n + 1}</span><span className="mono">{timecode(b.startSec, fps)} to {timecode(b.endSec, fps)}</span>
-                  <span className="muted">{b.primary || "Untitled"} · intensity {b.intensity} · energy {b.energy}</span></div>
-                <label className="field"><span className="field-label">Frame for beat {n + 1}</span>
-                  <select value={project.treatment[b.beatId]?.frameAssetId ?? ""} onChange={(e) => setT(b.beatId, { frameAssetId: e.target.value || undefined })}>
-                    <option value="">No frame</option>
-                    {images.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}</option>)}
-                  </select></label>
-                <label className="field"><span className="field-label">Sequence plan</span>
-                  <textarea rows={2} value={project.treatment[b.beatId]?.plan ?? ""} placeholder="What happens on screen in this beat?" onChange={(e) => setT(b.beatId, { plan: e.target.value })} /></label>
-                <label className="field"><span className="field-label">Motion language</span>
-                  <textarea rows={2} value={project.treatment[b.beatId]?.motion ?? ""} placeholder="How does it move? Easing, pace, transitions." onChange={(e) => setT(b.beatId, { motion: e.target.value })} /></label>
+                <div className="tile-head"><span className="strong">{b.primary || `Scene ${n + 1}`}</span><span className="time-chip mono">{timecode(b.startSec, fps)} to {timecode(b.endSec, fps)}</span></div>
+                <label className="field"><span className="visually-hidden">Sequence plan</span>
+                  <textarea rows={2} value={project.treatment[b.beatId]?.plan ?? ""} placeholder="What happens on screen in this scene?" onChange={(e) => setT(b.beatId, { plan: e.target.value })} /></label>
+                <details className="more">
+                  <summary>Picture and motion</summary>
+                  <label className="field"><span className="field-label">Frame for beat {n + 1}</span>
+                    <select value={project.treatment[b.beatId]?.frameAssetId ?? ""} onChange={(e) => setT(b.beatId, { frameAssetId: e.target.value || undefined })}>
+                      <option value="">No frame</option>
+                      {images.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}</option>)}
+                    </select></label>
+                  <label className="field"><span className="field-label">Motion language</span>
+                    <textarea rows={2} value={project.treatment[b.beatId]?.motion ?? ""} placeholder="How does it move? Easing, pace, transitions." onChange={(e) => setT(b.beatId, { motion: e.target.value })} /></label>
+                </details>
               </div>
             </li>
           ))}
@@ -70,11 +73,12 @@ export function TreatmentPage(f: FrameProps) {
     <PageFrame {...f} title="Treatment" intro="A storyboard: one frame and one plan per beat." strip main={main}
       inspector={<>
         <Fold title="Frames" defaultOpen meta={<span className="count">{images.length}</span>}>
-          <p className="muted">Frames come from your media wall. Add pictures here or in the Brief, or generate them in Settings, Image and video providers.</p>
+          <p className="muted">Each scene shows one picture from your media wall. Add some here or on the Brief page, or make them in Direction.</p>
           <button className="btn" disabled={imp.busy} onClick={() => void imp.run()}><ImagePlus size={16} aria-hidden="true" />Add pictures…</button>
+          <button className="btn" disabled={locked || fillFrames(project) === project} onClick={() => update((p) => fillFrames(p))}>Fill empty scenes with my pictures</button>
           {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
         </Fold>
-        <Fold title="Animatic"><p className="muted">The animatic plays frames over the audio. It is not an engine render. Audio arrives in Phase 3.</p></Fold>
+        
       </>}
       action={{
         label: state === "approved" ? "Treatment approved" : "Approve treatment", onClick: () => approveGate("C"),

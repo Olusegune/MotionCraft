@@ -519,6 +519,30 @@ class Service:
         a.save()
         return {"layer": r.results[0].result["layer"], **self._snapshot()}
 
+    def place_pictures(self, items: list) -> dict:
+        """Puts each scene's picture into the composition behind that scene: one image layer per item, on screen from `t_in` to `t_out`, below the
+        text and shapes. A background solid stays at the very back only if nothing is in front of the picture, so it is sent behind the pictures.
+        `items`: [{rel, t_in, t_out}]. At most 16. Pictures only; each goes through add_media and layer_timing, so every rule of those applies."""
+        if not isinstance(items, list) or not items or len(items) > 16:
+            raise AdapterError("Give between 1 and 16 pictures.")
+        made: list[int] = []
+        for it in items:
+            if not isinstance(it, dict):
+                raise AdapterError("Each picture needs a file and a time range.")
+            rel = str(it.get("rel") or "")
+            self._asset(rel, ("images",))
+            lid = self.add_media(rel)["layer"]
+            made.append(lid)
+            self.layer_timing(lid, t_in=float(it.get("t_in", 0)), t_out=float(it.get("t_out", 0)))
+        a = self._need()
+        a.execute([Command(id="layer.arrange", params={"layers": made, "to": "back"})], actor=USER)
+        comp = a.inspect().comp(None)
+        bg = [l.id for l in comp.layers if l.kind == "Solid" and "background" in l.name.lower() and l.id not in made]
+        if bg:
+            a.execute([Command(id="layer.arrange", params={"layers": bg, "to": "back"})], actor=USER)
+        a.save()
+        return {"placed": made, **self._snapshot()}
+
     def primitives(self) -> dict:
         return {"primitives": prim.describe()}
 

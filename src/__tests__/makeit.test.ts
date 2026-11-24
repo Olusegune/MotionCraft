@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProject } from "../lib/project";
-import { fillTreatment, suggestLook } from "../lib/makeIt";
+import { fillFrames, fillTreatment, suggestLook } from "../lib/makeIt";
 import { FAMILIES } from "../lib/styles";
 import type { Beat } from "../types";
 
@@ -31,5 +31,18 @@ describe("Make it: a look and a plan proposed from the intent", () => {
     expect(q.treatment.a.motion).toMatch(/slow, calm pace/);
     expect(q.treatment.b.plan).toBe("My own plan");
     expect(fillTreatment(q)).toEqual(q);                                   // running it again changes nothing
+  });
+
+  it("gives each scene without a picture an unused one, in order, and keeps the ones a person chose", () => {
+    const p = createProject("x");
+    const img = (id: string) => ({ id, kind: "image" as const, path: `assets/images/${id}.png`, provenance: { actor: "user", provider: "none", model: "none", at: "t", licence: "own", costReported: false, costValue: null, costUnit: null } });
+    p.assets = [img("i1"), img("i2"), img("i3")];
+    p.intent.arc = [beat("a", 0, 2, "one"), beat("b", 2, 5, "two"), beat("c", 5, 10, "three")];
+    p.treatment = { b: { plan: "", motion: "", frameAssetId: "i1" } };
+    const q = fillFrames(p);
+    expect(q.treatment.a.frameAssetId).toBe("i2");
+    expect(q.treatment.b.frameAssetId).toBe("i1");
+    expect(q.treatment.c.frameAssetId).toBe("i3");
+    expect(fillFrames(q)).toBe(q);                                        // nothing left to give: unchanged
   });
 });

@@ -12,6 +12,7 @@ import { approveLayer, bindingFor, logTiming, isChangedSinceApproval, markBuilt,
 import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write } from "./build/Panels";
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
+import { ScenePictures } from "./build/ScenePictures";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
 import { beatAt, clampDock, readDock, sceneStatus, writeDock } from "../lib/timelineMath";
 import { TimelinePanel, type SceneCard, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
@@ -264,6 +265,7 @@ export function BuildPage(f: FrameProps) {
       </Fold>
       <PrimitivesPanel write={write} selected={sel} locked={selLocked} playhead={playhead} disabled={writesOff} onApplied={() => undefined} />
       <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} onStructure={setStructure} />
+      <ScenePictures write={write} disabled={writesOff} />
       <BuilderPanel write={write} disabled={writesOff} onBuilt={(created, versions) => update((p) => markBuilt(p, created, versions))} />
       {unlocking && (
         <Sheet title="Unlock approved layer" onClose={() => setUnlocking(null)}

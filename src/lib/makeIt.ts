@@ -35,3 +35,21 @@ export function fillTreatment(p: MotionProject): MotionProject {
   }
   return { ...p, treatment };
 }
+
+/**
+ * A picture for every scene that has none: the project's pictures not yet used by a scene, in the order they were added (made or imported).
+ * Never replaces a picture a person chose, and never reuses one while there are unused ones left.
+ */
+export function fillFrames(p: MotionProject): MotionProject {
+  const images = (p.assets ?? []).filter((a) => a.kind === "image");
+  const used = new Set(p.intent.arc.map((b) => p.treatment[b.beatId]?.frameAssetId).filter(Boolean) as string[]);
+  const free = images.filter((a) => !used.has(a.id));
+  if (!free.length) return p;
+  const treatment = { ...p.treatment };
+  let n = 0;
+  for (const b of p.intent.arc) {
+    if (treatment[b.beatId]?.frameAssetId || n >= free.length) continue;
+    treatment[b.beatId] = { ...(treatment[b.beatId] ?? { plan: "", motion: "" }), frameAssetId: free[n++].id };
+  }
+  return n ? { ...p, treatment } : p;
+}
