@@ -10,8 +10,19 @@ const TONE_LOOK: Partial<Record<Tone, string>> = {
   instructional: "swiss", provocative: "brutalist", restrained: "editorial-minimal",
 };
 
-/** A look that fits the intent: the first tone that maps to one, else by energy (calm or lively), else a quiet editorial default. */
-export function suggestLook(p: Pick<MotionProject, "intent">): string {
+/** What a piece is about, in its own words, decides the look before any tone word does. */
+const SUBJECT_LOOK: [RegExp, string][] = [
+  [/\b(cosmic|universe|galax|space|sci-?fi|futur|civili[sz]ation|planet|orbit|stellar)/i, "cinematic-title"],
+  [/\b(neon|nightclub|club|synth|cyber|rave)/i, "neon-light"],
+  [/\b(luxury|premium|fashion|boutique|editorial|heritage)/i, "editorial-minimal"],
+  [/\b(startup|saas|software|dashboard|fintech|product launch)/i, "clean-broadcast"],
+  [/\b(kids|children|party|birthday|toy|fun)\b/i, "cut-paper"],
+];
+
+/** A look that fits the piece: what it is about first (a cosmic piece is cinematic whatever the tone word), then the tone, then the energy. */
+export function suggestLook(p: Pick<MotionProject, "intent"> & { brief?: { text?: string } }): string {
+  const about = `${p.intent.summary} ${p.brief?.text ?? ""}`;
+  for (const [re, look] of SUBJECT_LOOK) if (re.test(about)) return look;
   for (const t of p.intent.tone) { const f = TONE_LOOK[t]; if (f) return f; }
   const arc = p.intent.arc;
   const avg = arc.length ? arc.reduce((n, b) => n + b.energy, 0) / arc.length : 3;

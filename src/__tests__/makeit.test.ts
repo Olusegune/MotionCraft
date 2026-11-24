@@ -11,6 +11,10 @@ describe("Make it: a look and a plan proposed from the intent", () => {
     const p = createProject("x");
     p.intent.tone = ["elegant"];
     expect(suggestLook(p)).toBe("editorial-minimal");
+    p.intent.summary = "A restrained film about a civilization across many universes";
+    p.intent.tone = ["authoritative"];
+    expect(suggestLook(p)).toBe("cinematic-title");                       // what it is about beats the tone word
+    p.intent.summary = "";
     p.intent.tone = [];
     p.intent.arc = [beat("a", 0, 5, "x", 5), beat("b", 5, 10, "y", 4)];
     expect(suggestLook(p)).toBe("bold-kinetic");

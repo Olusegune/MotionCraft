@@ -70,7 +70,7 @@ export function BriefPage(f: FrameProps) {
       update((p) => {
         let q: typeof p = { ...p, intent: r.intent, updatedAt: nowIso() };
         q = { ...q, intent: { ...r.intent, firedRules: firedRules(q).map((x) => x.id) } };
-        if (!currentLook(q) && Object.keys(q.style.dimensions).length === 0) q = applyLook(q, suggestLook(q));
+        if (!currentLook(q) && Object.keys(q.style.dimensions).length === 0) q = applyLook(q, suggestLook({ ...q, brief: q.brief }));
         return fillFrames(fillTreatment(q));
       });
       setMk({ busy: false, notes: r.warnings, review: true });
