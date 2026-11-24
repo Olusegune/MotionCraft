@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ModelEntry } from "../lib/api";
-import { isCurated, rankModels, rankProviders } from "../lib/models";
+import { isCurated, rankForStills, rankModels, rankProviders } from "../lib/models";
 
 const m = (provider: ModelEntry["provider"], name: string, source = "curated"): ModelEntry => ({
   provider, model: `${provider}/${name}`, name, media: "image", official: provider !== "kie" && provider !== "fal", listed: true, source,
@@ -27,5 +27,10 @@ describe("which model is offered first", () => {
     expect(rankProviders(mixed, { fal: true, google: true, kie: true })).toEqual(["kie", "google", "fal"]);       // the owner's preferred provider first when it has a key
     expect(rankProviders(mixed, { fal: true, google: true })).toEqual(["google", "fal", "kie"]);                    // without its key, curated models decide
     expect(rankModels(mixed.filter((x) => x.provider === "kie")).map((x) => x.name)).toEqual(["Midjourney v7", "Imagen 4 Fast"]);
+  });
+
+  it("for one picture at a time, a quick light model comes before a heavier curated one", () => {
+    const list = [m("kie", "Midjourney v7"), m("kie", "Imagen 4 Fast", "discovered"), m("kie", "Flux Pro", "discovered")];
+    expect(rankForStills(list).map((x) => x.name)).toEqual(["Imagen 4 Fast", "Midjourney v7", "Flux Pro"]);
   });
 });

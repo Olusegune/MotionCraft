@@ -5,7 +5,7 @@ import { Sheet } from "../shell/Sheet";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
 import { capBlock, recordSpend } from "../lib/spend";
 import { getApi, type GenJob, type ModelEntry, type ModelList } from "../lib/api";
-import { rankModels, rankProviders } from "../lib/models";
+import { rankForStills, rankProviders } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { familyLabel } from "../lib/styles";
 import { NO_LETTERING } from "./Proposals";
@@ -39,7 +39,7 @@ export function MakePicture({ beat, disabled }: { beat: Beat; disabled?: boolean
 
   const usable = useMemo(() => models.filter((m) => m.media === "image" && keys[m.provider]), [models, keys]);
   const provider = useMemo(() => rankProviders(usable, keys)[0], [usable, keys]);
-  const picked = useMemo(() => rankModels(usable.filter((m) => m.provider === provider))[0], [usable, provider]);
+  const picked = useMemo(() => rankForStills(usable.filter((m) => m.provider === provider))[0], [usable, provider]);
   const each = picked?.price.known ? picked.price.value : null;
   const running = !!job && (job.state === "running" || job.state === "queued");
   const prompt = useMemo(() => scenePrompt(project, beat), [project, beat]);
