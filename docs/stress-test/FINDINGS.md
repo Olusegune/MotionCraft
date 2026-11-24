@@ -63,3 +63,12 @@ Verified in the app on the corrected build:
 - One of the three stills still drew lettering ("TypeVV") although the prompt begins with the no-lettering rule: the instruction is not enough on its own. Open: a check that flags text in a generated picture.
 
 New bug found by the run and fixed: the Builder lost its layer timing. The page shows the checked plan (with `in`/`out`) and sends it back to build; building checked it again, read only `start`/`end`, and dropped the timing, so every layer spanned the whole piece even when the model had timed them. Fixed, with a unit test and a real-engine test (both failed before). The text-spreading fallback and this fix together mean titles no longer pile up.
+
+## Round 3 (later on 2026-11-24): what was fixed and what is still open
+Fixed since the earlier rounds: lettering in pictures is flagged by a local model; each scene card has Make picture / Try another (Kie preferred, a quick light model for single pictures, the brief's colours in the prompt); sound is analysed on its own; the look follows what the piece is about; the fonts a brief names are checked against the installed fonts (Space Grotesk is not installed on the test machine, and the check says so); locked looks are explained; projects without a picture get a title card; a first-time hint on an empty Brief.
+
+Still open:
+1. macOS builds exist in CI (Apple silicon and Intel) but have not been run on a Mac.
+2. Picture quality depends on the model; "Try another" is the remedy.
+3. The first run is a hint and three steps, not an interactive walkthrough.
+4. A project made before a rule changed keeps its old look and plans (nothing is rewritten without being asked).
