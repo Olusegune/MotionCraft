@@ -4,7 +4,17 @@ What people see, newest first. Version numbers are the app's; the work below is 
 
 ## Unreleased (after 0.1.5)
 
-### New
+### New (this round)
+- **Make it**: one button on Brief. The Director drafts the intent, a look and a plan for every scene are proposed, you review once, and Build starts planning.
+- **The brief is read**: length, shape, frame rate and 4K, a timed script (as scenes) and its sound notes (as markers) are found in the text and offered before anything is used.
+- **Scene pictures**: the picture chosen for each scene goes behind that scene in the composition, fills the frame, is dimmed so text stays readable and pushes in slowly. Building does it with the layers.
+- **Shapes with art direction**: spheres are translucent rimmed circles spread across the frame, connections are hairlines, a point is a small bright dot.
+- **Layers are timed**: a plan keeps its in and out points when built (they were being lost), and text lines a model did not time are spread over the scenes.
+- **Project cards show the piece**; Treatment is a grid of picture cards; plain-language modes (You do it, Together, It does it); a spend ledger with a dollar cap for known prices and a call cap for unpriced ones; Fix all safe QA issues.
+- **Fixes**: Write markers no longer blanks the window (and a safety net shows a Reload button if a screen ever fails); the duration field follows the brief card; QA findings are readable.
+- **A little magic**: ambient light, glass panels, soft glow, gentle motion (off for reduced motion).
+
+### Earlier
 - **A timeline on Build** under the picture: audio waveform and sections, the emotional-arc curve with a dot at the playhead, QA findings and saved
   versions on the ruler, and every layer as a bar. Click to move the playhead.
 - **Move and trim layers on the timeline**: drag a bar to move it, drag an edge to trim it, or use Alt and the arrow keys. Approved layers and
