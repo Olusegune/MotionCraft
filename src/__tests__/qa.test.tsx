@@ -85,4 +85,12 @@ describe("QA: robustness and keyboard", () => {
     const offenders = files.filter((f) => /#[0-9a-fA-F]{6}\b/.test(fs.readFileSync(f, "utf-8")));
     expect(offenders.map((f) => path.basename(f))).toEqual([]);
   });
+
+  it("no blanket rule sets position on everything in the app: dialogs, notices and the full-screen player are position: fixed", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const css = fs.readFileSync(path.resolve(__dirname, "../styles/app.css"), "utf-8");
+    expect(css).not.toMatch(/\.app\s*>\s*\*\s*\{[^}]*position/);          // it once turned every dialog into an in-flow element at the bottom of the page
+    expect(css).toMatch(/\.sheet-backdrop\s*\{[^}]*position:\s*fixed/);
+  });
 });

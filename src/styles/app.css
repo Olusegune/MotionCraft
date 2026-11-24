@@ -476,10 +476,9 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .more[open] > summary { margin-bottom: 8px; }
 
 /* ===== A little magic: ambient light, glass, glow and gentle motion. Everything here is decoration and switches off for reduced motion. ===== */
-.app { position: relative; }
-.app::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+.app { position: relative; isolation: isolate; }
+.app::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
   background: radial-gradient(60% 50% at 12% -8%, var(--mc-glow-indigo), transparent 70%), radial-gradient(45% 40% at 96% 4%, var(--mc-glow-cyan), transparent 70%); }
-.app > * { position: relative; z-index: 1; }
 .rail, .inspector, .side-rail { background: var(--mc-glass); backdrop-filter: blur(14px) saturate(1.2); border-color: var(--mc-glass-edge); }
 .btn.primary:not(:disabled) { box-shadow: 0 0 0 1px var(--mc-glow-cyan-strong), 0 6px 24px -6px var(--mc-glow-cyan-strong); transition: box-shadow var(--mc-t-panel), transform var(--mc-t-panel); }
 .btn.primary:not(:disabled):hover { box-shadow: 0 0 0 1px var(--mc-accent), 0 10px 32px -6px var(--mc-glow-cyan-strong); transform: translateY(-1px); }
