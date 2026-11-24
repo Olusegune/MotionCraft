@@ -35,10 +35,6 @@ export function TreatmentPage(f: FrameProps) {
     </div>
   ) : (
     <div className="stack">
-      <div className="viewer-surround" aria-label="Selected storyboard frame">
-        <Frame asset={current ? frameOf(current.beatId) : undefined} projectPath={projectPath} ratio={ratio} className="big" />
-        <p className="viewer-meta">{current ? <><span className="mono">{timecode(current.startSec, fps)}</span> {current.primary || "Untitled beat"}</> : null}</p>
-      </div>
       <LockBar gate="C" kind="manual_edit" />
       <fieldset className="grp" disabled={locked}>
         <legend className="visually-hidden">Storyboard</legend>

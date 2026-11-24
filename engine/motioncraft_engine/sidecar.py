@@ -36,6 +36,42 @@ from . import songmap
 ECPROJ = "comp.ecproj"
 
 
+
+def _image_size(f: Path) -> tuple[int, int] | None:
+    """Pixel size of a PNG, JPEG or WebP from its header alone (no image library). None when it cannot be read."""
+    try:
+        with open(f, "rb") as fh:
+            b = fh.read(64 * 1024)
+    except OSError:
+        return None
+    try:
+        if b[:8] == bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]):
+            return int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big")
+        if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+            k = b[12:16]
+            if k == b"VP8X":
+                return 1 + int.from_bytes(b[24:27], "little"), 1 + int.from_bytes(b[27:30], "little")
+            if k == b"VP8L":
+                v = int.from_bytes(b[21:25], "little")
+                return 1 + (v & 0x3FFF), 1 + ((v >> 14) & 0x3FFF)
+            if k == b"VP8 ":
+                return int.from_bytes(b[26:28], "little") & 0x3FFF, int.from_bytes(b[28:30], "little") & 0x3FFF
+        if b[:2] == bytes([0xFF, 0xD8]):
+            i = 2
+            while i + 9 < len(b):
+                if b[i] != 0xFF:
+                    i += 1
+                    continue
+                m = b[i + 1]
+                if m in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                    return int.from_bytes(b[i + 7:i + 9], "big"), int.from_bytes(b[i + 5:i + 7], "big")
+                i += 2 + int.from_bytes(b[i + 2:i + 4], "big")
+    except (IndexError, ValueError):
+        return None
+    return None
+
+
+
 class Service:
     def __init__(self, adapter_factory, data_dir: Path | None = None, jobs: Jobs | None = None, renders: RenderJobs | None = None):
         self._factory = adapter_factory
@@ -533,7 +569,9 @@ class Service:
             self._asset(rel, ("images",))
             lid = self.add_media(rel)["layer"]
             made.append(lid)
-            self.layer_timing(lid, t_in=float(it.get("t_in", 0)), t_out=float(it.get("t_out", 0)))
+            t0, t1 = float(it.get("t_in", 0)), float(it.get("t_out", 0))
+            self.layer_timing(lid, t_in=t0, t_out=t1)
+            self._frame_picture(lid, self._asset(rel, ("images",)), t0, t1)
         a = self._need()
         a.execute([Command(id="layer.arrange", params={"layers": made, "to": "back"})], actor=USER)
         comp = a.inspect().comp(None)
@@ -542,6 +580,20 @@ class Service:
             a.execute([Command(id="layer.arrange", params={"layers": bg, "to": "back"})], actor=USER)
         a.save()
         return {"placed": made, **self._snapshot()}
+
+    def _frame_picture(self, lid: int, f: Path, t0: float, t1: float) -> None:
+        """Fits a scene picture to the whole frame (covering it, never stretched), dims it so text on top stays readable, and gives it a slow push-in
+        from the start of the scene to its end. Pictures whose size cannot be read keep their own size."""
+        a = self._need()
+        comp = a.inspect().comp(None)
+        size = _image_size(f)
+        if size is None or size[0] <= 0 or size[1] <= 0:
+            return
+        cover = max(comp.width / size[0], comp.height / size[1]) * 100.0
+        end = cover * 1.06
+        a.execute([Command(id="layer.setTransform", params={"layers": [lid], "prop": "opacity", "value": 70}),
+                   Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(t0, 4), "value": [round(cover, 3), round(cover, 3), 100.0]}),
+                   Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(max(t1 - 1.0 / comp.frame_rate, t0), 4), "value": [round(end, 3), round(end, 3), 100.0]})], actor=USER)
 
     def primitives(self) -> dict:
         return {"primitives": prim.describe()}
