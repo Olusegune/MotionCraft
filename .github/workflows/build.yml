@@ -27,7 +27,7 @@ jobs:
       - name: Engine tests (mock adapter)
         working-directory: engine
         run: |
-          pip install pydantic pillow pytest
+          pip install pydantic pillow pyyaml pytest
           python -m pytest -q
       - name: Python dependency audit
         working-directory: engine
@@ -63,7 +63,7 @@ jobs:
       - run: npm ci
       - name: Build the engine helper (PyInstaller)
         run: |
-          python -m pip install pyinstaller pydantic pillow
+          python -m pip install pyinstaller pydantic pillow pyyaml
           python scripts/build_sidecar.py
       - name: Rust tests
         working-directory: src-tauri

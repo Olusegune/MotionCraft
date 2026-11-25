@@ -1,5 +1,5 @@
 """Builds the engine helper into src-tauri/binaries/motioncraft-engine-<target-triple>[.exe] (Tauri externalBin naming).
-Needs: pip install pyinstaller pydantic   Usage: python scripts/build_sidecar.py"""
+Needs: pip install pyinstaller pydantic pillow pyyaml   Usage: python scripts/build_sidecar.py"""
 import re
 import shutil
 import subprocess
