@@ -85,6 +85,8 @@ jobs:
           Copy-Item src-tauri/target/release/motioncraft.exe portable/MotionCraft/MotionCraft.exe
           Copy-Item src-tauri/binaries/motioncraft-engine-*.exe portable/MotionCraft/motioncraft-engine.exe
           Copy-Item -Recurse THIRD_PARTY_NOTICES portable/MotionCraft/
+          Copy-Item -Recurse examples portable/MotionCraft/examples
+          Copy-Item -Recurse docs portable/MotionCraft/docs
           Compress-Archive -Path portable/MotionCraft -DestinationPath "MotionCraft_portable_windows-x64.zip"
       - name: Smoke test the built app (Windows)
         if: matrix.os == 'windows-latest'
