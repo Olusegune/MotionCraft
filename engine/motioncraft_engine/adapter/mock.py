@@ -36,6 +36,7 @@ ACCEPT: dict[str, set[str]] = {
     "renderQueue.add": {"comp", "format", "output", "proresProfile", "channels"}, "renderQueue.render": {"wait"},
     "text.fonts": {"query"}, "text.fontFeatures": {"font"},
     "file.import": {"paths", "sequence", "alphabetical", "frameRate"},
+    "footage.missing": set(), "file.relinkFootage": {"folder", "dryRun", "wait"},
     "layer.timing": {"layers", "in", "out", "delta", "start", "inDelta", "outDelta", "op", "merge"},
     "comp.settings": {"comp", "name", "width", "height", "anchor", "frameRate", "duration", "startTime"},
     "layer.addItem": {"item", "time", "index", "position", "duration", "in", "out", "anchor"},
@@ -208,6 +209,10 @@ class MockAdapter(BaseAdapter):
             kind = {"layer.newText": "Text", "layer.newShape": "Shape", "layer.newSolid": "Solid", "layer.newNull": "Null", "layer.newCamera": "Camera"}[cid]
             props = {"text/sourceText": {"value": p.get("text", ""), "keys": []}} if kind == "Text" else {}
             return {"layer": self._add_layer(kind, p.get("name") or p.get("text") or f"{kind} Layer", props)}
+        if cid == "footage.missing":
+            return {"missing": []}
+        if cid == "file.relinkFootage":
+            return {"relinked": 0}
         if cid == "file.import":
             ids = []
             for src in p["paths"]:

@@ -5,7 +5,8 @@ anything final or paid happens. This guide takes **one brief from an empty proje
 from the app.
 
 A second, longer walkthrough, with a 90-second film made from a script and ten pictures, is in [docs/walkthrough](walkthrough/README.md). The finished project
-ships with the app: on the Projects page press **Open the example**.
+ships with the app: on the Projects page press **Open the example**. Turning a picture into a real video clip (camera, acting, emotion, sound, your choice of model) is
+section 10 of that walkthrough.
 
 - [1. Before you start](#1-before-you-start)
 - [2. The walkthrough](#2-the-walkthrough)

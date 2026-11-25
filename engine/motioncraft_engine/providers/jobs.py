@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 from .clients import ProviderError, make_client
 from .net import Net, NetError
+from .registry import takes_picture
 from .registry import Registry
 
 LICENCE_NOTE = "Generated through a provider API. Its terms decide commercial use; check them before delivering."
@@ -23,6 +24,37 @@ PARAM_KEY = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")   # model ids from remote lists end up in URL paths
 MAX_RUNNING = 4
 MAX_PROMPT = 4000
+
+
+MAX_START_PICTURE = 25 * 1024 * 1024
+
+
+def load_start_picture(pkg: Path, rel: str) -> dict:
+    """The starting picture of an image-to-video job: a file directly in this project's assets/images folder, checked by what it really is, and shrunk to at
+    most 1920 pixels on its long side as a JPEG when Pillow is there (faster to send, and no model needs more). Returns {data, mime}."""
+    r = Path(rel)
+    if r.is_absolute() or len(r.parts) != 3 or r.parts[0] != "assets" or r.parts[1] != "images" or any(x in ("..", ".") for x in r.parts):
+        raise JobRefused("The starting picture must be one of this project's pictures.")
+    f = (pkg / r).resolve()
+    if pkg not in f.parents or not f.is_file() or f.is_symlink():
+        raise JobRefused("The starting picture is not in the project any more.")
+    if f.stat().st_size > MAX_START_PICTURE:
+        raise JobRefused("The starting picture is too large (over 25 MB).")
+    raw = f.read_bytes()
+    mime = "image/png" if raw[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg" if raw[:3] == b"\xff\xd8\xff" else "image/webp" if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP" else None
+    if mime is None:
+        raise JobRefused("The starting picture is not a PNG, JPEG or WebP file.")
+    try:
+        import io
+        from PIL import Image
+        with Image.open(io.BytesIO(raw)) as im:
+            im = im.convert("RGB")
+            im.thumbnail((1920, 1920))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=92)
+            return {"data": buf.getvalue(), "mime": "image/jpeg"}
+    except Exception:  # noqa: BLE001 - without Pillow, or an odd file, the original goes as it is
+        return {"data": raw, "mime": mime}
 
 
 class JobRefused(Exception):
@@ -66,6 +98,11 @@ class Jobs:
         pkg = Path(package).resolve()
         if pkg.suffix != ".motioncraft" or not pkg.is_dir():
             raise JobRefused("Not a MotionCraft package folder.")
+        if "image" in clean:       # image to video: the picture is one of this project's own, read here, never a path or address the page chose
+            if e["media"] != "video" or not takes_picture(e):
+                raise JobRefused("That model does not start from a picture. Choose one marked as taking a picture.")
+            clean["_image"] = load_start_picture(pkg, str(clean.pop("image")))
+
         with self._lock:
             if sum(1 for j in self._jobs.values() if j["state"] in ("queued", "running")) >= MAX_RUNNING:
                 raise JobRefused(f"{MAX_RUNNING} generations are already running. Wait for one to finish.")

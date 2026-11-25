@@ -59,7 +59,12 @@ class Fal:
         self.net, self.h, self.base = net, {"Authorization": f"Key {key}"}, queue_base
 
     def submit(self, model: str, prompt: str, params: dict) -> dict:
-        j = self.net.json("POST", f"{self.base}/{model}", headers=self.h, body={"prompt": prompt, **params})
+        params = dict(params)
+        img = params.pop("_image", None)
+        body = {"prompt": prompt, **params}
+        if img:
+            body["image_url"] = f"data:{img['mime']};base64,{base64.b64encode(img['data']).decode('ascii')}"
+        j = self.net.json("POST", f"{self.base}/{model}", headers=self.h, body=body)
         if not j or "request_id" not in j:
             raise ProviderError("fal did not return a request id.")
         return {"id": j["request_id"], "status_url": j.get("status_url"), "response_url": j.get("response_url")}
@@ -201,8 +206,13 @@ class Google:
 
     def submit(self, model: str, prompt: str, params: dict) -> dict:
         if model.startswith("veo-"):
-            p = {k2: params[k1] for k1, k2 in (("aspect_ratio", "aspectRatio"), ("resolution", "resolution"), ("duration", "durationSeconds")) if params.get(k1)}
-            j = self.net.json("POST", f"{self.base}/models/{model}:predictLongRunning", headers=self.h, body={"instances": [{"prompt": prompt}], "parameters": p})
+            p = {k2: params[k1] for k1, k2 in (("aspect_ratio", "aspectRatio"), ("resolution", "resolution"), ("duration", "durationSeconds"), ("negative_prompt", "negativePrompt"),
+                                              ("person_generation", "personGeneration")) if params.get(k1)}
+            instance: dict = {"prompt": prompt}
+            img = params.get("_image")
+            if img:
+                instance["image"] = {"bytesBase64Encoded": base64.b64encode(img["data"]).decode("ascii"), "mimeType": img["mime"]}
+            j = self.net.json("POST", f"{self.base}/models/{model}:predictLongRunning", headers=self.h, timeout=300, body={"instances": [instance], "parameters": p})
             if not (j or {}).get("name"):
                 raise ProviderError("Google did not return an operation.")
             return {"op": j["name"]}

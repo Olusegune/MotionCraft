@@ -659,8 +659,10 @@ fn engine_call(
     }
     if method == "models_refresh" {
         let mut keys = serde_json::Map::new();
-        if let Ok(k) = get_key("fal") {
-            keys.insert("fal".into(), Value::String(k)); // only fal's listing needs a key
+        for p in ["fal", "google"] {
+            if let Ok(k) = get_key(p) {
+                keys.insert(p.into(), Value::String(k)); // fal's and Google's lists need a key; listing models costs nothing
+            }
         }
         params.as_object_mut().unwrap().insert("keys".into(), Value::Object(keys));
     }

@@ -68,7 +68,7 @@ export interface MotionProject {
   style: { moodboard?: string[];   // asset ids chosen as references
            dimensions: Partial<Record<Dimension, { familyId: string; intensity: Intensity }>>;
            conflicts: { a: string; b: string; reason: string; overridden: boolean }[] };
-  treatment: Record<string, { plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean }>;   // keyed by beatId (added in P1-01; see PR)
+  treatment: Record<string, { plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean; stillAssetId?: string; animate?: import("./lib/videoPrompt").AnimateSettings }>;   // keyed by beatId (added in P1-01; see PR)
   /** `accepted`: warnings and notes the person has looked at and chosen to live with, so they stop counting against the sign-off. Errors cannot be accepted. */
   review: { comments: ReviewComment[]; preview?: { rel: string; at: string }; accepted?: { key: string; check: string; detail: string; at: string }[] };
   renders?: RenderRecord[];

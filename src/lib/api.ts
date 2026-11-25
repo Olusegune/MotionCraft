@@ -9,6 +9,8 @@ export type ProviderId = "byteplus" | "google" | "openai" | "kie" | "fal";
 export type KeyAccount = ProviderId | "anthropic" | "openrouter";
 export interface ModelEntry {
   provider: ProviderId; model: string; name: string; media: "image" | "video"; official: boolean; listed: boolean; source: string;
+  /** A video model that can start from a picture (image to video). */
+  imageInput?: boolean;
   price: { known: boolean; unit: string | null; value: number | null; note: string };
 }
 export interface ModelList { models: ModelEntry[]; status: Record<string, { refreshed: number | null; stale: boolean }> }

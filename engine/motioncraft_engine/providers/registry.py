@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from urllib.parse import quote
 import time
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,18 @@ BUILTIN: list[dict] = [
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
 
 
+def takes_picture(e: dict) -> bool:
+    """Can this model start from a picture (image to video)? Google's Veo can; fal lists its image-to-video models by name. Kie and BytePlus need the
+    picture hosted at a web address, which MotionCraft does not do (a picture is never uploaded anywhere but to the model the person chose)."""
+    if e.get("media") != "video":
+        return False
+    if e.get("provider") == "google":
+        return str(e.get("model", "")).startswith("veo-")
+    if e.get("provider") == "fal":
+        return "image-to-video" in str(e.get("model", ""))
+    return False
+
+
 def key_of(e: dict) -> str:
     return f"{e['provider']}/{e['model']}"
 
@@ -84,6 +97,7 @@ def discover_kie(net: Net) -> list[dict]:
 
 
 FAL_CATEGORIES = {"video": ("image-to-video", "text-to-video"), "image": ("text-to-image", "image-to-image")}
+FAL_NOT_A_GENERATOR = re.compile(r"avatar|lip[- ]?sync|sync-?[0-9]|heygen|infinitalk|first[- ]?frame|last[- ]?frame|lora|upscal|video-to-video|/extend|/edit|reference-to|motion[- ]control|talking", re.I)
 
 
 def discover_fal(net: Net, key: str) -> list[dict]:
@@ -96,7 +110,8 @@ def discover_fal(net: Net, key: str) -> list[dict]:
                 r = net.json("GET", f"https://api.fal.ai/v1/models?{q}", headers={"Authorization": f"Key {key}"})
                 for m in r.get("models", []):
                     mid = m.get("endpoint_id")
-                    if mid and mid not in seen:
+                    name_ = (m.get("metadata") or {}).get("display_name", mid)
+                    if mid and mid not in seen and not (media == "video" and FAL_NOT_A_GENERATOR.search(f"{mid} {name_}")):
                         seen.add(mid)
                         out.append(entry("fal", mid, (m.get("metadata") or {}).get("display_name", mid)[:100], media, source="discovered"))
                 cursor = r.get("next_cursor")
@@ -105,15 +120,33 @@ def discover_fal(net: Net, key: str) -> list[dict]:
     return out
 
 
+def discover_google(net: Net, key: str) -> list[dict]:
+    """The video models this Google key can really start: Veo models that support `predictLongRunning`. The built-in names are a guess until this has run
+    (a name Google does not offer answers 404, as `veo-3.1-lite-generate-preview` and `veo-3.1-fast-generate-preview` did on the first real test)."""
+    out: list[dict] = []
+    token = None
+    for _ in range(5):
+        url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200" + (f"&pageToken={quote(str(token), safe='')}" if token else "")   # the token comes from the reply: escaped, never trusted
+        r = net.json("GET", url, headers={"x-goog-api-key": key})
+        for m in (r or {}).get("models", []):
+            name = str(m.get("name", "")).removeprefix("models/")
+            if name.startswith("veo-") and "predictLongRunning" in (m.get("supportedGenerationMethods") or []):
+                out.append(entry("google", name, str(m.get("displayName") or name)[:100], "video", source="discovered"))
+        token = (r or {}).get("nextPageToken")
+        if not token:
+            break
+    return out
+
+
 class Registry:
     def __init__(self, path: Path | None = None):
         self.path = Path(path) if path else None
-        self.data: dict[str, Any] = {"models": {}, "refreshed": {}}
+        self.data: dict[str, Any] = {"models": {}, "refreshed": {}, "unlisted": []}
         if self.path and self.path.is_file():
             try:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict) and isinstance(loaded.get("models"), dict):
-                    self.data = {"models": loaded["models"], "refreshed": loaded.get("refreshed", {})}
+                    self.data = {"models": loaded["models"], "refreshed": loaded.get("refreshed", {}), "unlisted": list(loaded.get("unlisted", []))}
             except (OSError, ValueError):
                 pass  # a damaged cache is rebuilt from the built-in list
 
@@ -121,7 +154,11 @@ class Registry:
         out = {key_of(e): dict(e) for e in BUILTIN}
         for k, e in self.data["models"].items():
             if k not in out and e.get("media") in MEDIA and e.get("provider") in PROVIDERS:
-                out[k] = e
+                out[k] = dict(e)
+        for k, e in out.items():
+            e["imageInput"] = takes_picture(e)
+            if k in self.data["unlisted"]:
+                e["listed"] = False          # a built-in name the provider said it does not offer
         return sorted(out.values(), key=lambda e: (e["media"], e["provider"], e["name"].lower()))
 
     def get(self, provider: str, model: str) -> dict | None:
@@ -130,12 +167,12 @@ class Registry:
     def status(self) -> dict:
         now = time.time()
         return {p: {"refreshed": self.data["refreshed"].get(p),
-                    "stale": not self.data["refreshed"].get(p) or now - self.data["refreshed"][p] > STALE_SECONDS} for p in ("kie", "fal")}
+                    "stale": not self.data["refreshed"].get(p) or now - self.data["refreshed"][p] > STALE_SECONDS} for p in ("kie", "fal", "google")}
 
     def refresh(self, net: Net, keys: dict[str, str], providers: list[str] | None = None) -> dict[str, dict]:
         """Ask Kie and fal for their lists. A failure changes nothing for that provider and is reported."""
         results: dict[str, dict] = {}
-        for p in providers or ["kie", "fal"]:
+        for p in providers or ["kie", "fal", "google"]:
             try:
                 if p == "kie":
                     found = discover_kie(net)
@@ -144,13 +181,18 @@ class Registry:
                         results[p] = {"ok": False, "error": "Add your fal key in Settings to list its models."}
                         continue
                     found = discover_fal(net, keys["fal"])
+                elif p == "google":
+                    if not keys.get("google"):
+                        results[p] = {"ok": False, "error": "Add your Google key in Settings to list its video models."}
+                        continue
+                    found = discover_google(net, keys["google"])
                 else:
                     results[p] = {"ok": False, "error": "This provider has a built-in list."}
                     continue
             except NetError as e:
                 results[p] = {"ok": False, "error": str(e)}
                 continue
-            if not found:
+            if not found and p != "google":
                 results[p] = {"ok": False, "error": "The provider's list was empty or in a format this version does not read; nothing changed."}
                 continue
             found = [e for e in found if _SAFE_ID.match(e["model"]) and ".." not in e["model"]]   # remote ids become URL paths
@@ -160,8 +202,14 @@ class Registry:
             for k, e in self.data["models"].items():
                 if e["provider"] == p and k not in seen:
                     e["listed"] = False            # never removed: projects refer to it
+            if p == "google":                 # the built-in Veo names that this key's list does not have are hidden, never offered to fail
+                names = {e["model"] for e in found}
+                self.data["unlisted"] = sorted({key_of(b) for b in BUILTIN if b["provider"] == "google" and b["media"] == "video" and b["model"] not in names}
+                                               | {k for k in self.data["unlisted"] if not k.startswith("google/veo-")})
             self.data["refreshed"][p] = time.time()
             results[p] = {"ok": True, "models": len(found)}
+            if p == "google" and not found:
+                results[p]["note"] = "This Google key lists no Veo model, so it cannot start a video clip (Veo needs a Google account with billing turned on)."
         self._save()
         return results
 

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 /** Shared dialog. Every dialog uses it (AGENTS.md). Escape closes, focus is trapped and restored. */
@@ -27,7 +28,9 @@ export function Sheet({ title, onClose, children, footer, wide }: {
     document.addEventListener("keydown", onKey, true);
     return () => { document.removeEventListener("keydown", onKey, true); prev?.focus?.(); };
   }, []);
-  return (
+  // Drawn into the page's body, not where it was opened: a dialog opened inside a card or panel that has its own transform or clipping would otherwise be
+  // clipped to it (the Animate dialog showed up squeezed inside a scene card).
+  return createPortal(
     <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`sheet${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} tabIndex={-1}>
         <div className="sheet-head">
@@ -37,6 +40,7 @@ export function Sheet({ title, onClose, children, footer, wide }: {
         <div className="sheet-body">{children}</div>
         {footer && <div className="sheet-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

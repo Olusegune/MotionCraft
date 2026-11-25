@@ -119,12 +119,27 @@ class Service:
         ecproj = pkg / ECPROJ
         if ecproj.is_file():
             self.a.open(ecproj)
+            self._relink_media()
             self._follow_settings(settings)
         else:
             self.a.create(pkg, CompSettings(**(settings or {})))
         if locked:
             self.a.load_locks(None, [int(i) for i in locked])
         return self._snapshot()
+
+    def _relink_media(self) -> None:
+        """EffectCraft keeps the full path of every picture, clip and sound file. A project that was copied, exported, imported or moved still points at the
+        folder it was made in: on another computer (or after the first copy is deleted) every file is missing, and a render is silent and black. When a
+        composition is opened, anything missing is looked for, by its exact file name, in this project's own assets folder and pointed there.
+        Nothing else is touched; if nothing is missing this does nothing."""
+        try:
+            res = self.a.execute([Command(id="footage.missing", params={})], actor=USER).results[0].result or {}
+            if not res.get("missing"):
+                return
+            self.a.execute([Command(id="file.relinkFootage", params={"folder": str(self.pkg / "assets"), "wait": True})], actor=USER)
+            self.a.save()
+        except Exception:  # noqa: BLE001 - a project that cannot be relinked still opens; QA's missing-assets check then says what is missing
+            return
 
     def _follow_settings(self, settings: dict | None) -> None:
         """The brief can change the size, frame rate or length until the first layer exists. A composition with no layers takes the project's

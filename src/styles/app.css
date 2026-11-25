@@ -571,3 +571,9 @@ button.chip:focus-visible { outline: 2px solid var(--mc-accent); outline-offset:
 @media (max-width: 1620px) { .header .search-btn { min-width: 0; flex: 0 0 auto; } .header .search-btn .search-label { display: none; } }
 .header { min-width: 0; }
 .header .project-title, .header [class*="proj"] { min-width: 0; }
+
+/* Animate a scene: picture on the left, the director's choices on the right */
+.animate-grid { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(320px, 1.6fr); gap: 20px; }
+.animate-grid textarea { width: 100%; }
+@media (max-width: 900px) { .animate-grid { grid-template-columns: 1fr; } }
+.animate-scene { margin-top: 6px; }

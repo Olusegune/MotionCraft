@@ -105,3 +105,10 @@ Result: 2560 × 1080, 24 fps H.264, 90.0 s, with stereo AAC sound; QA 0 errors, 
 - Treatment shows "Try another" (a paid picture) on pictures the person supplied; it should say so only for pictures made in the app.
 - The voiceover lines in the script become markers only; nothing speaks them. No music is made; the score is imported.
 - The H.264 file is 172 MB for 90 s (about 15 Mbit/s). Fine for a master, large for the web: no bitrate choice yet.
+
+## Found while building image to video (same day)
+15. **Dialogs opened inside a card were squeezed into it.** The Animate dialog appeared clipped inside the scene card. Every dialog is now drawn into the page's body.
+16. **A project copy, an exported package or the shipped example lost its media.** EffectCraft keeps the full path of every file, so a copy still pointed at the folder it was made in; the sound went silent and pictures went missing once the original was gone (or on another computer). When a composition is opened, missing files are looked for by exact name in the project's own assets and pointed there. Real-engine test (fails without the fix).
+17. **A guessed model name answers 404.** The built-in Veo names (`veo-3.1-fast-generate-preview`, `veo-3.1-lite-generate-preview`) were rejected by the Gemini API for this key. The app now asks Google which models a key can start, and hides built-in names it does not list. This Google key listed no Veo model at all.
+18. **fal listed 847 models, many of them not video generators** (avatars, lip-sync, first and last frame tools). They are filtered, and the Animate dialog has a search box.
+19. Generated clips keep their own settings (camera, acting, emotion, dialogue, sound, model) in the project so a shot can be reopened and changed.

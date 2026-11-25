@@ -155,6 +155,29 @@ A copy of this finished project (without its final render) ships with MotionCraf
 
 ![The example, opened, with its draft preview](35-example-opened-preview.jpg)
 
+## 10. Bring a scene to life: a real video from a picture
+
+![The Animate dialog](37-animate-choices.jpg)
+
+On Treatment every scene that has a picture has **Animate…**. The dialog shows the picture and the choices a director would make: the **video model** (only models that can start
+from a picture, and whose key you have set), the **camera** (locked off, push in, pull back, pan, tilt, orbit, crane, handheld, dolly zoom), the **performance** (what the people do,
+and how, taken from the scene's plan), the **emotion** (taken from the scene's beat), an optional **line of dialogue**, the **sound** of the scene, the **length** and **size**, and what to
+**keep out** of the picture. The prompt sent to the model is built from these, shown in full, and can be replaced by hand. The price is shown, or "Unknown" when the provider does not publish one.
+Nothing is sent until you confirm, and a confirmation covers one clip.
+
+![Making the clip](39-clip-running.jpg)
+
+This test used fal's Veo 3 Fast, 4 seconds, 720p, on scene 2 (an adult, since some models refuse pictures of children). It took 53 seconds. The result is a real clip, 1280 × 720,
+24 fps, with stereo sound the model made: the technician looks up from her tablet with a small smile, then turns to look out over the sea while the camera pushes in. The picture is kept, and the
+clip becomes the scene's frame. **Put pictures behind the scenes** places it, and a clip shorter than its scene holds its last frame or loops (your choice, per scene).
+
+![The clip in the composition](41-clip-in-build.jpg)
+
+What to know:
+- Video models make 16:9 or 9:16. In a 21:9 film the clip is cropped to fit, as the pictures are.
+- Veo needs a Google account with billing turned on. The Google key used here listed no Veo model, so it could not start a clip; the dialog asks Google which models a key can use before it offers any.
+- Music is not generated: import it. Spoken lines said by someone in the scene come from the video model; a narrator's voiceover is a separate step that is not built yet.
+
 ## What this run found and fixed
 
 The run is also the stress test. See [docs/stress-test/FINDINGS.md](../stress-test/FINDINGS.md) for the list, with the tests that now guard each fix.
