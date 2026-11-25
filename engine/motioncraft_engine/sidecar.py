@@ -72,6 +72,9 @@ def _image_size(f: Path) -> tuple[int, int] | None:
 
 
 
+MAX_LOOP_COPIES = 24     # a scene is looped at most this many times: more means the clip is too short to be worth looping
+
+
 class Service:
     def __init__(self, adapter_factory, data_dir: Path | None = None, jobs: Jobs | None = None, renders: RenderJobs | None = None):
         self._factory = adapter_factory
@@ -560,7 +563,7 @@ class Service:
     def place_pictures(self, items: list) -> dict:
         """Puts each scene's picture or video clip into the composition behind that scene: one layer per item, on screen from `t_in` to `t_out`,
         below the text and shapes. A background solid stays at the very back only if nothing is in front of the picture, so it is sent behind them.
-        `items`: [{rel, t_in, t_out}], `rel` under assets/images or assets/video. At most 16. Each goes through add_media and layer_timing, so every
+        `items`: [{rel, t_in, t_out, loop?}], `rel` under assets/images or assets/video; `loop` repeats a clip shorter than its scene. At most 16. Each goes through add_media and layer_timing, so every
         rule of those applies. A clip plays once from its first frame and is trimmed at the end of the scene."""
         if not isinstance(items, list) or not items or len(items) > 16:
             raise AdapterError("Give between 1 and 16 pictures or clips.")
@@ -575,10 +578,28 @@ class Service:
             made.append(lid)
             t0, t1 = float(it.get("t_in", 0)), float(it.get("t_out", 0))
             if is_video:
-                # A new clip layer ends where the clip ends, and EffectCraft will not start a layer after its own end: set the end first, then the start.
-                self.layer_timing(lid, t_out=t1)
-                self.layer_timing(lid, t_in=t0)
-                self._frame_video(lid, f)
+                # How long the clip is by itself, as the engine reports it for a fresh layer.
+                comp = self._need().inspect().comp(None)
+                span = self._need().layer_spans(comp.id).get(lid) or {}
+                natural = float(span.get("out", 0.0)) - float(span.get("in", 0.0))
+                window = t1 - t0
+                frame = 1.0 / float(comp.frame_rate)
+                copies = 1
+                if bool(it.get("loop")) and natural > frame and window > natural + frame:
+                    copies = int(-(-window // natural))          # ceil
+                    if copies > MAX_LOOP_COPIES:
+                        raise AdapterError(f"{rel.split('/')[-1]} is only {natural:.1f} s long, so looping it for {window:.0f} s would need {copies} copies. Use a longer clip, or let it hold its last frame.")
+                # Each round of the clip is put where it belongs by SLIDING it (EffectCraft moves the clip's own start along with its in and out), not
+                # just trimmed: a trimmed clip keeps its start at time zero of the composition, so a clip placed at 6 s would already be over. Measured
+                # on EffectCraft 0.24.1 (tests/test_video_formats_real.py). Without `loop`, a clip shorter than its scene holds its last frame.
+                for k in range(copies):
+                    layer = lid if k == 0 else self.add_media(rel)["layer"]
+                    if k:
+                        made.append(layer)
+                    start = t0 + k * natural
+                    end = t1 if k == copies - 1 else min(t1, start + natural)
+                    self._place_clip_round(layer, start, end, natural, frame)
+                    self._frame_video(layer, f)
             else:
                 self.layer_timing(lid, t_in=t0, t_out=t1)
                 self._frame_picture(lid, f, t0, t1)
@@ -604,6 +625,17 @@ class Service:
         a.execute([Command(id="layer.setTransform", params={"layers": [lid], "prop": "opacity", "value": 70}),
                    Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(t0, 4), "value": [round(cover, 3), round(cover, 3), 100.0]}),
                    Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(max(t1 - 1.0 / comp.frame_rate, t0), 4), "value": [round(end, 3), round(end, 3), 100.0]})], actor=USER)
+
+    def _place_clip_round(self, layer: int, start: float, end: float, natural: float, frame: float) -> None:
+        """One round of a clip on screen from `start` to `end`: trimmed if the round is shorter than the clip, slid to `start`, and stretched
+        with a held last frame if the round is longer. The trim comes first so the slide never runs into the end of the composition."""
+        want = min(natural, end - start)
+        if want < natural - 1e-6:
+            self.layer_timing(layer, t_out=max(want, frame))
+        if start > 1e-6:
+            self.layer_timing(layer, delta=start)
+        if end - start > natural + 1e-6:
+            self.layer_timing(layer, t_out=end)
 
     def _frame_video(self, lid: int, f: Path) -> None:
         """Fits a scene clip to the whole frame (covering it, never stretched) and dims it a little so text on top stays readable. No push-in:

@@ -25,7 +25,7 @@ export function TreatmentPage(f: FrameProps) {
   const images = (project.assets ?? []).filter((a) => a.kind === "image" || a.kind === "video");   // a scene's frame can be a picture or a clip
   const frameOf = (beatId: string) => images.find((a) => a.id === project.treatment[beatId]?.frameAssetId);
   const missing = beats.filter((b) => !(project.treatment[b.beatId]?.plan ?? "").trim());
-  const setT = (id: string, patch: Partial<{ plan: string; motion: string; frameAssetId?: string }>) =>
+  const setT = (id: string, patch: Partial<{ plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean }>) =>
     update((p) => ({ ...p, treatment: { ...p.treatment, [id]: { ...(p.treatment[id] ?? { plan: "", motion: "" }), ...patch } }, updatedAt: new Date().toISOString() }));
 
   const main = beats.length === 0 ? (
@@ -57,6 +57,13 @@ export function TreatmentPage(f: FrameProps) {
                       <option value="">No frame</option>
                       {images.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}{a.kind === "video" ? " (video)" : ""}</option>)}
                     </select></label>
+                  {frameOf(b.beatId)?.kind === "video" && (
+                    <label className="field"><span className="field-label">When the clip is shorter than the scene</span>
+                      <select value={project.treatment[b.beatId]?.frameLoop ? "loop" : "hold"} onChange={(e) => setT(b.beatId, { frameLoop: e.target.value === "loop" })}>
+                        <option value="hold">Play once, then hold the last frame</option>
+                        <option value="loop">Loop the clip</option>
+                      </select></label>
+                  )}
                   <div className="row-actions">
                     <button type="button" className="btn" disabled={locked || imp.busy} onClick={() => void imp.run().then((added) => { const first = added.find((x) => x.kind === "image" || x.kind === "video"); if (first) setT(b.beatId, { frameAssetId: first.id }); })}>Use my own picture or video…</button>
                     <span className="muted">Or drag files onto the window to add them, then choose one here.</span></div>

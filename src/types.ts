@@ -68,7 +68,7 @@ export interface MotionProject {
   style: { moodboard?: string[];   // asset ids chosen as references
            dimensions: Partial<Record<Dimension, { familyId: string; intensity: Intensity }>>;
            conflicts: { a: string; b: string; reason: string; overridden: boolean }[] };
-  treatment: Record<string, { plan: string; motion: string; frameAssetId?: string }>;   // keyed by beatId (added in P1-01; see PR)
+  treatment: Record<string, { plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean }>;   // keyed by beatId (added in P1-01; see PR)
   review: { comments: ReviewComment[]; preview?: { rel: string; at: string } };
   renders?: RenderRecord[];
   controlModes: Record<ModeKey, ControlMode>;

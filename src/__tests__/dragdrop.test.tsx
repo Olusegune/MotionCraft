@@ -85,3 +85,18 @@ describe("rights notes on imported files", () => {
     expect(setRights(done, undefined).provenance.licence).toMatch(/Make sure you have the rights/);
   });
 });
+
+describe("looping a short clip", () => {
+  it("passes loop to the engine only for a video whose scene says so", () => {
+    const p = createProject("l");
+    p.intent.arc = [{ beatId: "a", startSec: 0, endSec: 6, primary: "one", intensity: 2, energy: 2 }, { beatId: "b", startSec: 6, endSec: 9, primary: "two", intensity: 2, energy: 2 }];
+    const prov = { actor: "user" as const, provider: "import", model: "file", at: "t", licence: "own", costReported: false, costValue: null, costUnit: null };
+    p.assets = [{ id: "v", kind: "video", path: "assets/video/c.mp4", provenance: prov }, { id: "i", kind: "image", path: "assets/images/i.png", provenance: prov }];
+    p.treatment = { a: { plan: "x", motion: "", frameAssetId: "v", frameLoop: true }, b: { plan: "y", motion: "", frameAssetId: "i", frameLoop: true } };
+    const items = scenePictureItems(p);
+    expect(items[0].loop).toBe(true);
+    expect(items[1].loop).toBeUndefined();            // a picture never loops
+    p.treatment.a.frameLoop = false;
+    expect(scenePictureItems(p)[0].loop).toBeUndefined();
+  });
+});

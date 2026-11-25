@@ -71,10 +71,10 @@ export function fillFrames(p: MotionProject): MotionProject {
 }
 
 /** The pictures and clips to put behind the scenes: one per scene that has one chosen, with the scene's time range. At most 16. */
-export function scenePictureItems(p: MotionProject): { rel: string; t_in: number; t_out: number; name: string }[] {
+export function scenePictureItems(p: MotionProject): { rel: string; t_in: number; t_out: number; name: string; loop?: boolean }[] {
   return p.intent.arc.flatMap((b) => {
     const a = (p.assets ?? []).find((x) => (x.kind === "image" || x.kind === "video") && x.id === p.treatment[b.beatId]?.frameAssetId);
-    return a ? [{ rel: a.path, t_in: b.startSec, t_out: b.endSec, name: b.primary }] : [];
+    return a ? [{ rel: a.path, t_in: b.startSec, t_out: b.endSec, name: b.primary, ...(a.kind === "video" && p.treatment[b.beatId]?.frameLoop ? { loop: true } : {}) }] : [];
   }).slice(0, 16);
 }
 

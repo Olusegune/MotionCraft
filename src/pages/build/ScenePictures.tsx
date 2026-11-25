@@ -16,7 +16,7 @@ export function ScenePictures({ write, disabled }: { write: Write; disabled: boo
       <p className="muted">Puts each scene's picture behind that scene, under the text and shapes. They are normal layers you can move, trim or remove.</p>
       <button className="btn" disabled={!!reason} onClick={async () => {
         setMsg(null);
-        const r = await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out }) => ({ rel, t_in, t_out })) });
+        const r = await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}) })) });
         if (r) setMsg(`${items.length} picture${items.length === 1 ? "" : "s"} placed.`);
       }}><Images size={16} aria-hidden="true" />Put pictures behind the scenes</button>
       {reason && <p className="why">{reason}</p>}

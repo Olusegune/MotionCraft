@@ -83,3 +83,73 @@ def test_a_clip_placed_as_a_scene_background_starts_late_fills_the_frame_and_sit
     for xy in ((2, 2), (im.width - 3, 2), (2, im.height - 3), (im.width - 3, im.height - 3)):
         assert sum(im.getpixel(xy)) > 90, f"black at {xy}: the clip does not cover the frame"
     s.handle("close", {})
+
+
+def _open_with_clip(tmp_path, width=320, height=180):
+    Image = pytest.importorskip("PIL.Image")
+    cli = os.environ.get("EFFECTCRAFT_CLI")
+    if not cli or not Path(cli).exists():
+        pytest.skip("EFFECTCRAFT_CLI not set: real engine NOT CHECKED")
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg not installed: NOT CHECKED")
+    s = Service(lambda p: EffectCraftAdapter(Path(cli), read_roots=[p], write_roots=[p]), data_dir=tmp_path / "d")
+    pkg = tmp_path / "P.motioncraft"
+    (pkg / "fonts").mkdir(parents=True)
+    (pkg / "fonts" / "manifest.json").write_text("[]")
+    (pkg / "assets" / "video").mkdir(parents=True)
+    make_clip(pkg / "assets" / "video" / "c.mp4", CASES["h264.mp4"])        # 2 seconds
+    s.handle("open", {"package": str(pkg), "settings": {"name": "Main", "width": width, "height": height, "frame_rate": 24, "duration": 10}})
+    s.handle("add_solid", {"name": "Background"})
+    return s, Image
+
+
+def _frame(s, Image, t):
+    return Image.open(io.BytesIO(base64.b64decode(s.handle("preview", {"times": [t], "max_side": 320})["png"]))).convert("RGB")
+
+
+def _diff(a, b):
+    return sum(sum(abs(x - y) for x, y in zip(pa, pb)) for pa, pb in zip(a.getdata(), b.getdata())) / (a.width * a.height)
+
+
+def test_a_clip_shorter_than_its_scene_holds_its_last_frame_unless_asked_to_loop(tmp_path):
+    s, Image = _open_with_clip(tmp_path)
+    s.handle("place_pictures", {"items": [{"rel": "assets/video/c.mp4", "t_in": 0, "t_out": 6}]})
+    clips = [l for l in s.handle("timeline_read", {})["layers"] if l["name"] == "c.mp4"]
+    assert len(clips) == 1
+    assert _diff(_frame(s, Image, 3.0), _frame(s, Image, 5.0)) < 1.0, "after the clip ends it should stay on one frame"
+    s.handle("close", {})
+
+
+def test_looping_repeats_the_clip_back_to_back_to_the_end_of_the_scene(tmp_path):
+    s, Image = _open_with_clip(tmp_path)
+    s.handle("place_pictures", {"items": [{"rel": "assets/video/c.mp4", "t_in": 1, "t_out": 6, "loop": True}]})
+    clips = sorted((l for l in s.handle("timeline_read", {})["layers"] if l["name"].startswith("c.mp4")), key=lambda l: l["in"])   # the engine numbers the copies
+    assert len(clips) == 3                                                     # 5 s of scene, 2 s clip: 2 + 2 + 1
+    assert [round(l["in"]) for l in clips] == [1, 3, 5] and round(clips[-1]["out"]) == 6
+    assert _diff(_frame(s, Image, 1.5), _frame(s, Image, 3.5)) < 12.0, "the second round should look like the first"
+    assert _diff(_frame(s, Image, 1.5), _frame(s, Image, 1.9)) > 3.0, "the clip should be moving within a round"
+    s.handle("close", {})
+
+
+def test_a_clip_too_short_to_loop_is_refused_with_a_plain_reason(tmp_path):
+    s, _ = _open_with_clip(tmp_path)
+    with pytest.raises(Exception, match="copies"):
+        s.handle("place_pictures", {"items": [{"rel": "assets/video/c.mp4", "t_in": 0, "t_out": 60, "loop": True}]})
+    s.handle("close", {})
+
+
+def test_a_clip_placed_late_really_plays_from_its_first_frame_then_holds(tmp_path):
+    """Regression: a clip only trimmed to start at 4 s kept its own start at 0 and was already over, so only its last frame ever showed."""
+    s, Image = _open_with_clip(tmp_path)
+    s.handle("place_pictures", {"items": [{"rel": "assets/video/c.mp4", "t_in": 4, "t_out": 8}]})
+    assert _diff(_frame(s, Image, 4.2), _frame(s, Image, 5.0)) > 3.0, "the clip should be playing between 4 s and 6 s"
+    assert _diff(_frame(s, Image, 6.5), _frame(s, Image, 7.5)) < 1.0, "after its 2 seconds it holds the last frame to the end of the scene"
+    s.handle("close", {})
+
+
+def test_a_long_clip_is_trimmed_at_the_end_of_a_short_scene(tmp_path):
+    s, Image = _open_with_clip(tmp_path)
+    s.handle("place_pictures", {"items": [{"rel": "assets/video/c.mp4", "t_in": 9, "t_out": 10}]})
+    clip = [l for l in s.handle("timeline_read", {})["layers"] if l["name"].startswith("c.mp4")][0]
+    assert clip["in"] == pytest.approx(9.0, abs=0.05) and clip["out"] == pytest.approx(10.0, abs=0.05)
+    s.handle("close", {})
