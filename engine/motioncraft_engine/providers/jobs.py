@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 from .clients import ProviderError, make_client
 from .net import Net, NetError
-from .registry import takes_picture
+from .registry import takes_inputs, takes_picture
 from .registry import Registry
 
 LICENCE_NOTE = "Generated through a provider API. Its terms decide commercial use; check them before delivering."
@@ -57,6 +57,64 @@ def load_start_picture(pkg: Path, rel: str) -> dict:
         return {"data": raw, "mime": mime}
 
 
+MAX_FILE = {"images": 25 * 1024 * 1024, "video": 100 * 1024 * 1024, "audio": 50 * 1024 * 1024}
+MAX_FILE_FIELDS, MAX_FILES_PER_FIELD = 12, 12
+
+
+def _sniff(raw: bytes, folder: str) -> str | None:
+    if folder == "images":
+        return "image/png" if raw[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg" if raw[:3] == b"\xff\xd8\xff" else "image/webp" if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP" else None
+    if folder == "video":
+        return "video/mp4" if raw[4:8] == b"ftyp" and raw[8:12] not in (b"qt  ",) else "video/quicktime" if raw[4:8] == b"ftyp" else "video/webm" if raw[:4] == b"\x1a\x45\xdf\xa3" else None
+    if folder == "audio":
+        return "audio/wav" if raw[:4] == b"RIFF" and raw[8:12] == b"WAVE" else "audio/mpeg" if raw[:3] == b"ID3" or (len(raw) > 2 and raw[0] == 0xFF and raw[1] & 0xE0 == 0xE0) else \
+            "audio/flac" if raw[:4] == b"fLaC" else "audio/mp4" if raw[4:8] == b"ftyp" else None
+    return None
+
+
+def load_input_files(pkg: Path, files: dict) -> dict:
+    """The files a model is given as inputs (a start picture, a last frame, reference pictures, a clip to change, sound): each a file of THIS project, in its
+    pictures, video or audio folder, read here and checked by what it really is. Returns {field: {"list": bool, "items": [{kind, data, mime, name}]}}."""
+    if not isinstance(files, dict) or len(files) > MAX_FILE_FIELDS:
+        raise JobRefused("Too many input slots.")
+    out: dict[str, dict] = {}
+    for field, spec in files.items():
+        if not PARAM_KEY.match(str(field)) or not isinstance(spec, dict) or not isinstance(spec.get("paths"), list):
+            raise JobRefused(f"Input {field!r} is not allowed.")
+        paths = spec["paths"]
+        if not paths or len(paths) > MAX_FILES_PER_FIELD:
+            raise JobRefused(f"Input {field!r} needs between 1 and {MAX_FILES_PER_FIELD} files.")
+        items = []
+        for rel in paths:
+            r = Path(str(rel))
+            if r.is_absolute() or len(r.parts) != 3 or r.parts[0] != "assets" or r.parts[1] not in MAX_FILE or any(x in ("..", ".") for x in r.parts):
+                raise JobRefused("An input must be one of this project's pictures, clips or sounds.")
+            f = (pkg / r).resolve()
+            if pkg not in f.parents or not f.is_file():
+                raise JobRefused(f"{r.name} is not in the project any more.")
+            if f.stat().st_size > MAX_FILE[r.parts[1]]:
+                raise JobRefused(f"{r.name} is too large to send ({f.stat().st_size // 1048576} MB).")
+            raw = f.read_bytes()
+            mime = _sniff(raw, r.parts[1])
+            if mime is None:
+                raise JobRefused(f"{r.name} is not a picture, clip or sound file the models can take.")
+            if r.parts[1] == "images":
+                try:
+                    import io
+                    from PIL import Image
+                    with Image.open(io.BytesIO(raw)) as im:
+                        im = im.convert("RGB")
+                        im.thumbnail((1920, 1920))
+                        buf = io.BytesIO()
+                        im.save(buf, "JPEG", quality=92)
+                        raw, mime = buf.getvalue(), "image/jpeg"
+                except Exception:  # noqa: BLE001 - the original goes as it is
+                    pass
+            items.append({"kind": {"images": "image", "video": "video", "audio": "audio"}[r.parts[1]], "data": raw, "mime": mime, "name": r.name})
+        out[str(field)] = {"list": bool(spec.get("list")), "items": items}
+    return out
+
+
 class JobRefused(Exception):
     """The request was rejected before anything was sent or charged."""
 
@@ -73,7 +131,7 @@ class Jobs:
 
     # ------------------------------------------------------------------ start
     def start(self, *, provider: str, model: str, prompt: str, params: dict | None, api_key: str, package: Path, spend_token: str,
-              generative_enabled: bool, offline: bool, actor: str = "user") -> dict:
+              generative_enabled: bool, offline: bool, actor: str = "user", files: dict | None = None) -> dict:
         if not generative_enabled:
             raise JobRefused("Generative models are off. Turn them on in Settings first.")
         if offline:
@@ -98,6 +156,17 @@ class Jobs:
         pkg = Path(package).resolve()
         if pkg.suffix != ".motioncraft" or not pkg.is_dir():
             raise JobRefused("Not a MotionCraft package folder.")
+        if files:                   # the files this model is given: validated against the project, then handed to the client, which uploads or encodes them
+            if e["media"] != "video" or not takes_inputs(e):
+                raise JobRefused("That model does not take pictures, clips or sound as input. Choose one that does.")
+            loaded = load_input_files(pkg, files)
+            if provider == "google":     # Veo takes one starting picture and nothing else
+                extra = set(loaded) - {"image"}
+                if extra or "image" not in loaded:
+                    raise JobRefused("Google's Veo takes one starting picture and no other file.")
+                clean["_image"] = {"data": loaded["image"]["items"][0]["data"], "mime": loaded["image"]["items"][0]["mime"]}
+            else:
+                clean["_files"] = loaded
         if "image" in clean:       # image to video: the picture is one of this project's own, read here, never a path or address the page chose
             if e["media"] != "video" or not takes_picture(e):
                 raise JobRefused("That model does not start from a picture. Choose one marked as taking a picture.")

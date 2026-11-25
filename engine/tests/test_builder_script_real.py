@@ -72,3 +72,28 @@ def test_a_fade_in_and_a_fade_out_on_the_same_line_both_work(tmp_path):
     shown = [bright_box(Image, s, t) is not None for t in (3.0, 6.0, 9.0, 11.0, 12.5)]
     assert shown == [False, True, True, True, False], shown
     s.handle("close", {})
+
+
+def test_the_chosen_font_is_really_used_by_the_engine(tmp_path):
+    """Two fonts that ship with Windows draw the same words at clearly different widths: the font parameter reaches EffectCraft."""
+    Image = pytest.importorskip("PIL.Image")
+    cli = os.environ.get("EFFECTCRAFT_CLI")
+    if not cli or not Path(cli).exists():
+        pytest.skip("EFFECTCRAFT_CLI not set: real engine NOT CHECKED")
+    widths = {}
+    for i, fam in enumerate(("Bahnschrift", "Agency FB", "Inter")):
+        s = Service(lambda p: EffectCraftAdapter(Path(cli), read_roots=[p], write_roots=[p]), data_dir=tmp_path / f"d{i}")
+        pkg = tmp_path / f"P{i}.motioncraft"
+        (pkg / "fonts").mkdir(parents=True)
+        (pkg / "fonts" / "manifest.json").write_text("[]")
+        s.handle("open", {"package": str(pkg), "settings": {"name": "Main", "width": 1280, "height": 540, "frame_rate": 24, "duration": 5}})
+        have = {f["family"]: f["origin"] for f in s.handle("fonts_available", {})["families"]}
+        if fam not in have:
+            pytest.skip(f"{fam} is not installed here: NOT CHECKED")
+        plan = {"layers": [{"key": "a", "kind": "text", "name": "Line", "role": "title", "text": "SLEEK FUTURE", "size": 100, "font": fam, "animations": []}]}
+        res = s.handle("builder_execute", {"plan": plan})
+        assert not [w for w in res["warnings"] if "not installed" in w]
+        box = bright_box(Image, s, 2.0)
+        widths[fam] = box[4] - box[2]
+        s.handle("close", {})
+    assert len({round(w / 8) for w in widths.values()}) == 3, widths          # three different fonts, three different widths

@@ -577,3 +577,12 @@ button.chip:focus-visible { outline: 2px solid var(--mc-accent); outline-offset:
 .animate-grid textarea { width: 100%; }
 @media (max-width: 900px) { .animate-grid { grid-template-columns: 1fr; } }
 .animate-scene { margin-top: 6px; }
+
+/* Font moods: each card shows its specimen in the very font it would pick */
+.font-moods { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin: 10px 0; }
+.font-mood { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; background: var(--mc-bg-panel); color: var(--mc-text); border: 2px solid transparent; border-radius: var(--mc-r-card); cursor: pointer; }
+.font-mood:hover:not(:disabled) { background: var(--mc-bg-raised); }
+.font-mood.on { border-color: var(--mc-accent); }
+.font-mood:disabled { cursor: not-allowed; opacity: 0.6; }
+.font-sample { font-size: 22px; line-height: 1.2; min-height: 54px; overflow: hidden; }
+.font-mood-name { font-weight: 600; font-size: 13px; }

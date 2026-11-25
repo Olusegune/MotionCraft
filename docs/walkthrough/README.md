@@ -173,6 +173,19 @@ clip becomes the scene's frame. **Put pictures behind the scenes** places it, an
 
 ![The clip in the composition](41-clip-in-build.jpg)
 
+### One dialog, every model: what it can do is read from the provider
+
+Kie.ai is offered first, then fal, then Google. When you choose a model, MotionCraft reads that model's own published page (Kie.ai and fal both publish a schema for every model) and the dialog
+shows only what the model can really do: its **aspect ratios** (Seedance 2.0 does 21:9, so a 21:9 film is not cropped), **lengths** (4 to 15 seconds for Seedance 2.0), **sizes** (up to 4K),
+whether it makes **sound**, and whether it takes a **last frame**, up to nine **reference pictures**, a **clip to follow** (video to video) or **sound to follow**. The files you choose are your
+project's own; MotionCraft sends them to the provider you chose and no one else (Kie.ai keeps uploaded files for 24 hours).
+
+![Seedance 2.0 Fast on Kie.ai](42-animate-kie-seedance.jpg)
+
+A real test: Seedance 2.0 Fast on Kie.ai, 4 seconds, 480p, from the scene 3 picture, in the film's own 21:9. It took two minutes; the clip is 992 × 432 with sound, and Kie.ai reported what it cost
+(46.8 Kie credits), which MotionCraft records in the clip's provenance. The model lists (about a thousand models) are refreshed from Kie.ai, fal and Google once each time the app runs, and a
+model that is not listed yet can be added by its id (Image and video models, "A model that is not listed?").
+
 What to know:
 - Video models make 16:9 or 9:16. In a 21:9 film the clip is cropped to fit, as the pictures are.
 - Veo needs a Google account with billing turned on. The Google key used here listed no Veo model, so it could not start a clip; the dialog asks Google which models a key can use before it offers any.

@@ -319,7 +319,13 @@ class MockAdapter(BaseAdapter):
             for q in self._queue:
                 Path(q["output"]).write_bytes(b"MOCKRENDER" + str(len(c["layers"])).encode()); n += 1
             self._queue = []; return {"failed": 0, "items": n}
-        if cid in ("text.fonts", "text.fontFeatures"):
+        if cid == "text.fonts":
+            fams = [{"family": "Inter", "styles": ["Regular", "Bold"], "origin": "bundled", "variable": True}, {"family": "JetBrains Mono", "styles": ["Regular"], "origin": "bundled", "variable": True},
+                    {"family": "Noto Serif", "styles": ["Regular"], "origin": "bundled", "variable": False}, {"family": "Bahnschrift", "styles": ["Regular"], "origin": "system", "variable": True},
+                    {"family": "Orbitron", "styles": ["Regular", "Bold"], "origin": "system", "variable": True}]
+            q = str(p.get("query") or "").lower()
+            return {"count": len(fams), "families": [f for f in fams if q in f["family"].lower()]}
+        if cid == "text.fontFeatures":
             return {"families": []}
         raise AdapterContractError(f"mock does not implement {cid}")
 

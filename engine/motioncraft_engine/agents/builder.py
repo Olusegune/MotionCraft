@@ -149,6 +149,8 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
             key, n = f"{base}-{n}", n + 1
         seen.add(key)
         layer: dict[str, Any] = {"key": key, "kind": kind, "name": name, "role": r.get("role") if r.get("role") in ROLES else DEFAULT_ROLE[kind]}
+        if kind == "text" and isinstance(r.get("font"), str) and 0 < len(r["font"].strip()) <= 80:
+            layer["font"] = r["font"].strip()
         if kind == "text" and r.get("slot") in SLOTS:        # where a script-timed line sits in the frame; set by apply_script, kept when the plan is checked again
             layer["slot"] = r["slot"]
         if kind == "text":
@@ -371,6 +373,22 @@ def apply_script(out: dict, segments: list, brief: str, duration: float, fps: fl
     out["warnings"].append(f"On-screen text was timed to the script ({len(rows)} lines).")
 
 
+def apply_fonts(out: dict, fonts: dict | None) -> None:
+    """The project's chosen fonts: the display font for titles and labels, the body font for tags and everything else. A font the model or the person
+    already set on a layer is left alone."""
+    if not isinstance(fonts, dict):
+        return
+    display, body = str(fonts.get("display") or "").strip()[:80], str(fonts.get("body") or "").strip()[:80]
+    if not display and not body:
+        return
+    for L in out["plan"]["layers"]:
+        if L["kind"] != "text" or L.get("font"):
+            continue
+        face = display if (L.get("slot") in ("title", "label") or L.get("role") == "title") else (body or display)
+        if face:
+            L["font"] = face
+
+
 def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = "", spend_token: str = "", offline: bool = False) -> dict:
     ctx = context or {}
     has_material = any(str(ctx.get(k) or "").strip() for k in ("brief", "script")) or bool((ctx.get("intent") or {}).get("summary"))
@@ -384,6 +402,7 @@ def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = 
     out = validate(raw, duration_sec=_num(d.get("durationSec"), 15), fps=_num(d.get("fps"), 30))
     apply_script(out, ctx.get("segments") or [], str(ctx.get("brief") or "") + "\n" + str(ctx.get("script") or ""), _num(d.get("durationSec"), 15), _num(d.get("fps"), 30),
                  _num(d.get("width"), 1920), _num(d.get("height"), 1080))
+    apply_fonts(out, ctx.get("fonts"))
     spread_text(out, [b.get("startSec") for b in ((ctx.get("intent") or {}).get("arc") or []) if isinstance(b.get("startSec"), (int, float))], _num(d.get("durationSec"), 15))
     return {**out, "provider": provider, "model": model, "usage": r.get("usage") or {}}
 
@@ -416,6 +435,8 @@ SLOT_AT = {"title": (0.5, 0.74), "label": (0.5, 0.875), "tag": (0.5, 0.945)}
 
 def text_params(L: dict, width: int, height: int) -> dict:
     params: dict[str, Any] = {"text": L["text"], "size": L["size"], "name": L["name"]}
+    if L.get("font"):
+        params["font"] = L["font"]
     at = SLOT_AT.get(L.get("slot", ""))
     if at:
         params["position"] = [round(width * at[0]), round(height * at[1])]

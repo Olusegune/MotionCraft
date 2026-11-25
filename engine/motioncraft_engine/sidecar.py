@@ -14,6 +14,8 @@ import argparse
 import base64
 import json
 import sys
+import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +27,7 @@ from . import audio as audio_mod
 from .primitives import library as prim
 from .renderjobs import RenderJobs
 from .providers.jobs import JobRefused, Jobs
-from .providers.net import Net
+from .providers.net import Net, NetError
 from .providers.registry import Registry
 from .llm import Llm
 from .agents import builder, director
@@ -72,6 +74,12 @@ def _image_size(f: Path) -> tuple[int, int] | None:
 
 
 
+# Families that are open (SIL Open Font License) and so free for video, as people commonly have them installed.
+OPEN_FONTS = {f.lower() for f in ("Inter", "Space Grotesk", "Orbitron", "Exo", "Exo 2", "Rajdhani", "Oxanium", "Audiowide", "Michroma", "Chakra Petch", "Sora", "Lexend", "Unbounded", "Syncopate",
+                                   "Saira", "Bebas Neue", "Oswald", "Anton", "Montserrat", "Poppins", "Playfair Display", "Cormorant Garamond", "Cormorant", "DM Sans", "Manrope", "Archivo",
+                                   "Archivo Narrow", "Barlow", "Barlow Condensed", "IBM Plex Sans", "IBM Plex Mono", "JetBrains Mono", "Noto Serif", "Noto Sans", "Roboto", "Roboto Condensed",
+                                   "Lora", "Source Sans 3", "Work Sans", "Raleway", "Josefin Sans", "Antonio", "Teko", "Russo One", "Major Mono Display", "Share Tech Mono", "Space Mono")}
+
 MAX_LOOP_COPIES = 24     # a scene is looped at most this many times: more means the clip is too short to be worth looping
 
 
@@ -79,6 +87,7 @@ class Service:
     def __init__(self, adapter_factory, data_dir: Path | None = None, jobs: Jobs | None = None, renders: RenderJobs | None = None):
         self._factory = adapter_factory
         base_dir = data_dir or Path.home() / ".motioncraft"
+        self.data_dir = base_dir
         self.reg = Registry(base_dir / "registry.json")
         self.llm = Llm(base_dir / "llm.json")
         self.jobs = jobs or Jobs(self.reg, Net())
@@ -182,12 +191,45 @@ class Service:
         except (OSError, ValueError):
             return {}
 
-    def _record_text(self, layer: int, size: int) -> None:
+    def fonts_available(self, query: str = "") -> dict:
+        """The font families EffectCraft can use on this computer, with where each comes from (bundled with EffectCraft, installed for everyone, or
+        installed for this user). Only these are offered as choices: a font that is not here would be drawn in a substitute."""
+        a = self._need()
+        res = a.execute([Command(id="text.fonts", params={"query": str(query)[:80]} if query else {})], actor=USER).results[0].result or {}
+        fams = [{"family": str(f.get("family")), "origin": str(f.get("origin") or "system"), "variable": bool(f.get("variable"))} for f in (res.get("families") or []) if isinstance(f, dict) and f.get("family")]
+        return {"count": len(fams), "families": fams[:1500]}
+
+    def _record_font_licences(self, families: list[str], origins: dict[str, str]) -> None:
+        """Writes down, in the project's font manifest, the fonts the Builder used and what is known of their licence: the fonts EffectCraft bundles and the
+        open fonts people commonly install are free for video; anything else is recorded as "unknown", which QA then says plainly instead of guessing."""
+        if self.pkg is None or not families:
+            return
+        f = self.pkg / "fonts" / "manifest.json"
+        try:
+            manifest = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else []
+            manifest = manifest if isinstance(manifest, list) else []
+        except (OSError, ValueError):
+            manifest = []
+        have = {str(m.get("family", "")).lower() for m in manifest if isinstance(m, dict)}
+        for fam in families:
+            if fam.lower() in have:
+                continue
+            ofl = origins.get(fam) == "bundled" or fam.lower() in OPEN_FONTS
+            manifest.append({"family": fam, "style": "Regular", "source": origins.get(fam, "system"),
+                             "licence": "SIL Open Font License 1.1: free to use, including in video" if ofl else "Installed on this computer. Check its licence allows use in video.",
+                             "videoUse": "yes" if ofl else "unknown", "sha256": ""})
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(manifest, indent=1, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _record_text(self, layer: int, size: int, font: str | None = None) -> None:
         f = self._text_meta_file()
         if f is None:
             return
         d = self._text_meta()
-        d[str(int(layer))] = {"size": int(size)}
+        d[str(int(layer))] = {"size": int(size), **({"font": font} if font else {})}
         try:
             f.parent.mkdir(parents=True, exist_ok=True)
             tmp = f.with_suffix(".tmp")
@@ -237,9 +279,51 @@ class Service:
         return {"results": res, **self.models()}
 
     def generate_start(self, package: str, provider: str, model: str, prompt: str, api_key: str = "", params: dict | None = None,
-                       spend_token: str = "", generative_enabled: bool = False, offline: bool = False) -> dict:
+                       spend_token: str = "", generative_enabled: bool = False, offline: bool = False, files: dict | None = None) -> dict:
         return self.jobs.start(provider=provider, model=model, prompt=prompt, params=params, api_key=api_key, package=Path(package),
-                               spend_token=spend_token, generative_enabled=generative_enabled, offline=offline)
+                               spend_token=spend_token, generative_enabled=generative_enabled, offline=offline, files=files)
+
+    def models_add(self, provider: str, model: str, name: str = "", media: str = "video") -> dict:
+        """Adds a model by its id (see Registry.add_custom). Nothing is called; the first use asks for a spend confirmation like any other."""
+        try:
+            e = self.reg.add_custom(provider, model, name, media)
+        except ValueError as err:
+            raise JobRefused(str(err)) from None
+        return {"added": e, **self.models()}
+
+    def model_schema(self, provider: str, model: str, offline: bool = False) -> dict:
+        """What a video model can do, read from its provider's own published schema (cached for a week): the inputs it takes, the aspect ratios, lengths and
+        sizes it offers, whether it takes pictures, clips or sound, and whether it makes sound. Free: it only reads public documentation."""
+        from .providers import schema as sch
+        from .providers.registry import _SAFE_ID
+        if not _SAFE_ID.match(model or "") or ".." in model or provider not in ("kie", "fal", "google"):
+            raise JobRefused("That model id is not allowed.")
+        cache = (self.data_dir / "schemas" / f"{provider}__{model.replace('/', '_')}.json") if getattr(self, "data_dir", None) else None
+        if cache and cache.is_file() and time.time() - cache.stat().st_mtime < 7 * 86400:
+            try:
+                return json.loads(cache.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        if provider == "google":
+            out = sch.google_veo() if model.startswith("veo-") else {"fields": [], "caps": sch.capabilities([])}
+        else:
+            if offline:
+                raise JobRefused("Offline mode is on, so the model's page cannot be read.")
+            try:
+                if provider == "kie":
+                    out = sch.parse_kie(self.jobs.net.text(f"https://docs.kie.ai/market/{model}.md", timeout=30))
+                else:
+                    out = sch.parse_fal(self.jobs.net.json("GET", f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={urllib.parse.quote(model, safe='/')}"))
+            except (ValueError, NetError) as e:
+                raise AdapterError(f"This model's inputs could not be read ({e}). Its basic settings are used.") from None
+        out = {"provider": provider, "model": model, **out}
+        if cache:
+            try:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                cache.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+            except OSError:
+                pass
+        return out
 
     # ------------------------------------------------------------ language model (P1-05)
     def llm_status(self, offline: bool = False) -> dict:
@@ -302,13 +386,23 @@ class Service:
                     except (prim.PrimitiveError, CommandFailed, AdapterContractError) as e:   # one motion failing does not stop the build
                         warnings.append(f"{L['name']}: {an['primitive']} was not applied. {e}")
                 if L["kind"] == "text":
-                    self._record_text(lid, int(L["size"]))
+                    self._record_text(lid, int(L["size"]), L.get("font"))
                 created.append({"key": L["key"], "layer": lid, "kind": L["kind"], "role": L["role"], "name": L["name"], "primitives": applied,
                                 **({"in": L["in"], "out": L["out"]} if "in" in L else {})})
         except Exception as e:
             a.save()
             raise AdapterError(f"The build stopped after {len(created)} of {len(checked['plan']['layers'])} layers: {e}") from None
         a.save()
+        used = sorted({L["font"] for L in checked["plan"]["layers"] if L["kind"] == "text" and L.get("font")})
+        if used:
+            try:
+                origins = {f["family"]: f["origin"] for f in self.fonts_available()["families"]}
+            except Exception:  # noqa: BLE001 - the licence note is a courtesy; the build already happened
+                origins = {}
+            self._record_font_licences(used, origins)
+            for fam in used:
+                if origins and fam not in origins:
+                    warnings.append(f"{fam} is not installed on this computer, so EffectCraft draws that text in a substitute font.")
         after = self._try_snapshot(warnings)
         return {"created": created, "warnings": warnings, "cost": checked["cost"], "versions": {"before": before, "after": after}, **self._snapshot()}
 
@@ -479,7 +573,7 @@ class Service:
             op = val(props, ("transform/opacity",))
             qa_checks_layers.append(qa_checks.Layer(
                 id=l.id, name=l.name, kind=l.kind, parent=l.parent, text=txt if isinstance(txt, str) else None,
-                font=font if isinstance(font, str) else None,
+                font=font if isinstance(font, str) else ((recorded.get(str(l.id)) or {}).get("font") if isinstance((recorded.get(str(l.id)) or {}).get("font"), str) else None),
                 size=float(size) if isinstance(size, (int, float)) else (float(recorded[str(l.id)]["size"]) if isinstance((recorded.get(str(l.id)) or {}).get("size"), (int, float)) else None),
                 position=pair(pos, None) if isinstance(pos, (list, tuple)) else None,
                 position_z=float(pos[2]) if isinstance(pos, (list, tuple)) and len(pos) > 2 and isinstance(pos[2], (int, float)) else 0.0,

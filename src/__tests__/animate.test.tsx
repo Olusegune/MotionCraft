@@ -55,8 +55,8 @@ describe("the shot, in words", () => {
   });
   it("offers only video models that take a picture and have a key, official ones first", () => {
     const list = [entry("fal", "fal-ai/x/image-to-video", "Fal i2v"), entry("google", "veo-3.1-generate-preview", "Veo 3.1"), entry("google", "veo-3.1-fast-generate-preview", "Veo 3.1 Fast"),
-      entry("kie", "kling", "Kie", { imageInput: false }), entry("google", "gemini-image", "Nano", { media: "image", imageInput: false })];
-    expect(animateChoices(list, { google: true, fal: true, kie: true }).map((m) => m.name)).toEqual(["Veo 3.1 Fast", "Veo 3.1", "Fal i2v"]);
+      entry("kie", "kling", "Kie"), entry("google", "gemini-image", "Nano", { media: "image", imageInput: false })];
+    expect(animateChoices(list, { google: true, fal: true, kie: true }).map((m) => m.name)).toEqual(["Kie", "Fal i2v", "Veo 3.1 Fast", "Veo 3.1"]);       // Kie.ai first, then fal, then Google
     expect(animateChoices(list, { fal: true }).map((m) => m.name)).toEqual(["Fal i2v"]);
     expect(animateChoices(list, {})).toEqual([]);
   });

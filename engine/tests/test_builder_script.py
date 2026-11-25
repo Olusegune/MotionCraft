@@ -140,3 +140,31 @@ def test_script_text_is_sized_from_the_frame_and_long_lines_fit_the_safe_area():
     size = out2["plan"]["layers"][0]["size"]
     assert size < round(1920 * 0.065)
     assert text_width_em("BEYOND THE ORIGINAL KARDASHEV SCALE") * size <= 0.8 * 1080 + 1
+
+
+# ------------------------------------------------------------------ fonts
+def test_the_projects_fonts_go_to_titles_labels_and_tags_and_an_explicit_font_is_kept():
+    out = builder.validate({"layers": [{"kind": "text", "name": "L", "text": "TYPE I", "size": 80}, {"kind": "text", "name": "Mine", "text": "KEEP", "size": 80, "font": "Georgia"}]}, duration_sec=90, fps=24)
+    builder.apply_script(out, [{"start": 0, "end": 8, "onScreen": "TYPE IV · UNIVERSAL SPECULATIVE"}], "Use a SPECULATIVE tag with Type IV.", 90, 24, 2560, 1080)
+    builder.apply_fonts(out, {"display": "Orbitron", "body": "Inter"})
+    by = {l["name"]: l for l in out["plan"]["layers"]}
+    assert by["Mine"]["font"] == "Georgia"
+    tag = next(l for l in out["plan"]["layers"] if l.get("slot") == "tag")
+    label = next(l for l in out["plan"]["layers"] if l.get("slot") == "label")
+    assert label["font"] == "Orbitron" and tag["font"] == "Inter"
+    assert builder.text_params(label, 2560, 1080)["font"] == "Orbitron"
+    assert "font" not in builder.text_params({"text": "x", "size": 10, "name": "n"}, 100, 100)
+
+
+def test_a_font_survives_the_second_check_before_building():
+    first = builder.validate({"layers": [{"kind": "text", "name": "L", "text": "x", "size": 80, "font": "Orbitron"}]}, duration_sec=10, fps=24)
+    again = builder.validate(first["plan"], duration_sec=10, fps=24)
+    assert again["plan"]["layers"][0]["font"] == "Orbitron"
+    assert "font" not in builder.validate({"layers": [{"kind": "text", "name": "L", "text": "x", "font": "x" * 200}]}, duration_sec=10, fps=24)["plan"]["layers"][0]
+
+
+def test_no_fonts_chosen_changes_nothing():
+    out = builder.validate({"layers": [{"kind": "text", "name": "L", "text": "x", "size": 80}]}, duration_sec=10, fps=24)
+    builder.apply_fonts(out, None)
+    builder.apply_fonts(out, {"display": "", "body": ""})
+    assert "font" not in out["plan"]["layers"][0]

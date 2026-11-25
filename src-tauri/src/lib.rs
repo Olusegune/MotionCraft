@@ -433,13 +433,13 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 37] = [
+const ENGINE_METHODS: [&str; 38] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
     "primitives", "audio_analyze", "audio_cached", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
     "snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore",
-    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read", "layer_timing", "place_pictures", "picture_check",
+    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read", "layer_timing", "place_pictures", "picture_check", "fonts_available",
 ];
-const MODEL_METHODS: [&str; 11] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
+const MODEL_METHODS: [&str; 13] = ["models", "models_refresh", "models_add", "model_schema", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
 const LLM_CALL_METHODS: [&str; 3] = ["llm_complete", "director_intent", "builder_plan"];
 /// Language-model providers that run in the cloud: a call needs a key and a spend token. Local ones (ollama, lmstudio, inkling) need neither,

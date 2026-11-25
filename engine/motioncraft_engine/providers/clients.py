@@ -11,6 +11,8 @@ local fake server. Each `poll` returns one of:
 from __future__ import annotations
 
 import base64
+import uuid
+import re
 import json
 from typing import Any
 
@@ -61,9 +63,13 @@ class Fal:
     def submit(self, model: str, prompt: str, params: dict) -> dict:
         params = dict(params)
         img = params.pop("_image", None)
+        files = params.pop("_files", None) or {}
         body = {"prompt": prompt, **params}
         if img:
             body["image_url"] = f"data:{img['mime']};base64,{base64.b64encode(img['data']).decode('ascii')}"
+        for field, spec in files.items():
+            uris = [f"data:{it['mime']};base64,{base64.b64encode(it['data']).decode('ascii')}" for it in spec["items"]]
+            body[field] = uris if spec["list"] else uris[0]
         j = self.net.json("POST", f"{self.base}/{model}", headers=self.h, body=body)
         if not j or "request_id" not in j:
             raise ProviderError("fal did not return a request id.")
@@ -94,7 +100,30 @@ class Kie:
     def _is_mj(model: str) -> bool:
         return model.startswith("midjourney/")
 
+    KIE_UPLOAD_LIMIT = 10 * 1024 * 1024        # Kie.ai's quick upload; larger files need its stream upload
+    upload_host = "https://kieai.redpandaai.co"  # Kie.ai's file service: its documentation shows api.kie.ai, which answers 404 for uploads (found by a real test)
+
+    def upload(self, item: dict) -> str:
+        """Puts one file on Kie.ai (kept there for 24 hours) and returns its address, for models that take inputs by address. Only to Kie.ai, and only for the
+        model the person chose."""
+        if len(item["data"]) > self.KIE_UPLOAD_LIMIT:
+            raise ProviderError(f"{item['name']} is larger than 10 MB, which is the most Kie.ai's quick upload takes. Use a smaller file.")
+        j = self.net.json("POST", f"{self.upload_host}/api/file-base64-upload", headers=self.h, timeout=300,
+                          body={"base64Data": f"data:{item['mime']};base64,{base64.b64encode(item['data']).decode('ascii')}", "uploadPath": f"motioncraft/{item['kind']}",
+                                "fileName": f"{uuid.uuid4().hex[:12]}-{re.sub(r'[^A-Za-z0-9._-]', '-', item['name'])[:60]}"})
+        url = ((j or {}).get("data") or {}).get("downloadUrl")
+        if not (j or {}).get("success", False) and not url:
+            raise ProviderError(f"Kie.ai could not take {item['name']}: {str((j or {}).get('msg') or 'no reason given')}")
+        if not isinstance(url, str) or not url.startswith("https://"):
+            raise ProviderError("Kie.ai did not return an address for the file.")
+        return url
+
     def submit(self, model: str, prompt: str, params: dict) -> dict:
+        params = dict(params)
+        files = params.pop("_files", None) or {}
+        for field, spec in files.items():
+            urls = [self.upload(it) for it in spec["items"]]
+            params[field] = urls if spec["list"] else urls[0]
         if self._is_mj(model):
             body = {"taskType": "mj_txt2img", "prompt": prompt, "speed": params.get("speed", "fast"), "aspectRatio": params.get("aspect_ratio", "16:9"),
                     "version": str(params.get("version", "7")), "enableTranslation": False}

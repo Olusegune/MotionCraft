@@ -7,6 +7,7 @@ import { Fold } from "../shell/Fold";
 import { Segmented } from "../shell/Segmented";
 import { applyLook, CATEGORY_LABEL, currentLook, DIMENSIONS, detectConflicts, FAMILIES, familyLabel, samePair, type FamilyCategory } from "../lib/styles";
 import { StyleCard } from "../shell/StyleArt";
+import { FontPicker } from "./FontPicker";
 import { gateState } from "../lib/project";
 import { LockBar, useLocked, type FrameProps } from "./common";
 import { MediaWall, useImportMedia } from "../shell/Media";
@@ -61,6 +62,7 @@ export function DirectionPage(f: FrameProps) {
           {shown.map((fam) => <StyleCard key={fam.id} id={fam.id} on={currentLook(project) === fam.id} disabled={locked} onPick={() => update((p) => applyLook(p, fam.id))} />)}
         </div>
       </section>
+      <FontPicker locked={locked} />
       <fieldset className="grp" disabled={locked}>
         <legend className="visually-hidden">Style system</legend>
         <h2>Style system</h2>

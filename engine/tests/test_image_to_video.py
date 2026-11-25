@@ -36,7 +36,8 @@ def test_only_models_that_can_take_a_picture_are_marked():
     assert takes_picture(entry("google", "veo-3.1-fast-generate-preview", "Veo", "video"))
     assert takes_picture(entry("fal", "fal-ai/kling-video/v2.1/master/image-to-video", "Kling i2v", "video"))
     assert not takes_picture(entry("fal", "fal-ai/kling-video/v2.1/master/text-to-video", "Kling t2v", "video"))
-    assert not takes_picture(entry("kie", "kling/v2-1-master-image-to-video", "Kie i2v", "video"))        # needs a hosted picture: not offered
+    assert takes_picture(entry("kie", "kling/v2-1-master-image-to-video", "Kie i2v", "video"))            # Kie.ai takes the picture by address: MotionCraft uploads it to Kie.ai first
+    assert not takes_picture(entry("kie", "kling/text-to-video", "Kie t2v", "video"))
     assert not takes_picture(entry("google", "gemini-nano-banana-2.1", "Nano Banana", "image"))
     assert not takes_picture(entry("byteplus", "seedream-4-5-251128", "Seedream", "image"))
 

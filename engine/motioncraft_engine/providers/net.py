@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 API_HOSTS = {
-    "api.kie.ai", "docs.kie.ai", "queue.fal.run", "api.fal.ai", "ark.ap-southeast.bytepluses.com",
+    "api.kie.ai", "docs.kie.ai", "kieai.redpandaai.co", "queue.fal.run", "api.fal.ai", "fal.ai", "ark.ap-southeast.bytepluses.com",
     "generativelanguage.googleapis.com", "api.openai.com", "api.anthropic.com", "openrouter.ai",
 }
 UA = "MotionCraft/0.1"

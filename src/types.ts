@@ -65,7 +65,8 @@ export interface MotionProject {
   brief: { text: string; script?: string; audio: string[]; references: string[]; brandDocs: string[]; storyboards: string[];
            deliverables: Deliverable[] };
   intent: { purpose?: Purpose; tone: Tone[]; arc: Beat[]; summary: string; firedRules: string[]; source: "agent" | "user" };
-  style: { moodboard?: string[];   // asset ids chosen as references
+  style: { fonts?: { mood: string; display: string; body: string };   // the type chosen for the project (see lib/fonts.ts)
+           moodboard?: string[];   // asset ids chosen as references
            dimensions: Partial<Record<Dimension, { familyId: string; intensity: Intensity }>>;
            conflicts: { a: string; b: string; reason: string; overridden: boolean }[] };
   treatment: Record<string, { plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean; stillAssetId?: string; animate?: import("./lib/videoPrompt").AnimateSettings }>;   // keyed by beatId (added in P1-01; see PR)

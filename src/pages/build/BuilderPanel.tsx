@@ -1,4 +1,5 @@
 import { parseTimedScript } from "../../lib/briefParse";
+import { projectFonts } from "../../lib/fonts";
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useApp } from "../../ctx";
@@ -10,6 +11,7 @@ import { hasAnyProvider } from "../../lib/project";
 import { firedRules } from "../../lib/rules";
 import type { Write } from "./Panels";
 import type { Versions } from "../../lib/layers";
+import type { MotionProject } from "../../types";
 
 export interface PlanLayer { key: string; kind: "text" | "solid" | "shape"; name: string; role: string; text?: string; size?: number; shape?: string; color?: number[]; animations: { primitive: string; params: Record<string, unknown> }[] }
 export interface BuilderPlan { summary: string; layers: PlanLayer[] }
@@ -18,8 +20,20 @@ type PlanResult = { plan: BuilderPlan; warnings: string[]; cost: { usd: number; 
 type LlmStatus = { ready: boolean; reason: string; config: { provider: string | null; model: string }; providers: { id: string; label: string; local: boolean }[] };
 
 /** The Builder agent: plan the layers and motion from the approved intent, show them with their cost, build only when you confirm. */
+/** The fonts the Builder should use: the project's choice, or the best for its mood from what EffectCraft has here. Reads the installed list once, when planning. */
+async function installedFontsFor(api: Awaited<ReturnType<typeof getApi>>, project: MotionProject, projectPath: string, enginePath: string): Promise<{ display: string; body: string }> {
+  let have: Set<string> | null = null;
+  try {
+    const d = project.brief.deliverables[0];
+    await api.engine("open", { settings: { name: "Main", width: d.width, height: d.height, frame_rate: d.fps, duration: d.durationSec } }, projectPath, enginePath);
+    have = new Set((await api.engine<{ families: { family: string }[] }>("fonts_available", {}, projectPath, enginePath)).families.map((f) => f.family));
+  } catch { /* not read: the plan uses the first choice of the mood, and the build says if it is not installed */ }
+  const f = projectFonts(project, have);
+  return { display: f.display, body: f.body };
+}
+
 export function BuilderPanel({ write, disabled, onBuilt, afterBuild }: { write: Write; disabled: boolean; onBuilt: (created: Created[], versions?: Versions) => void; afterBuild?: () => Promise<number> }) {
-  const { project } = useApp();
+  const { project, projectPath } = useApp();
   const { offline, enginePath } = useSettings();
   const [st, setSt] = useState<{ busy: boolean; error?: string; result?: PlanResult; ask?: { provider: string; model: string; label: string }; built?: { n: number; warnings: string[] } }>({ busy: false });
   const d = project.brief.deliverables[0];
@@ -39,6 +53,7 @@ export function BuilderPanel({ write, disabled, onBuilt, afterBuild }: { write: 
         provider, model, offline,
         context: { intent: project.intent, firedRules: firedRules(project), brief: project.brief.text, script: project.brief.script ?? "",
                    deliverable: { width: d.width, height: d.height, fps: d.fps, durationSec: d.durationSec },
+                   fonts: await installedFontsFor(api, project, projectPath, enginePath),
                    segments: parseTimedScript(`${project.brief.text}
 ${project.brief.script ?? ""}`, d.durationSec) },
       };

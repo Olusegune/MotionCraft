@@ -70,7 +70,15 @@ def takes_picture(e: dict) -> bool:
         return str(e.get("model", "")).startswith("veo-")
     if e.get("provider") == "fal":
         return "image-to-video" in str(e.get("model", ""))
+    if e.get("provider") == "kie":      # the slug says it (image-to-video, keyframe, reference), and Seedance, Kling 3 and Wan 2.7 take pictures in every mode
+        return bool(re.search(r"image-to-video|keyframe|reference-to-video|r2v|seedance|kling-3|kling/v[34]-|wan/2-[67]|wan/3-0|hailuo/.*image|video-?to-video", str(e.get("model", "")), re.I))
     return False
+
+
+def takes_inputs(e: dict) -> bool:
+    """May this model be given files (a picture, a clip, sound)? Veo and the fal and Kie video models can; whether a particular one takes a picture, a last frame,
+    a clip or sound is read from its own schema when it is chosen."""
+    return e.get("media") == "video" and e.get("provider") in ("google", "kie", "fal") and (takes_picture(e) or e.get("provider") in ("kie", "fal"))
 
 
 def key_of(e: dict) -> str:
@@ -160,6 +168,17 @@ class Registry:
             if k in self.data["unlisted"]:
                 e["listed"] = False          # a built-in name the provider said it does not offer
         return sorted(out.values(), key=lambda e: (e["media"], e["provider"], e["name"].lower()))
+
+    def add_custom(self, provider: str, model: str, name: str = "", media: str = "video") -> dict:
+        """A model the person adds by its id: the newest model of a provider is often not in any list yet (BytePlus's list is built in and cannot be read). It is
+        used exactly like a listed one, with no price known, and is never removed by a refresh."""
+        model = (model or "").strip()
+        if provider not in PROVIDERS or media not in MEDIA or not _SAFE_ID.match(model) or ".." in model:
+            raise ValueError("Choose a provider and give the model id exactly as the provider writes it (letters, numbers, . _ / -).")
+        e = entry(provider, model, (name or model).strip()[:100], media, source="added")
+        self.data["models"][key_of(e)] = e
+        self._save()
+        return e
 
     def get(self, provider: str, model: str) -> dict | None:
         return next((e for e in self.all() if e["provider"] == provider and e["model"] == model), None)
