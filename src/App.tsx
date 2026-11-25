@@ -323,7 +323,14 @@ export default function App() {
       {overlay?.kind === "copy" && project && <SaveCopySheet defaultName={`${project.name} copy`} onClose={() => setOverlay(null)} onSave={async (n) => { setOverlay(null); try { await saveCopy(n); } catch (e) { say(e instanceof Error ? e.message : String(e)); } }} />}
       {overlay?.kind === "manual" && <ManualSheet onClose={() => setOverlay(null)} onSettings={() => setOverlay({ kind: "settings" })} />}
       {overlay?.kind === "about" && <AboutSheet engine={engine} onClose={() => setOverlay(null)} />}
-      {overlay?.kind === "gate" && project && <GateSheet project={project} gate={overlay.gate} onClose={() => setOverlay(null)} onApprove={() => update((p) => approve(p, (overlay as { gate: GateId }).gate), true)} />}
+      {overlay?.kind === "gate" && project && <GateSheet project={project} gate={overlay.gate} onClose={() => setOverlay(null)} onApprove={() => {
+        // Golden path: after a sign-off, close the sheet and take the person to the page the next step is on.
+        const g = (overlay as { gate: GateId }).gate;
+        const after = nextStep(approve(project, g));
+        update((p) => approve(p, g), true);
+        setOverlay(null);
+        if (after) { setStage(after.stage); say(`Approved. Next: ${after.text}`); } else say("Approved. Everything is done.");
+      }} />}
       {overlay?.kind === "impact" && project && (
         <ImpactSheet project={project} gate={overlay.gate} onCancel={() => setOverlay(null)}
           onConfirm={() => { update((p) => reviseApproved(p, overlay.gate, `Unlocked ${STAGE_LABEL[Object.entries(GATE_AFTER).find(([, v]) => v === overlay.gate)![0] as Stage]} for editing`, overlay.revKind), true); setOverlay(null); }} />
