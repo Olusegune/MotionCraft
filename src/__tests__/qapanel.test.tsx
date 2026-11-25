@@ -67,7 +67,7 @@ describe("QA panel (P4-02)", () => {
     expect(log.calls.map((c) => c.method).filter((m) => m === "open" || m === "qa_run")).toEqual(["open", "qa_run"]);   // the composition is opened first
     const facts = (log.calls.find((c) => c.method === "qa_run")!.params as { facts: { deliverable: { fps: number }; assets: { path: string }[] } }).facts;
     expect(facts.deliverable.fps).toBe(30);
-    expect(facts.assets).toEqual([{ id: "a1", kind: "image", path: "assets/images/gone.png" }]);
+    expect(facts.assets).toEqual([{ id: "a1", kind: "image", path: "assets/images/gone.png", source: "import", rights: null, name: null }]);
     const list = screen.getByText("Frame rate").closest("ul")!;
     expect(within(list).getByText("Frame rate").parentElement).toHaveTextContent("Passed");
     expect(screen.getByText("Missing assets").parentElement).toHaveTextContent("1 found");

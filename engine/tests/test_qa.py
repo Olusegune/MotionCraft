@@ -40,7 +40,7 @@ def sev(res): return [f["severity"] for f in res.findings]
 def test_every_check_is_registered_and_a_missing_input_is_never_a_pass():
     res = C.run_all(scene())
     assert [r.check for r in res] == ["missing-assets", "missing-fonts", "requested-fonts", "font-licence", "frame-rate", "aspect-ratio", "low-resolution", "safe-title",
-                                      "text-collisions", "contrast", "audio-drift", "beat-misalignment", "alpha", "colour-space", "unsupported-effects", "orphan-layers"]
+                                      "text-collisions", "contrast", "audio-drift", "beat-misalignment", "alpha", "colour-space", "unsupported-effects", "orphan-layers", "rights-unconfirmed"]
     assert {r.check for r in res if r.state == "not-checked"} >= {"missing-assets", "audio-drift", "beat-misalignment", "colour-space", "unsupported-effects"}
     assert all(r.reason for r in res if r.state == "not-checked")
 
@@ -257,7 +257,7 @@ def test_qa_run_on_the_mock_reports_every_check_and_changes_nothing(svc):
     before = svc.a.hash_layers(None)
     facts = {"deliverable": DELIV, "assets": [{"id": "x", "kind": "image", "path": "assets/images/missing.png"}], "renders": []}
     out = svc.handle("qa_run", {"facts": facts})
-    assert out["total"] == 16 and {r["check"] for r in out["results"]} >= {"missing-assets", "contrast", "orphan-layers"}
+    assert out["total"] == 17 and {r["check"] for r in out["results"]} >= {"missing-assets", "contrast", "orphan-layers"}
     by = {r["check"]: r for r in out["results"]}
     assert by["missing-assets"]["state"] == "findings" and by["frame-rate"]["state"] == "passed" and by["aspect-ratio"]["state"] == "passed"
     assert by["text-collisions"]["state"] == "findings", "two identical texts at the same place and time; their size was recorded when they were made"
@@ -362,3 +362,13 @@ def test_qa_fix_runs_only_known_fixes_and_never_takes_commands_from_the_page(fix
     with pytest.raises(TypeError):     # there is no parameter for commands: a page cannot supply its own
         svc.handle("qa_fix", {"check": "safe-title", "layer": edge, "facts": svc.facts, "commands": [{"id": "edit.clear", "params": {}}]})
     assert len(svc.handle("inspect", {})["layers"]) == 2
+
+
+def test_rights_check_asks_about_imported_files_only(svc):
+    facts = {"deliverable": DELIV, "renders": [], "assets": [
+        {"id": "a", "kind": "image", "path": "assets/images/a.png", "source": "import", "rights": None, "name": "Logo.png"},
+        {"id": "b", "kind": "video", "path": "assets/video/b.mp4", "source": "import", "rights": "licensed"},
+        {"id": "c", "kind": "image", "path": "assets/images/c.png", "source": "kie", "rights": None}]}
+    by = {r["check"]: r for r in svc.handle("qa_run", {"facts": facts})["results"]}
+    f = by["rights-unconfirmed"]["findings"]
+    assert by["rights-unconfirmed"]["state"] == "findings" and len(f) == 1 and f[0]["evidence"]["assetId"] == "a" and "Logo.png" in f[0]["evidence"]["detail"]

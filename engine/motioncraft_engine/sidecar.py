@@ -482,7 +482,7 @@ class Service:
                 manifest = m if isinstance(m, list) else None
             except (OSError, ValueError):
                 manifest = None
-        assets = [{"id": x.get("id"), "kind": x.get("kind"), "path": str(x.get("path", ""))} for x in (facts.get("assets") or []) if isinstance(x, dict)][:500]
+        assets = [{"id": x.get("id"), "kind": x.get("kind"), "path": str(x.get("path", "")), "source": str(x.get("source") or ""), "rights": x.get("rights") or None, "name": str(x.get("name") or "")} for x in (facts.get("assets") or []) if isinstance(x, dict)][:500]
         audio, skipped = [], []
         for x in assets:
             if x["kind"] != "audio":

@@ -45,6 +45,8 @@ export interface LayerBinding {
 export interface AssetReference {
   id: string; kind: "image" | "video" | "audio"; path: string;   // path is relative to the package folder
   name?: string;
+  /** What the person says about their right to use an imported file. Unset means not confirmed yet. Files MotionCraft made through a provider carry the provider's terms in provenance instead. */
+  rights?: "mine" | "licensed" | "stock";
   /** Result of looking for lettering in a picture with a model on this computer: true found, false none, null could not be checked. */
   check?: { lettering: boolean | null; text?: string };
   provenance: { actor: string; prompt?: string; provider: string; model: string; at: string; licence: string;

@@ -27,7 +27,7 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
 
   const facts = () => ({
     deliverable: { aspect: d.aspect, width: d.width, height: d.height, fps: d.fps, durationSec: d.durationSec, alpha: d.alpha },
-    assets: (project.assets ?? []).map((a) => ({ id: a.id, kind: a.kind, path: a.path })),
+    assets: (project.assets ?? []).map((a) => ({ id: a.id, kind: a.kind, path: a.path, source: a.provenance.provider, rights: a.rights ?? null, name: a.name ?? null })),
     renders: (project.renders ?? []).map((r) => ({ preset: r.preset })),
     requestedFonts: parseFonts(`${project.brief.text}\n${project.brief.script ?? ""}`),
   });
@@ -36,7 +36,6 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
     const locked = (project.layerMap ?? []).filter((b) => b.lock === "approved").map((b) => b.engineLayerId);
     await api.engine("open", { settings: { name: "Main", width: d.width, height: d.height, frame_rate: d.fps, duration: d.durationSec }, locked }, projectPath, enginePath);
     const f = facts();
-    f.assets = (project.assets ?? []).map((a) => ({ id: a.id, kind: a.kind, path: a.path }));
     return api.engine<QaReport>("qa_run", { facts: f, contrast: true }, projectPath, enginePath).then((report) => {
       setQaPins(report.results.flatMap((r) => r.findings).filter((x) => x.at?.timeSec !== undefined).map((x) => ({ id: x.id, t: x.at!.timeSec!, label: `${x.check}: ${x.evidence.detail}`, severity: x.severity })));
       setSt({ busy: false, report, at: Date.now(), done: note });

@@ -4,6 +4,7 @@ import type { AssetReference } from "../types";
 import { getApi } from "../lib/api";
 import { useApp } from "../ctx";
 import { nowIso } from "../lib/project";
+import { RIGHTS, setRights, type Rights } from "../lib/rights";
 
 const cache = new Map<string, string>();
 
@@ -22,14 +23,31 @@ export function useAssetUrl(projectPath: string, asset: AssetReference | undefin
   return url;
 }
 
+/** The address of a video file the web view can play, or null (not a desktop app, not under the allowed folder, or no file). A video shows its own first frames as the thumbnail. */
+export function useVideoUrl(projectPath: string, asset: AssetReference | undefined): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    setUrl(null);
+    if (!asset || asset.kind !== "video") return;
+    let live = true;
+    getApi().then((a) => a.fileUrl(projectPath, asset.path)).then((u) => { if (live) setUrl(u); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [asset, projectPath]);
+  return url;
+}
+
 export const assetLabel = (a: AssetReference) => a.name ?? a.provenance.prompt?.slice(0, 40) ?? a.path.split("/").pop() ?? a.path;
 
 export function Frame({ asset, projectPath, ratio = "16 / 9", className = "" }: { asset?: AssetReference; projectPath: string; ratio?: string; className?: string }) {
   const url = useAssetUrl(projectPath, asset);
+  const vurl = useVideoUrl(projectPath, asset);
+  const [vfail, setVfail] = useState(false);
+  useEffect(() => setVfail(false), [vurl]);
   return (
     <div className={`frame-slot ${className}`} style={{ aspectRatio: ratio }}>
       {asset?.check?.lettering && <span className="frame-flag" title={asset.check.text ? `Lettering found: ${asset.check.text}` : "Lettering found"}>Has lettering</span>}
       {asset && url ? <img src={url} alt={assetLabel(asset)} />
+        : asset && vurl && !vfail ? <video className="frame-video" src={`${vurl}#t=0.5`} muted preload="metadata" playsInline tabIndex={-1} aria-label={`${assetLabel(asset)} (video)`} onError={() => setVfail(true)} />
         : asset ? <span className="frame-kind">{asset.kind === "video" ? <Film size={22} aria-hidden="true" /> : asset.kind === "audio" ? <AudioLines size={22} aria-hidden="true" /> : "…"}<span>{assetLabel(asset)}</span></span>
           : <span className="frame-kind muted"><ImagePlus size={22} aria-hidden="true" />No picture yet</span>}
     </div>
@@ -101,8 +119,9 @@ export function DropZone({ onNotice, disabled }: { onNotice: (m: string) => void
 
 /** All media of the project as a wall of frames. `onPick` makes each one a button. */
 export function MediaWall({ assets, selected, onPick, empty }: { assets: AssetReference[]; selected?: string[]; onPick?: (a: AssetReference) => void; empty: string }) {
-  const { projectPath } = useApp();
+  const { projectPath, update } = useApp();
   if (!assets.length) return <p className="empty-note">{empty}</p>;
+  const rate = (id: string, r: string) => update((p) => ({ ...p, assets: (p.assets ?? []).map((x) => (x.id === id ? setRights(x, (r || undefined) as Rights | undefined) : x)), updatedAt: nowIso() }));
   return (
     <ul className="wall" aria-label="Media">
       {assets.map((a) => (
@@ -110,6 +129,12 @@ export function MediaWall({ assets, selected, onPick, empty }: { assets: AssetRe
           {onPick
             ? <button className="wall-item" aria-pressed={selected?.includes(a.id)} onClick={() => onPick(a)}><Frame asset={a} projectPath={projectPath} /><span className="wall-label">{assetLabel(a)}</span></button>
             : <div className="wall-item"><Frame asset={a} projectPath={projectPath} /><span className="wall-label">{assetLabel(a)}</span></div>}
+          {a.provenance.provider === "import" && (
+            <label className="wall-rights"><span className="visually-hidden">Rights for {assetLabel(a)}</span>
+              <select value={a.rights ?? ""} onChange={(e) => rate(a.id, e.target.value)}>
+                <option value="">Rights: not confirmed</option>
+                {RIGHTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select></label>)}
         </li>
       ))}
     </ul>

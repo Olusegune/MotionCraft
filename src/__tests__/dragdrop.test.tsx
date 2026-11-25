@@ -69,3 +69,19 @@ describe("a scene can use the person's own clip", () => {
     expect(scenePictureItems(q).map((x) => [x.rel, x.t_in, x.t_out])).toEqual([["assets/video/c.mp4", 0, 3], ["assets/images/i.png", 3, 6]]);
   });
 });
+
+import { needsRights, rightsLabel, setRights } from "../lib/rights";
+describe("rights notes on imported files", () => {
+  const prov = (provider: string) => ({ actor: "user" as const, provider, model: "file", at: "t", licence: "Imported by you. Make sure you have the rights to use it.", costReported: false, costValue: null, costUnit: null });
+  it("asks about imports only, and records the answer with a licence line", () => {
+    const mine = { id: "a", kind: "image" as const, path: "assets/images/a.png", provenance: prov("import") };
+    const made = { id: "b", kind: "image" as const, path: "assets/images/b.png", provenance: prov("kie") };
+    expect(needsRights(mine)).toBe(true);
+    expect(needsRights(made)).toBe(false);
+    const done = setRights(mine, "licensed");
+    expect(needsRights(done)).toBe(false);
+    expect(rightsLabel(done.rights)).toBe("Licensed to me");
+    expect(done.provenance.licence).toMatch(/Licensed/);
+    expect(setRights(done, undefined).provenance.licence).toMatch(/Make sure you have the rights/);
+  });
+});

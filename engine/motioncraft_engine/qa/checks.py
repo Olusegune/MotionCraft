@@ -483,9 +483,22 @@ def orphan_layers(s: Scene) -> Result:
     return _done(r)
 
 
+# ------------------------------------------------------------------------------------------------------------------ 17
+def rights_unconfirmed(s: Scene) -> Result:
+    """Files the person imported, with no note on whether they may use them. MotionCraft cannot know a file's licence; it only makes sure the
+    person has been asked. Files made through a provider are not listed: their terms are recorded when they are made."""
+    r = Result("rights-unconfirmed", "Rights for your own files")
+    for a in s.assets:
+        if a.get("source") == "import" and not a.get("rights"):
+            label = a.get("name") or Path(str(a.get("path", ""))).name
+            r.findings.append(finding(r.check, "warn", f"{label} has no rights note.", "You imported it and have not said whether you made it, hold a licence for it, or it is stock.",
+                                      assetId=a.get("id")))
+    return _done(r)
+
+
 CHECKS: list[Callable[[Scene], Result]] = [
     missing_assets, missing_fonts, requested_fonts, font_licence, frame_rate, aspect_ratio, low_resolution, safe_title, text_collisions, contrast, audio_drift,
-    beat_misalignment, alpha_errors, colour_space, unsupported_effects, orphan_layers,
+    beat_misalignment, alpha_errors, colour_space, unsupported_effects, orphan_layers, rights_unconfirmed,
 ]
 
 
