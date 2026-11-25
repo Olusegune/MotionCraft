@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import re
 import sys
 import time
 import urllib.parse
@@ -25,7 +26,7 @@ from .adapter.errors import AdapterContractError, AdapterError, CommandFailed, L
 from .adapter.real import EffectCraftAdapter
 from . import audio as audio_mod
 from .primitives import library as prim
-from .renderjobs import RenderJobs
+from .renderjobs import RenderJobs, safe_stem
 from .providers.jobs import JobRefused, Jobs
 from .providers.net import Net, NetError
 from .providers.registry import Registry
@@ -318,6 +319,64 @@ class Service:
         prov = {"actor": "user", "prompt": str(text)[:400], "provider": provider, "model": model, "at": datetime.now(timezone.utc).isoformat(),
                 "licence": "Made by the provider from your text with your account. Check the provider's terms for how the voice may be used.", "costReported": False, "costValue": None, "costUnit": None}
         return {"path": out.relative_to(pkg).as_posix(), "bytes": len(data), "voice": voice, "provenance": prov}
+
+    KEY_COLOURS = {"green": [0.0, 0.69, 0.25, 1.0], "blue": [0.0, 0.28, 1.0, 1.0]}     # the flat screens a model is asked for (#00B140, #0047FF)
+
+    def key_out(self, layers: list, colour: str = "green") -> dict:
+        """Take the flat green (or blue) screen out of footage layers so what is behind them shows: EffectCraft's Screen Color Key, aimed at the screen colour."""
+        a = self._need()
+        if colour not in self.KEY_COLOURS:
+            raise AdapterError("The screen colour is green or blue.")
+        if not isinstance(layers, list) or not layers or len(layers) > 20:
+            raise AdapterError("Give between 1 and 20 layers.")
+        comp = a.inspect().comp(None)
+        done = []
+        for lid in [int(x) for x in layers]:
+            a.execute([Command(id="effect.apply", params={"effect": "ec.keying.keylight", "layers": [lid]})], actor=USER)
+            idx = [int(m.group(1)) for k in a.layer_props(comp.id, lid)["props"] if (m := re.match(r"effects/#(\d+)/screenColour$", k))]
+            if not idx:
+                raise AdapterError("The key effect did not appear on the layer.")
+            a.execute([Command(id="prop.set", params={"layer": lid, "path": f"effects/#{max(idx)}/screenColour", "value": self.KEY_COLOURS[colour]})], actor=USER)
+            done.append(lid)
+        a.save()
+        return {"keyed": done, "colour": colour, **self._snapshot()}
+
+    BRIDGES = {
+        "aep": ("After Effects", ".aep"),
+        "fcpxml": ("DaVinci Resolve or Final Cut Pro", ".fcpxml"),
+        "xml": ("Premiere Pro", ".xml"),
+        "otio": ("OpenTimelineIO", ".otio"),
+        "edl": ("an editor that reads an EDL (one video track)", ".edl"),
+    }
+
+    def export_bridge(self, kind: str, allow_losses: bool = False) -> dict:
+        """Hands the composition to another editor, into a new folder under exports/. After Effects gets a project (`.aep`); Resolve, Final Cut and
+        Premiere get a timeline (FCPXML, XML, OTIO or EDL) plus the clips EffectCraft renders for it, so a keyed layer arrives keyed. EffectCraft says what an `.aep`
+        cannot carry: when something would be lost nothing is written until `allow_losses` is true, and the losses come back to be shown."""
+        a = self._need()
+        if kind not in self.BRIDGES:
+            raise AdapterError(f"Choose one of: {', '.join(self.BRIDGES)}.")
+        label, ext = self.BRIDGES[kind]
+        assert self.pkg is not None
+        comp = a.inspect().comp(None)
+        out = self.pkg / "exports" / f"{kind}-{time.strftime('%Y%m%d-%H%M%S')}"
+        out.mkdir(parents=True, exist_ok=True)
+        path = out / f"{safe_stem(comp.name or 'composition')}{ext}"
+        rel = path.relative_to(self.pkg).as_posix()
+        if kind == "aep":
+            try:
+                r = a.execute([Command(id="file.exportAep", params={"path": str(path), **({"allowLosses": True} if allow_losses else {})})], actor=USER).results[0].result or {}
+            except AdapterError as e:
+                if "would lose" not in str(e):
+                    raise
+                rep = (a.execute([Command(id="file.exportAep", params={"path": str(path), "dryRun": True})], actor=USER).results[0].result or {}).get("report", {})
+                return {"ok": False, "needs_ok": True, "target": label, "kind": kind, "losses": rep.get("losses", []), "limitations": rep.get("limitations", []),
+                        "note": "Nothing was written. Send it anyway to take what can be taken."}
+            rep = r.get("report") or {}
+            return {"ok": True, "target": label, "kind": kind, "path": rel, "files": [path.name], "losses": rep.get("losses", []) if allow_losses else [], "warnings": r.get("warnings", [])}
+        r = a.execute([Command(id="file.exportTimeline", params={"path": str(path), "format": kind})], actor=USER).results[0].result or {}
+        files = sorted(p.name for p in out.iterdir())
+        return {"ok": True, "target": label, "kind": kind, "path": rel, "files": files, "clips": r.get("clips"), "warnings": r.get("warnings", [])}
 
     def set_audio_level(self, layers: list, db: float) -> dict:
         """The level of audio layers, in decibels (0 is the file as it is, -10 sits under a voice). The same for both channels. Footage layers with sound only."""
@@ -745,7 +804,7 @@ class Service:
     def place_pictures(self, items: list) -> dict:
         """Puts each scene's picture or video clip into the composition behind that scene: one layer per item, on screen from `t_in` to `t_out`,
         below the text and shapes. A background solid stays at the very back only if nothing is in front of the picture, so it is sent behind them.
-        `items`: [{rel, t_in, t_out, loop?}], `rel` under assets/images or assets/video; `loop` repeats a clip shorter than its scene. At most 16. Each goes through add_media and layer_timing, so every
+        `items`: [{rel, t_in, t_out, loop?, key?}], `key` (green or blue) takes that flat screen out; `rel` under assets/images or assets/video; `loop` repeats a clip shorter than its scene. At most 16. Each goes through add_media and layer_timing, so every
         rule of those applies. A clip plays once from its first frame and is trimmed at the end of the scene."""
         if not isinstance(items, list) or not items or len(items) > 16:
             raise AdapterError("Give between 1 and 16 pictures or clips.")
@@ -753,6 +812,7 @@ class Service:
         for it in items:
             if not isinstance(it, dict):
                 raise AdapterError("Each picture needs a file and a time range.")
+            first = len(made)
             rel = str(it.get("rel") or "")
             f = self._asset(rel, ("images", "video"))
             is_video = rel.split("/")[1] == "video"
@@ -785,6 +845,8 @@ class Service:
             else:
                 self.layer_timing(lid, t_in=t0, t_out=t1)
                 self._frame_picture(lid, f, t0, t1)
+            if it.get("key") in self.KEY_COLOURS:                  # a clip made on a flat green or blue screen: the screen is taken out as it is placed
+                self.key_out(made[first:], str(it["key"]))
         a = self._need()
         a.execute([Command(id="layer.arrange", params={"layers": made, "to": "back"})], actor=USER)
         comp = a.inspect().comp(None)

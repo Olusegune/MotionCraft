@@ -1,3 +1,4 @@
+import { stillAspect } from "../lib/models";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Clapperboard } from "lucide-react";
 import { useApp } from "../ctx";
@@ -58,6 +59,7 @@ export function AnimateScene({ beat, disabled }: { beat: Beat; disabled?: boolea
   const videos = (project.assets ?? []).filter((a) => a.kind === "video" && a.id !== t?.frameAssetId);
   const sounds = (project.assets ?? []).filter((a) => a.kind === "audio");
   const filmAspect = project.brief.deliverables[0].aspect;
+  const wantAspect = still?.screen ? stillAspect(filmAspect) : filmAspect;       // a screen picture is made in a common shape; asking for 21:9 makes the model invent the rest of the frame
 
   const load = useCallback(async () => {
     try {
@@ -95,7 +97,7 @@ export function AnimateScene({ beat, disabled }: { beat: Beat; disabled?: boolea
         if (!live) return;
         if (isSchema(r)) {
           setSchema(r);
-          setAspect(chooseAspect(r.caps.aspects, filmAspect) ?? "");
+          setAspect(chooseAspect(r.caps.aspects, wantAspect) ?? "");
           setResolution(String(r.fields.find((f) => f.role === "resolution")?.default ?? r.caps.resolutions[0] ?? ""));
           const d = durationChoices(r.caps.durations);
           if (d.length) setS((x) => ({ ...x, duration: nearestDuration(d, x.duration) ?? x.duration }));
@@ -104,7 +106,7 @@ export function AnimateScene({ beat, disabled }: { beat: Beat; disabled?: boolea
       } catch (e) { if (live) setSchemaNote(`${String(e instanceof Error ? e.message : e)}`); }
     })();
     return () => { live = false; };
-  }, [open, picked?.provider, picked?.model, offline, enginePath, filmAspect]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, picked?.provider, picked?.model, offline, enginePath, wantAspect]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const legacy = !schema;
   const limits = picked ? videoLimits(picked.model) : { durations: [8], resolutions: ["720p" as const] };
@@ -149,7 +151,7 @@ export function AnimateScene({ beat, disabled }: { beat: Beat; disabled?: boolea
       let files: Record<string, { paths: string[]; list: boolean }> | undefined;
       if (schema) {
         const req = buildRequest(schema, { firstFrame: still.path, lastFrame: path(lastFrame), refImages: refImages.map(path).filter(Boolean) as string[], refVideos: path(refVideo) ? [path(refVideo)!] : undefined,
-          refAudios: path(refAudio) ? [path(refAudio)!] : undefined, aspect: aspect || undefined, resolution: resolution || undefined, duration: eff.duration, sound: eff.sound, negative: eff.negative }, filmAspect);
+          refAudios: path(refAudio) ? [path(refAudio)!] : undefined, aspect: aspect || undefined, resolution: resolution || undefined, duration: eff.duration, sound: eff.sound, negative: eff.negative }, wantAspect);
         params = req.params; files = req.files;
         if (picked.provider === "google") params.person_generation = "allow_adult";
       } else {
@@ -215,6 +217,11 @@ export function AnimateScene({ beat, disabled }: { beat: Beat; disabled?: boolea
                 <select value={refVideo} onChange={(e) => setRefVideo(e.target.value)}><option value="">None</option>{videos.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}</option>)}</select></label>}
               {caps && caps.audioRefs > 0 && sounds.length > 0 && <label className="field"><span className="field-label">Sound or voice to follow</span>
                 <select value={refAudio} onChange={(e) => setRefAudio(e.target.value)}><option value="">None</option>{sounds.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}</option>)}</select></label>}
+              <label className="field"><span className="field-label">Background</span>
+                <select value={s.keyColor ?? ""} onChange={(e) => { setHandWritten(false); set({ keyColor: (e.target.value || undefined) as "green" | "blue" | undefined, prompt: undefined }); }}>
+                  <option value="">As in the picture</option><option value="green">Green screen (to key out and composite)</option><option value="blue">Blue screen (to key out and composite)</option></select></label>
+              {s.keyColor && still && still.screen !== s.keyColor && <p className="error-text" role="alert">This picture has its own background, and a video model keeps it. For a clean {s.keyColor} screen, make the picture on a {s.keyColor} screen first (Try another, Background).</p>}
+              {s.keyColor && <p className="muted">The model is asked for a flat {s.keyColor} background. Pictures of the subject on a plain background work best. When you put the clip in place in Build, the {s.keyColor} is taken out so what is behind shows through.</p>}
               <label className="field"><span className="field-label">Keep out of the picture</span>
                 <input value={s.negative} onChange={(e) => set({ negative: e.target.value })} /></label>
               <label className="field"><span className="field-label">The prompt sent to the model {handWritten ? "(written by you)" : "(built from the choices above)"}</span>

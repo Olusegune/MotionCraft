@@ -30,6 +30,7 @@ export function AddLayerPanel({ write, disabled, onAdded }: { write: Write; disa
   const imp = useImportMedia();
   const [shape, setShape] = useState("rect");
   const [mediaId, setMediaId] = useState("");
+  const [screen, setScreen] = useState("");
   const media = (project.assets ?? []).filter((a) => a.kind !== "audio");
   const pick = media.find((m) => m.id === mediaId) ?? media[0];
   return (
@@ -45,8 +46,15 @@ export function AddLayerPanel({ write, disabled, onAdded }: { write: Write; disa
         <select value={pick?.id ?? ""} disabled={!media.length} onChange={(e) => setMediaId(e.target.value)}>
           {media.length === 0 ? <option value="">No media yet</option> : media.map((m) => <option key={m.id} value={m.id}>{assetLabel(m)} ({m.kind})</option>)}
         </select></label>
+      <label className="field"><span className="field-label">Take out a flat screen (for green or blue screen footage)</span>
+        <select value={screen} onChange={(e) => setScreen(e.target.value)}><option value="">Keep the picture as it is</option><option value="green">Remove green</option><option value="blue">Remove blue</option></select></label>
       <div className="row-actions">
-        <button className="btn" disabled={disabled || !pick} onClick={async () => pick && onAdded((await write("add media", "add_media", { rel: pick.path }))?.layer)}><Plus size={16} aria-hidden="true" />Add as layer</button>
+        <button className="btn" disabled={disabled || !pick} onClick={async () => {
+          if (!pick) return;
+          const r = await write("add media", "add_media", { rel: pick.path });
+          if (r?.layer !== undefined && screen) await write("key out", "key_out", { layers: [r.layer], colour: screen });
+          onAdded(r?.layer);
+        }}><Plus size={16} aria-hidden="true" />Add as layer</button>
         <button className="btn quiet" disabled={imp.busy} onClick={() => void imp.run()}>Import more…</button>
       </div>
       {imp.error && <p className="error-text" role="alert">{imp.error}</p>}

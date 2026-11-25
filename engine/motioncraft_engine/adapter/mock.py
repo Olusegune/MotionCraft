@@ -21,6 +21,7 @@ from .models import (CompInfo, CompSettings, DocSnapshot, ExportResult, FinalRen
 
 ACCEPT: dict[str, set[str]] = {
     "file.newProject": set(), "file.open": {"path"}, "file.save": {"path"}, "file.saveCopy": {"path"}, "file.close": set(),
+    "file.exportAep": {"path", "allowLosses", "dryRun"}, "file.exportTimeline": {"comp", "path", "format", "prerender", "precomps"},
     "file.checkOutput": {"path"}, "file.exportLottie": {"comp", "path", "includeExpressions", "textAsShapes"},
     "comp.new": {"name", "width", "height", "frameRate", "duration"}, "comp.open": {"comp"}, "comp.info": {"comp"},
     "comp.addMarker": {"time", "comment"}, "comp.deleteAllMarkers": {"comp"},
@@ -308,6 +309,16 @@ class MockAdapter(BaseAdapter):
             elif cid == "layer.style.dropShadow":
                 for l in ls: l["props"]["style/dropShadow"] = {"value": True, "keys": []}
             self._dirty = True; return None
+        if cid == "file.exportAep":
+            lost = [{"category": "effects", "count": 1, "details": ["a layer has an effect"]}] if any(l["props"].get("effects") for l in c["layers"]) else []
+            if p.get("dryRun"):
+                return {"dryRun": True, "report": {"exported": {"layers": len(c["layers"])}, "limitations": [], "losses": lost}}
+            if lost and not p.get("allowLosses"):
+                raise AdapterContractError("exporting would lose effects: 1; allow losses to export anyway (nothing was written)")
+            Path(p["path"]).write_bytes(b"MOCKAEP"); return {"path": p["path"], "bytes": 7}
+        if cid == "file.exportTimeline":
+            Path(p["path"]).write_text("MOCK " + str(p.get("format", "xml")), encoding="utf-8")
+            return {"path": p["path"], "format": p.get("format", "xml"), "clips": len(c["layers"]), "bytes": 8, "prerendered": [], "warnings": []}
         if cid == "file.exportLottie":
             Path(p["path"]).write_text(json.dumps({"v": "5.12.0", "layers": len(c["layers"])}), encoding="utf-8")
             warns = ["Camera: cameras and lights are not exported"] if any(l["kind"] == "Camera" for l in c["layers"]) else []

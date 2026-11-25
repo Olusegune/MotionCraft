@@ -45,6 +45,8 @@ export interface LayerBinding {
 export interface AssetReference {
   id: string; kind: "image" | "video" | "audio"; path: string;   // path is relative to the package folder
   name?: string;
+  /** A picture made on a flat green or blue screen, to be animated and keyed out. A video model keeps the picture's own background, so the screen has to be in the picture. */
+  screen?: "green" | "blue";
   /** `voiceover`: speech made for a scene. It is placed at its scene's start, never at zero like a score. */
   use?: "voiceover";
   /** What the person says about their right to use an imported file. Unset means not confirmed yet. Files MotionCraft made through a provider carry the provider's terms in provenance instead. */

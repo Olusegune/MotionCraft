@@ -6,6 +6,7 @@ import { Sheet } from "../shell/Sheet";
 import { Player } from "../shell/Player";
 import { getApi } from "../lib/api";
 import { openComposition } from "../lib/openComposition";
+import { HandOff } from "./HandOff";
 import { useSettings } from "../lib/settings";
 import { gateState, newId, nowIso } from "../lib/project";
 import type { RenderRecord } from "../types";
@@ -208,6 +209,7 @@ export function DeliverPage(f: FrameProps) {
           <dt>Cost</dt><dd>None from a provider; renders on this computer</dd>
         </dl>
       </div>
+      <HandOff disabled={!connected || running} reason={!connected ? "Needs a connected EffectCraft engine." : running ? "A render is running." : undefined} />
       {unfinished.filter((u) => u.id !== job?.id && u.state !== "running").length > 0 && (
         <section aria-labelledby="unfinished-h"><h2 id="unfinished-h">Unfinished renders</h2>
           <ul className="plain">{unfinished.filter((u) => u.id !== job?.id && u.state !== "running").map((u) => (

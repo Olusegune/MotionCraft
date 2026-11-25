@@ -433,11 +433,11 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 40] = [
+const ENGINE_METHODS: [&str; 42] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
     "primitives", "audio_analyze", "audio_cached", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
     "snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore",
-    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read", "layer_timing", "place_pictures", "picture_check", "fonts_available", "place_audio", "set_audio_level",
+    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read", "layer_timing", "place_pictures", "picture_check", "fonts_available", "place_audio", "set_audio_level", "key_out", "export_bridge",
 ];
 const MODEL_METHODS: [&str; 15] = ["models", "models_refresh", "models_add", "model_schema", "speech_models", "speech_generate", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
@@ -448,7 +448,7 @@ const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthr
 const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
 /// Credential-store accounts: the generation providers plus the two language-model-only ones.
 const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
-const WRITE_METHODS: [&str; 19] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore", "sync_labelled_markers", "layer_timing", "place_pictures", "place_audio", "set_audio_level"];
+const WRITE_METHODS: [&str; 21] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore", "sync_labelled_markers", "layer_timing", "place_pictures", "place_audio", "set_audio_level", "key_out", "export_bridge"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
 const PAID_ENGINE_METHODS: [&str; 2] = ["render_start", "render_resume"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];

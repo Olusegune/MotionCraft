@@ -5,10 +5,11 @@ import { Sheet } from "../shell/Sheet";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
 import { capBlock, recordSpend } from "../lib/spend";
 import { getApi, type GenJob, type ModelEntry, type ModelList } from "../lib/api";
-import { rankForStills, rankProviders } from "../lib/models";
+import { rankForStills, rankProviders, stillAspect } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { familyPrompt } from "../lib/styles";
 import { NO_LETTERING } from "./Proposals";
+import { screenName } from "../lib/videoPrompt";
 import type { Beat, MotionProject } from "../types";
 
 /** The prompt for one scene's picture, from what the project already says about it: the look, the scene's own plan and the intent. Never asks for words. */
@@ -21,6 +22,13 @@ export function scenePrompt(p: MotionProject, b: Beat): string {
   const colourSentence = `${p.brief.text}`.split(/(?<=[.!?])\s+/).find((x) => /\b(palette|colou?rs?|obsidian|indigo|cyan|crimson|gold|black|white|blue|red|green|orange|purple|pink)\b/i.test(x) && x.length < 220);
   const palette = colourSentence ? ` Palette: ${colourSentence.replace(/\s+/g, " ").trim()}` : "";
   return `${NO_LETTERING} ${look}, ${p.brief.deliverables[0]?.aspect ?? "16:9"} film still with generous negative space. Scene: ${b.primary}. ${plan} Mood: ${mood}${palette}`.slice(0, 900);
+}
+
+/** The prompt for a scene's subject alone on a flat green or blue screen, for compositing. A video model keeps whatever background the picture has, so this is where the screen is made. */
+export function screenPrompt(p: MotionProject, b: Beat, colour: "green" | "blue"): string {
+  const plan = (p.treatment[b.beatId]?.plan ?? "").replace(/\(\d+(\.\d+)? seconds\):/, ":").trim();
+  return `${NO_LETTERING} ${p.brief.deliverables[0]?.aspect ?? "16:9"} studio photograph of the scene's subject alone, large in the frame (about two thirds of its height) and in the middle, shot against one flat, evenly lit, ${screenName(colour)} screen, edge to edge, with no gradient, no floor line, no shadows on it and no texture. `
+    + `Show only the people or objects, whole and sharp, with no room, furniture, sky or scenery. Subject: ${b.primary}. ${plan} Ignore any place or setting named above: the only thing behind the subject is the flat screen, and the floor is the same screen.`.slice(0, 900);
 }
 
 /** Retry only when the person authorised it up front, a retry is still left, the picture was looked at and has lettering, and the spend limit allows it. */
@@ -42,6 +50,8 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
   const left = useRef(0);                         // retries still allowed for the picture being made
   const retried = useRef<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [screen, setScreen] = useState<"" | "green" | "blue">("");   // a flat screen for compositing, or the scene as it is
+  const screenOf = useRef<"" | "green" | "blue">("");
 
   const load = useCallback(async () => {
     try { const api = await getApi(); setModels(((await api.engine<ModelList>("models", {}, "", enginePath)) as Partial<ModelList>).models ?? []); setKeys(await api.keyStatus()); }
@@ -54,7 +64,7 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
   const picked = useMemo(() => rankForStills(usable.filter((m) => m.provider === provider))[0], [usable, provider]);
   const each = picked?.price.known ? picked.price.value : null;
   const running = !!job && (job.state === "running" || job.state === "queued");
-  const prompt = useMemo(() => scenePrompt(project, beat), [project, beat]);
+  const prompt = useMemo(() => (screen ? screenPrompt(project, beat, screen) : scenePrompt(project, beat)), [project, beat, screen]);
   const reason = disabled ? "Unlock the treatment first." : !generative ? "Turn on image providers in Settings." : offline ? "Offline mode is on." : !picked ? "Add an image provider key in Settings." : capBlock(project, each) ?? (running ? "Making the picture…" : undefined);
 
   useEffect(() => {
@@ -67,8 +77,8 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
       saved.current = job.id;
       const a = job.asset;
       update((p) => ({
-        ...p, assets: [...(p.assets ?? []), { id: job.id, kind: a.kind, path: a.path, name: beat.primary, provenance: a.provenance }],
-        treatment: { ...p.treatment, [beat.beatId]: { ...(p.treatment[beat.beatId] ?? { plan: "", motion: "" }), frameAssetId: job.id } }, updatedAt: new Date().toISOString(),
+        ...p, assets: [...(p.assets ?? []), { id: job.id, kind: a.kind, path: a.path, name: beat.primary, provenance: a.provenance, ...(screenOf.current ? { screen: screenOf.current } : {}) }],
+        treatment: { ...p.treatment, [beat.beatId]: { ...(p.treatment[beat.beatId] ?? { plan: "", motion: "" }), frameAssetId: job.id, stillAssetId: undefined, frameLoop: false } }, updatedAt: new Date().toISOString(),
       }));
     }
   }, [job, update, beat]);
@@ -91,10 +101,11 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
     if (!picked) return;
     if (!isRetry) { left.current = extra; retried.current = null; setNote(null); }
     setErr(null); setConfirming(false);
+    screenOf.current = screen;
     try {
       const api = await getApi();
       const token = await api.confirmSpend(picked.provider, picked.model);     // only reachable from the confirm click
-      setJob(await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt, params: { aspect_ratio: project.brief.deliverables[0].aspect }, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
+      setJob(await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt, params: { aspect_ratio: stillAspect(project.brief.deliverables[0].aspect) }, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
       update((p) => recordSpend(p, { provider: picked.provider, model: picked.model, what: "still", usd: each }));
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
   };
@@ -104,11 +115,16 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
       <button className="btn" disabled={!!reason} title={reason} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />{running ? "Making…" : again ? "Try another" : "Make picture"}</button>
       {note && <p className="muted" role="status">{note}</p>}
       {err && <p className="error-text" role="alert">{err}</p>}
+      {job?.state === "failed" && <p className="error-text" role="alert">The picture could not be made: {job.error ?? job.detail}</p>}
       {confirming && picked && (
         <Sheet title="Confirm spending" onClose={() => setConfirming(false)}
           footer={<><button className="btn" onClick={() => setConfirming(false)}>Cancel</button><button className="btn primary" onClick={() => void run()}>Confirm and make the picture{extra > 0 ? ` (up to ${extra + 1})` : ""}</button></>}>
           <dl className="facts"><dt>Scene</dt><dd>{beat.primary}</dd><dt>Model</dt><dd>{picked.name}</dd><dt>Provider</dt><dd>{PROVIDER_LABEL[picked.provider]} ({picked.official ? "official API" : "aggregator"})</dd>
             <dt>Price</dt><dd>{each !== null ? `Estimate $${each.toFixed(3)} (${priceText(picked)})` : "Unknown. The provider has not published a price here."}</dd><dt>Charged to</dt><dd>Your {PROVIDER_LABEL[picked.provider]} account</dd></dl>
+          <label className="check-row"><span>Background</span>
+            <select value={screen} onChange={(e) => setScreen(e.target.value as "" | "green" | "blue")} aria-label="Background of the picture">
+              <option value="">As the scene</option><option value="green">Green screen (for compositing)</option><option value="blue">Blue screen (for compositing)</option></select></label>
+          {screen && <p className="muted">The subject is made alone on a flat {screen} screen. Animate it next, and Build takes the {screen} out.</p>}
           <label className="check-row"><span>If lettering is found, try again</span>
             <select value={extra} onChange={(e) => setExtra(Number(e.target.value))} aria-label="Retries if lettering is found">
               <option value={0}>No, make one picture</option><option value={1}>Up to 1 more picture</option><option value={2}>Up to 2 more pictures</option></select></label>

@@ -209,6 +209,48 @@ In Build, **Put pictures and voiceovers in place** starts each voiceover at its 
 
 What to know: a voiceover costs money (no price is reported by the provider, so the ledger says unknown); music is still imported, not made.
 
+## 12. Green screen clips, for compositing
+
+**A video model keeps the background of the picture it starts from.** A real test showed it: asked, in words, to replace a Lagos kitchen with a green screen, Seedance 2.0 Fast made a clip with the kitchen and only a green edge. So the screen has to be in the picture:
+
+1. **Make the picture on a screen.** On a scene, **Try another** (or Make picture) has **Background**: Green screen or Blue screen. The picture is made of the scene's subject alone, whole and sharp, on one flat, evenly lit screen (green: RGB 0, 177, 64; blue: RGB 0, 71, 255), with no room or scenery. It is marked as a screen picture.
+2. **Animate it.** The Animate dialog starts with Background set to the picture's screen and asks the model to keep it exactly, with none of that colour on the subject. If you choose a screen for a picture that has its own background, the dialog says plainly that the model will keep it.
+3. **Build takes the screen out.** "Put pictures and voiceovers in place" keys the clip with EffectCraft's Screen Color Key, so what is behind it shows through. For footage you brought yourself, **Add layers**, "Take out a flat screen" removes green or blue as the file is added. The key stays an ordinary effect in EffectCraft, where softness and spill can be tuned.
+
+![Making the picture on a green screen: Background in the confirmation](45-green-screen-picture.jpg)
+
+![A green screen picture made by an image model](46-green-screen-picture.jpg)
+
+Real run (Kie.ai: Imagen 4 Fast for the picture, Seedance 2.0 Fast for a 4 second 480p clip), checked on the pixels:
+
+![A generated clip before the key](48-green-clip-before-key.jpg)
+![The same clip keyed in EffectCraft over a magenta background](49-green-clip-keyed-over-magenta.jpg)
+
+The screen (RGB 23, 157, 41) becomes the background behind it (RGB 244, 4, 221) and the subject is unchanged. What the model drew **besides** the screen is not removed: this clip kept a faded block of flats at the top
+(the image model put scenery behind the subject although it was told not to), and the key tints it. A generated screen is good, not studio perfect: look at the picture before animating, and use Try another if it has scenery.
+
+What to know: use blue when the subject is green. Pictures made with an image model can have an uneven screen; the key copes with small variations, not with a patterned background.
+
+## 13. Work on it in After Effects, DaVinci Resolve or Premiere
+
+Deliver has **Work on it in another editor**. Choose the editor and press **Prepare files**. Everything is written into the project's `exports` folder, one new folder per hand-off (nothing is sent anywhere, nothing costs money):
+
+| Editor | What you get | How it was checked |
+| --- | --- | --- |
+| After Effects | An `.aep` with the layers, text, keyframes and markers EffectCraft can write | EffectCraft writes it and reads it back. **Not opened in After Effects** (only the plug-in folders of AE 2025 are on this PC) |
+| DaVinci Resolve or Final Cut Pro | An FCPXML timeline plus the clips it points at, rendered by EffectCraft with their effects | Files written and read for clip count; **not imported into Resolve** |
+| Premiere Pro | The same timeline as XML | As above, not imported into Premiere |
+| OpenTimelineIO, EDL | The timeline in those formats (an EDL holds one video track) | As above |
+
+![Work on it in another editor, After Effects](50-hand-off-after-effects.jpg)
+
+On the real Civilization project, After Effects listed 35 footage items and 3 layer timings it cannot carry, wrote nothing, and wrote `Main.aep` after Send it anyway.
+
+A keyed green screen clip arrives in Resolve, Final Cut and Premiere **already keyed**: the clips written next to the timeline are rendered with the key and carry an alpha channel (real-engine test: the screen's alpha is near 0, the subject's is solid).
+After Effects is different: its file cannot carry EffectCraft's key effect. MotionCraft says so before writing anything ("Nothing was written yet"), lists what would be lost, and writes only after **Send it anyway**; in After Effects, apply Keylight to the clip.
+
+Full chain tested on the real engine: a green screen clip is placed, keyed, composited over a magenta background in EffectCraft (the screen shows the magenta, the red subject stays), then handed to each editor.
+
 ## What this run found and fixed
 
 The run is also the stress test. See [docs/stress-test/FINDINGS.md](../stress-test/FINDINGS.md) for the list, with the tests that now guard each fix.

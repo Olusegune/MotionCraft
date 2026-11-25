@@ -5,7 +5,7 @@ import { Sheet } from "../shell/Sheet";
 import { Frame } from "../shell/Media";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
 import { getApi, type GenJob, type ModelEntry, type ModelList, type ProviderId } from "../lib/api";
-import { rankModels, rankProviders } from "../lib/models";
+import { rankModels, rankProviders, stillAspect } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { FAMILIES } from "../lib/styles";
 import { nowIso } from "../lib/project";
@@ -92,7 +92,7 @@ export function Proposals() {
     const started = await Promise.all(cards.map(async (c) => {
       try {
         const token = await api.confirmSpend(picked.provider, picked.model);     // one per still, all from the same confirmation click
-        const job = await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt: c.prompt, params: { aspect_ratio: project.brief.deliverables[0].aspect }, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath);
+        const job = await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt: c.prompt, params: { aspect_ratio: stillAspect(project.brief.deliverables[0].aspect) }, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath);
         return { ...c, job, error: null, asset: undefined };
       } catch (e) { return { ...c, job: null, error: String(e instanceof Error ? e.message : e) }; }
     }));

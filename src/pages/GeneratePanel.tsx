@@ -5,7 +5,7 @@ import { Sheet } from "../shell/Sheet";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
 import { capBlock, recordSpend } from "../lib/spend";
 import { getApi, type GenJob, type ModelEntry, type ModelList, type ProviderId } from "../lib/api";
-import { rankModels, rankProviders } from "../lib/models";
+import { rankModels, rankProviders, stillAspect } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { Frame } from "../shell/Media";
 
@@ -64,7 +64,7 @@ export function GeneratePanel() {
     try {
       const api = await getApi();
       const token = await api.confirmSpend(provider, picked.model);     // only reachable from the confirm click below
-      setJob(await api.engine<GenJob>("generate_start", { provider, model: picked.model, prompt: prompt.trim(), params: kind === "image" ? { aspect_ratio: project.brief.deliverables[0].aspect } : {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
+      setJob(await api.engine<GenJob>("generate_start", { provider, model: picked.model, prompt: prompt.trim(), params: kind === "image" ? { aspect_ratio: stillAspect(project.brief.deliverables[0].aspect) } : {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
       update((p) => recordSpend(p, { provider, model: picked.model, what: kind, usd: picked.price.known ? picked.price.value : null }));
       setConfirming(false);
     } catch (e) { setConfirming(false); setErr(String(e instanceof Error ? e.message : e)); }

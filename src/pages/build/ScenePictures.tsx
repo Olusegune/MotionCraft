@@ -18,7 +18,7 @@ export function ScenePictures({ write, disabled }: { write: Write; disabled: boo
       <p className="muted">Puts each scene's picture behind that scene, under the text and shapes. They are normal layers you can move, trim or remove.</p>
       <button className="btn" disabled={!!reason} onClick={async () => {
         setMsg(null);
-        const r = !items.length ? null : await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}) })) });
+        const r = !items.length ? null : await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop, key }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}), ...(key ? { key } : {}) })) });
         const v = vo.length ? await write("voiceovers", "place_audio", { items: vo.map(({ rel, t_in }) => ({ rel, t_in })) }) : null;
         if (v) update((p) => ({ ...p, treatment: Object.fromEntries(Object.entries(p.treatment).map(([k, t]) => [k, t.voice?.assetId && vo.some((x) => x.beatId === k) ? { ...t, voice: { ...t.voice, placed: true } } : t])) }));
         if (r || v) setMsg(`${r ? `${items.length} picture${items.length === 1 ? "" : "s"}` : ""}${r && v ? " and " : ""}${v ? `${vo.length} voiceover${vo.length === 1 ? "" : "s"}` : ""} placed.`);

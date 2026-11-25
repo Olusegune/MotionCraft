@@ -30,6 +30,7 @@ export interface AnimateSettings {
   duration: number;              // seconds
   resolution: "720p" | "1080p";
   negative: string;              // what must not appear
+  keyColor?: "green" | "blue";   // shoot against a flat screen of this colour, to be keyed out and composited
   model?: string;                // "provider/model" last used
   prompt?: string;               // the whole prompt, written by hand; replaces the one built from the pieces above
 }
@@ -50,11 +51,28 @@ export function performanceFrom(plan: string): string {
   return sentences.slice(0, 2).join(" ").trim().slice(0, 320);
 }
 
+const SCREEN = {
+  green: "pure chroma-key green (RGB 0, 177, 64)",
+  blue: "pure chroma-key blue (RGB 0, 71, 255)",
+};
+
+export const screenName = (c: "green" | "blue"): string => SCREEN[c];
+
+/** The words that ask a model for a clean, keyable screen. */
+export function screenText(c: "green" | "blue"): string {
+  const col = SCREEN[c];
+  return `Background: the subject is shot against one flat, evenly lit, ${col} screen, edge to edge. Keep that screen exactly as it is: no gradient, no floor line, no shadows cast on it, no texture, nothing new behind it. `
+    + `Keep the subject sharply lit and in focus, with a clean edge, no motion blur on the outline, and none of that colour on the subject, its clothes or its props.`;
+}
+
 export function defaultAnimate(p: MotionProject, b: Beat): AnimateSettings {
   const saved = p.treatment[b.beatId]?.animate;
-  if (saved) return saved;
+  const t = p.treatment[b.beatId];
+  const still = (p.assets ?? []).find((a) => a.id === (t?.stillAssetId ?? t?.frameAssetId));
+  if (saved) return still?.screen && !saved.keyColor ? { ...saved, keyColor: still.screen } : saved;      // a new picture on a screen is animated keyed
   return {
-    camera: b.energy >= 4 ? "handheld" : b.energy <= 2 ? "push" : "pan-right",
+    ...(still?.screen ? { keyColor: still.screen } : {}),
+    camera: still?.screen ? "hold" : b.energy >= 4 ? "handheld" : b.energy <= 2 ? "push" : "pan-right",
     performance: performanceFrom(p.treatment[b.beatId]?.plan ?? "") || b.primary,
     emotion: emotionText(b),
     spoken: "",
@@ -72,13 +90,14 @@ export function videoPrompt(p: MotionProject, _beat: Beat, s: AnimateSettings): 
   const fam = p.style.dimensions.composition?.familyId ?? p.style.dimensions.typography?.familyId;
   const cam = CAMERA_MOVES.find((c) => c.id === s.camera) ?? CAMERA_MOVES[0];
   const parts = [
-    "Bring this still image to life as one continuous cinematic shot. Keep the same people, faces, clothing, lighting and setting as in the picture.",
+    s.keyColor ? "Bring this still image to life as one continuous shot of the same subject. Keep the same people, faces and clothing as in the picture." : "Bring this still image to life as one continuous cinematic shot. Keep the same people, faces, clothing, lighting and setting as in the picture.",
+    s.keyColor ? screenText(s.keyColor) : "",
     `Camera: ${cam.text}.`,
     s.performance.trim() ? `Performance: ${s.performance.trim().replace(/[.]+$/, "")}. Natural, believable acting, with small human details.` : "",
     s.emotion.trim() ? `Emotion: ${s.emotion.trim()}. Let it show in the faces, the posture and the pace.` : "",
     s.spoken.trim() ? `Dialogue: one person in the scene says, "${s.spoken.trim().replace(/"/g, "'")}".` : "",
     s.sound ? `Sound: ${s.ambience.trim().replace(/[.]+$/, "") || "natural ambience"}.` : "No sound beyond the natural sound of the scene.",
-    fam ? `Look: ${familyPrompt(fam)}.` : "",
+    fam && !s.keyColor ? `Look: ${familyPrompt(fam)}.` : "",
     "No on-screen text, captions, subtitles, logos or watermarks.",
   ];
   return parts.filter(Boolean).join(" ").slice(0, 3900);
