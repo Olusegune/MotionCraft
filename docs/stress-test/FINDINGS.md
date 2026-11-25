@@ -103,7 +103,7 @@ Result: 2560 × 1080, 24 fps H.264, 90.0 s, with stereo AAC sound; QA 0 errors, 
 - Settings, Language model: the model is a free-text box; it does not list what Ollama has installed.
 - The Intent page's "Source evidence" shows the brief's raw markdown marks.
 - Treatment shows "Try another" (a paid picture) on pictures the person supplied; it should say so only for pictures made in the app.
-- The voiceover lines in the script become markers only; nothing speaks them. No music is made; the score is imported.
+- The voiceover lines in the script become markers only (fixed for voices, see item 25). No music is made; the score is imported.
 - The H.264 file is 172 MB for 90 s (about 15 Mbit/s). Fine for a master, large for the web: no bitrate choice yet.
 
 ## Found while building image to video (same day)
@@ -117,3 +117,7 @@ Result: 2560 × 1080, 24 fps H.264, 90.0 s, with stereo AAC sound; QA 0 errors, 
 22. **What a video model can do is read, not guessed.** Kie.ai pages and fal endpoints publish an OpenAPI schema; the dialog is built from it (aspect ratios, lengths, sizes, sound, last frame, reference pictures, clip and sound to follow). Recorded copies of a Kie.ai page and a fal schema are test fixtures.
 23. **Providers are offered Kie.ai, fal, Google in that order**; the lists refresh once per run; a model not yet listed can be added by its id.
 24. **Newest models, as the providers list them today**: Seedream 5.0 Pro (BytePlus) and 5.0 Flash and Lite (fal) are the newest Seedream; there is no Seedream 5.5 in any provider's list yet. MAGI-2 (text, image and reference to video) is on Kie.ai. Wan 3.0 and Wan 3.0 Prime are on Kie.ai and fal. Seedance 2.0 and 2.5, and Kling 3 and 4, are on Kie.ai; Seedance is on fal too. They appear in the app as soon as the providers list them.
+
+## Found while building voice (same day)
+25. **A narrator's lines were only markers; nothing spoke them.** Each scene can now be given a voiceover (OpenAI, Google; official providers only, spend-confirmed, saved in the project with provenance). It is placed at the scene's start, not at zero, and the score is no longer mixed in at the voice's level: Build can set music to -6, -10 or -16 dB.
+26. **Kept honest**: a Google voice has a unit test but was not run for real (no billing on this key); the OpenAI voice was run for real and placed in a real composition.

@@ -45,6 +45,8 @@ export interface LayerBinding {
 export interface AssetReference {
   id: string; kind: "image" | "video" | "audio"; path: string;   // path is relative to the package folder
   name?: string;
+  /** `voiceover`: speech made for a scene. It is placed at its scene's start, never at zero like a score. */
+  use?: "voiceover";
   /** What the person says about their right to use an imported file. Unset means not confirmed yet. Files MotionCraft made through a provider carry the provider's terms in provenance instead. */
   rights?: "mine" | "licensed" | "stock";
   /** Result of looking for lettering in a picture with a model on this computer: true found, false none, null could not be checked. */
@@ -69,7 +71,7 @@ export interface MotionProject {
            moodboard?: string[];   // asset ids chosen as references
            dimensions: Partial<Record<Dimension, { familyId: string; intensity: Intensity }>>;
            conflicts: { a: string; b: string; reason: string; overridden: boolean }[] };
-  treatment: Record<string, { plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean; stillAssetId?: string; animate?: import("./lib/videoPrompt").AnimateSettings }>;   // keyed by beatId (added in P1-01; see PR)
+  treatment: Record<string, { plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean; stillAssetId?: string; animate?: import("./lib/videoPrompt").AnimateSettings; voice?: import("./lib/voice").VoiceSettings }>;   // keyed by beatId (added in P1-01; see PR)
   /** `accepted`: warnings and notes the person has looked at and chosen to live with, so they stop counting against the sign-off. Errors cannot be accepted. */
   review: { comments: ReviewComment[]; preview?: { rel: string; at: string }; accepted?: { key: string; check: string; detail: string; at: string }[] };
   renders?: RenderRecord[];

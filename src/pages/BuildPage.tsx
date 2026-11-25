@@ -14,6 +14,7 @@ import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
 import { ScenePictures } from "./build/ScenePictures";
 import { audioToAdd, scenePictureItems } from "../lib/makeIt";
+import { voiceItems } from "../lib/voice";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
 import { beatAt, clampDock, readDock, sceneStatus, writeDock } from "../lib/timelineMath";
 import { TimelinePanel, type SceneCard, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
@@ -265,13 +266,17 @@ export function BuildPage(f: FrameProps) {
         </Fold>
       </Fold>
       <PrimitivesPanel write={write} selected={sel} locked={selLocked} playhead={playhead} disabled={writesOff} onApplied={() => undefined} />
-      <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} onStructure={setStructure} />
+      <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} onStructure={setStructure} layers={layers.map((l) => ({ id: l.id, name: l.name }))} />
       <ScenePictures write={write} disabled={writesOff} />
       <BuilderPanel write={write} disabled={writesOff} afterBuild={async () => {
         let note = 0;
         const items = scenePictureItems(project);
         if (items.length) { const r = await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}) })) }); if (r) note = items.length; }
         for (const rel of audioToAdd(project, layers.map((l) => l.name))) await write("add audio", "add_media", { rel });      // the sound goes in with the layers, so the render is not silent
+        const vo = voiceItems(project);
+        if (vo.length && await write("voiceovers", "place_audio", { items: vo.map(({ rel, t_in }) => ({ rel, t_in })) })) {       // each voiceover starts at its scene
+          update((p) => ({ ...p, treatment: Object.fromEntries(Object.entries(p.treatment).map(([k, t]) => [k, t.voice?.assetId && vo.some((x) => x.beatId === k) ? { ...t, voice: { ...t.voice, placed: true } } : t])) }));
+        }
         return note;
       }} onBuilt={(created, versions) => update((p) => markBuilt(p, created, versions))} />
       {unlocking && (

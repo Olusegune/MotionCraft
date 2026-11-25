@@ -433,13 +433,13 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 38] = [
+const ENGINE_METHODS: [&str; 40] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
     "primitives", "audio_analyze", "audio_cached", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
     "snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore",
-    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read", "layer_timing", "place_pictures", "picture_check", "fonts_available",
+    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read", "layer_timing", "place_pictures", "picture_check", "fonts_available", "place_audio", "set_audio_level",
 ];
-const MODEL_METHODS: [&str; 13] = ["models", "models_refresh", "models_add", "model_schema", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
+const MODEL_METHODS: [&str; 15] = ["models", "models_refresh", "models_add", "model_schema", "speech_models", "speech_generate", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
 /// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
 const LLM_CALL_METHODS: [&str; 3] = ["llm_complete", "director_intent", "builder_plan"];
 /// Language-model providers that run in the cloud: a call needs a key and a spend token. Local ones (ollama, lmstudio, inkling) need neither,
@@ -448,10 +448,12 @@ const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthr
 const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
 /// Credential-store accounts: the generation providers plus the two language-model-only ones.
 const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
-const WRITE_METHODS: [&str; 17] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore", "sync_labelled_markers", "layer_timing", "place_pictures"];
+const WRITE_METHODS: [&str; 19] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore", "sync_labelled_markers", "layer_timing", "place_pictures", "place_audio", "set_audio_level"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
 const PAID_ENGINE_METHODS: [&str; 2] = ["render_start", "render_resume"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
+/// Voiceover is made by official providers only (ADR-0005 bans voice and music models through aggregators).
+const SPEECH_PROVIDERS: [&str; 2] = ["openai", "google"];
 const KEY_SERVICE: &str = "motioncraft";
 const SPEND_TTL: Duration = Duration::from_secs(300);
 
@@ -623,7 +625,7 @@ fn engine_call(
             o.remove(k);
         }
     }
-    if method == "open" || method == "generate_start" {
+    if method == "open" || method == "generate_start" || method == "speech_generate" {
         let root = projects_root(&app)?;
         let pkg = check_package(&root, package.as_deref().ok_or("No project path.")?)?;
         params.as_object_mut().unwrap().insert("package".into(), Value::String(pkg.to_string_lossy().into_owned()));
@@ -633,6 +635,18 @@ fn engine_call(
         if !take_spend(&st, &token) {
             return Err("A final render needs a confirmation from a click on the render sheet. Confirm again.".into());
         }
+    }
+    if method == "speech_generate" {
+        let provider = params.get("provider").and_then(Value::as_str).ok_or("No provider.")?.to_string();
+        if !SPEECH_PROVIDERS.contains(&provider.as_str()) {
+            return Err("Voiceover uses official providers only: OpenAI or Google.".into());
+        }
+        let token = params.get("spend_token").and_then(Value::as_str).unwrap_or("").to_string();
+        if !take_spend(&st, &token) {
+            return Err("A voiceover needs a spend confirmation from a click on the confirmation sheet. Confirm again.".into());
+        }
+        let key = get_key(&provider)?;
+        params.as_object_mut().unwrap().insert("api_key".into(), Value::String(key));
     }
     if method == "generate_start" {
         let provider = params.get("provider").and_then(Value::as_str).ok_or("No provider.")?.to_string();
@@ -1582,7 +1596,9 @@ mod tests {
 
     #[test]
     fn only_generate_start_is_paid_and_providers_are_a_closed_list() {
-        assert!(MODEL_METHODS.contains(&"generate_start"));
+        assert!(MODEL_METHODS.contains(&"generate_start") && MODEL_METHODS.contains(&"speech_generate"));
+        assert!(SPEECH_PROVIDERS.contains(&"openai") && SPEECH_PROVIDERS.contains(&"google") && !SPEECH_PROVIDERS.contains(&"kie") && !SPEECH_PROVIDERS.contains(&"fal"), "voices come from official providers only");
+        assert!(!WRITE_METHODS.contains(&"speech_generate"));
         assert!(provider_ok("kie").is_ok() && provider_ok("fal").is_ok() && provider_ok("byteplus").is_ok());
         assert!(provider_ok("suno").is_err() && provider_ok("../x").is_err());
         assert!(!WRITE_METHODS.contains(&"generate_start"));

@@ -283,6 +283,78 @@ class Service:
         return self.jobs.start(provider=provider, model=model, prompt=prompt, params=params, api_key=api_key, package=Path(package),
                                spend_token=spend_token, generative_enabled=generative_enabled, offline=offline, files=files)
 
+    def speech_models(self) -> dict:
+        """The voice models and their voices (official providers only: OpenAI and Google)."""
+        from .providers import speech
+        return {"models": speech.catalogue()}
+
+    def speech_generate(self, package: str, provider: str, model: str, text: str, voice: str, instructions: str = "", speed: float = 1.0, api_key: str = "",
+                        spend_token: str = "", generative_enabled: bool = False, offline: bool = False) -> dict:
+        """A voiceover: the text spoken by a provider's voice, saved as an audio file in the project. Paid by the person's own account, so it needs a spend confirmation
+        from a click (the shell checks the token), and it is refused when generative models are off or in offline mode. Returns the new file and its provenance."""
+        from .providers import speech
+        from .providers.clients import ProviderError
+        if not generative_enabled:
+            raise JobRefused("Generative models are off. Turn them on in Settings first.")
+        if offline:
+            raise JobRefused("Offline mode is on, so cloud providers are disabled.")
+        if not spend_token:
+            raise JobRefused("A spend confirmation from a user click is required before any paid generation.")
+        if not api_key:
+            raise JobRefused(f"Add your {provider} key in Settings first.")
+        pkg = Path(package).resolve()
+        if pkg.suffix != ".motioncraft" or not pkg.is_dir():
+            raise JobRefused("Not a MotionCraft package folder.")
+        try:
+            data, ext = speech.synthesize(self.jobs.net, provider, api_key, model, text, voice, instructions, speed)
+        except (ProviderError, NetError) as e:
+            raise AdapterError(str(e)) from None
+        import uuid
+        from datetime import datetime, timezone
+        dest = pkg / "assets" / "audio"
+        dest.mkdir(parents=True, exist_ok=True)
+        out = dest / f"vo-{uuid.uuid4().hex[:10]}{ext}"
+        out.write_bytes(data)
+        prov = {"actor": "user", "prompt": str(text)[:400], "provider": provider, "model": model, "at": datetime.now(timezone.utc).isoformat(),
+                "licence": "Made by the provider from your text with your account. Check the provider's terms for how the voice may be used.", "costReported": False, "costValue": None, "costUnit": None}
+        return {"path": out.relative_to(pkg).as_posix(), "bytes": len(data), "voice": voice, "provenance": prov}
+
+    def set_audio_level(self, layers: list, db: float) -> dict:
+        """The level of audio layers, in decibels (0 is the file as it is, -10 sits under a voice). The same for both channels. Footage layers with sound only."""
+        a = self._need()
+        if not isinstance(layers, list) or not layers or len(layers) > 20:
+            raise AdapterError("Give between 1 and 20 layers.")
+        if isinstance(db, bool) or not isinstance(db, (int, float)) or db != db:
+            raise AdapterError("The level must be a number of decibels.")
+        level = round(max(-48.0, min(6.0, float(db))), 1)
+        for lid in [int(x) for x in layers]:
+            a.execute([Command(id="prop.set", params={"layer": lid, "path": "audio/levels", "value": [level, level]})], actor=USER)
+        a.save()
+        return {"level": level, **self._snapshot()}
+
+    def place_audio(self, items: list) -> dict:
+        """Puts voiceover files into the composition, each starting at its time (a scene's start): one audio layer per item, slid to its start. Audio only."""
+        if not isinstance(items, list) or not items or len(items) > 40:
+            raise AdapterError("Give between 1 and 40 sounds.")
+        made: list[int] = []
+        for it in items:
+            if not isinstance(it, dict):
+                raise AdapterError("Each sound needs a file and a start time.")
+            rel = str(it.get("rel") or "")
+            self._asset(rel, ("audio",))
+            lid = self.add_media(rel)["layer"]
+            made.append(lid)
+            t0 = max(0.0, float(it.get("t_in", 0)))
+            if t0 > 1e-6:
+                comp = self._need().inspect().comp(None)
+                span = self._need().layer_spans(comp.id).get(lid) or {}
+                length = float(span.get("out", 0.0)) - float(span.get("in", 0.0))
+                if t0 + length > comp.duration:                       # keep the slide inside the composition: trim the end first
+                    self.layer_timing(lid, t_out=max(comp.duration - t0, 1.0 / float(comp.frame_rate)))
+                self.layer_timing(lid, delta=t0)
+        self._need().save()
+        return {"placed": made, **self._snapshot()}
+
     def models_add(self, provider: str, model: str, name: str = "", media: str = "video") -> dict:
         """Adds a model by its id (see Registry.add_custom). Nothing is called; the first use asks for a spend confirmation like any other."""
         try:

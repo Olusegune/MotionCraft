@@ -113,11 +113,14 @@ export function PrimitivesPanel({ write, selected, locked, playhead, disabled, o
 }
 
 /** Waveform, tempo and beats of a song from your media wall, with beat markers written into the composition. */
-export function AudioPanel({ write, disabled, info, onInfo, onStructure }: { write: Write; disabled: boolean; info: AudioInfo | null; onInfo: (a: AudioInfo | null) => void; onStructure?: (s: { sections: SongSection[]; downbeats: number[] } | null) => void }) {
+export function AudioPanel({ write, disabled, info, onInfo, onStructure, layers }: { write: Write; disabled: boolean; layers?: { id: number; name: string }[]; info: AudioInfo | null; onInfo: (a: AudioInfo | null) => void; onStructure?: (s: { sections: SongSection[]; downbeats: number[] } | null) => void }) {
   const { project, projectPath, update } = useApp();
   const { enginePath } = useSettings();
   const imp = useImportMedia();
   const tracks = (project.assets ?? []).filter((a) => a.kind === "audio");
+  const [level, setLevel] = useState("-10");
+  // The music layers: the project's sound files that are not voiceovers, found in the composition by file name.
+  const musicLayers = (layers ?? []).filter((l) => tracks.some((t) => t.use !== "voiceover" && t.path.split("/").pop() === l.name));
   const [rel, setRel] = useState("");
   const [mode, setMode] = useState<"beats" | "downbeats">("beats");
   const [busy, setBusy] = useState(false);
@@ -229,6 +232,13 @@ export function AudioPanel({ write, disabled, info, onInfo, onStructure }: { wri
         </>
       )}
       <button className="btn" disabled={disabled || !chosen || busy} onClick={async () => { if (chosen) { const r = await write("add audio", "add_media", { rel: chosen.path }); if (r) setMsg("Audio added to the composition, so renders include it."); } }}>Add audio to composition</button>
+      <div className="row-actions">
+        <label className="field"><span className="field-label">Music level</span>
+          <select value={level} onChange={(e) => setLevel(e.target.value)}>
+            <option value="0">Full (0 dB)</option><option value="-6">A little lower (-6 dB)</option><option value="-10">Under a voiceover (-10 dB)</option><option value="-16">Quiet bed (-16 dB)</option></select></label>
+        <button className="btn" disabled={disabled || !musicLayers.length} title={musicLayers.length ? undefined : "Add the music to the composition first."}
+          onClick={async () => { const r = await write("music level", "set_audio_level", { layers: musicLayers.map((l) => l.id), db: Number(level) }); if (r) setMsg(`Music set to ${level} dB.`); }}>Set music level</button>
+      </div>
       {msg && <p className="muted" role="status">{msg}</p>}
       {err && <p className="error-text" role="alert">{err}</p>}
     </Fold>

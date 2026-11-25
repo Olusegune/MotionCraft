@@ -189,7 +189,25 @@ model that is not listed yet can be added by its id (Image and video models, "A 
 What to know:
 - Video models make 16:9 or 9:16. In a 21:9 film the clip is cropped to fit, as the pictures are.
 - Veo needs a Google account with billing turned on. The Google key used here listed no Veo model, so it could not start a clip; the dialog asks Google which models a key can use before it offers any.
-- Music is not generated: import it. Spoken lines said by someone in the scene come from the video model; a narrator's voiceover is a separate step that is not built yet.
+- Music is not generated: import it, then set its level under Build, Audio. Spoken lines said by someone in the scene come from the video model; a narrator's voiceover is made in the next section.
+
+## 11. Give a scene a voice: voiceover
+
+Each scene in Treatment has a **Voiceover...** button. It opens a sheet already filled in:
+
+- **The line to speak** is taken from the script's voiceover column for that scene's time.
+- **How to say it** is written from the scene's feeling, strength and energy ("Narrate with wonder and awe (strong), at a slow, unhurried pace...") and can be changed.
+- **Voice model and Voice**: OpenAI GPT-4o mini TTS (steerable by the delivery text), OpenAI TTS HD, and Google Gemini TTS. Only official providers make voices; a model appears only when its key is set.
+
+![The voiceover sheet](43-voiceover-sheet.jpg)
+
+Pressing **Confirm and make the voice** is the spend confirmation. The file is saved in the project (assets/audio) with where it came from, and a small player appears under the button so you can listen before it goes in the film.
+
+![A voiceover made for a scene](44-voiceover-made.jpg)
+
+In Build, **Put pictures and voiceovers in place** starts each voiceover at its scene's start (it never goes in at zero like a score). The score goes in at zero and its level can be set (full, -6, -10 under a voice, -16 quiet bed). Real test: a 7.3 second voiceover made in 3 seconds, placed at 8 s, heard in the rendered preview.
+
+What to know: a voiceover costs money (no price is reported by the provider, so the ledger says unknown); music is still imported, not made.
 
 ## What this run found and fixed
 

@@ -586,3 +586,7 @@ button.chip:focus-visible { outline: 2px solid var(--mc-accent); outline-offset:
 .font-mood:disabled { cursor: not-allowed; opacity: 0.6; }
 .font-sample { font-size: 22px; line-height: 1.2; min-height: 54px; overflow: hidden; }
 .font-mood-name { font-weight: 600; font-size: 13px; }
+
+/* Voiceover for a scene: the button, and a small player under it */
+.voice-over { margin-top: 6px; }
+.vo-audio { display: block; width: 100%; max-width: 320px; margin-top: 6px; }

@@ -77,6 +77,22 @@ class Net:
         except ValueError:
             raise NetError("The provider's answer was not JSON.") from None
 
+    def post_bytes(self, url: str, *, headers: dict | None = None, body: Any = None, timeout: float = 120, limit: int = 60 * 1024 * 1024) -> bytes:
+        """A POST whose answer is a file (speech from a text-to-speech call). Same host rules as every provider call; the answer is size-limited."""
+        self._check(url)
+        req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST", headers={"User-Agent": UA, "Content-Type": "application/json", **(headers or {})})
+        try:
+            with self._opener.open(req, timeout=timeout) as r:
+                raw = r.read(limit + 1)
+        except urllib.error.HTTPError as e:
+            detail = e.read(2000).decode("utf-8", "replace")
+            raise NetError(f"{urllib.parse.urlsplit(url).hostname} answered {e.code}: {_trim(detail)}", e.code) from None
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            raise NetError(f"Could not reach {urllib.parse.urlsplit(url).hostname} ({type(e).__name__}).") from None
+        if len(raw) > limit:
+            raise NetError("The provider's answer was unexpectedly large.")
+        return raw
+
     def text(self, url: str, timeout: float = 30) -> str:
         self._check(url)
         req = urllib.request.Request(url, headers={"User-Agent": UA})
