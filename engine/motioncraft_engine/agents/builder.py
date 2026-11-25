@@ -409,9 +409,9 @@ def shape_role(name: str, kind: str) -> str:
     return "plain"
 
 
-# Where script-timed text sits, as fractions of the frame (centre of the text). A title card is in the middle; a label sits in the lower third so the picture
-# behind stays clean; a tag sits just under its label.
-SLOT_AT = {"title": (0.5, 0.46), "label": (0.5, 0.86), "tag": (0.5, 0.935)}
+# Where script-timed text sits, as fractions of the frame (centre of the text). Titles and labels sit in the lower third so the picture
+# behind stays clean (a title card is two lines, so it sits a little higher); a tag sits just under its label.
+SLOT_AT = {"title": (0.5, 0.74), "label": (0.5, 0.875), "tag": (0.5, 0.945)}
 
 
 def text_params(L: dict, width: int, height: int) -> dict:

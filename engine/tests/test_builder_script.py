@@ -81,8 +81,8 @@ def test_lines_come_and_go_with_a_fade_and_sit_in_their_slots():
     fade_out = next(a for a in b["Type_I"]["animations"] if a["primitive"] == "exit.fade-out")
     assert 17 < fade_out["params"]["start"] < 18                  # ends with the row
     assert b["Title_00:00"]["slot"] == "title" and b["Type_I"]["slot"] == "label"
-    assert builder.text_params(b["Type_I"], 2560, 1080)["position"] == [1280, round(1080 * 0.86)]
-    assert builder.text_params(b["Title_00:00"], 2560, 1080)["position"] == [1280, round(1080 * 0.46)]
+    assert builder.text_params(b["Type_I"], 2560, 1080)["position"] == [1280, round(1080 * 0.875)]
+    assert builder.text_params(b["Title_00:00"], 2560, 1080)["position"] == [1280, round(1080 * 0.74)]
     assert "position" not in builder.text_params({"text": "x", "size": 10, "name": "n"}, 100, 100)
 
 

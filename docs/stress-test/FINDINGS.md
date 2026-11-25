@@ -72,3 +72,36 @@ Still open:
 2. Picture quality depends on the model; "Try another" is the remedy.
 3. The first run is a hint and three steps, not an interactive walkthrough.
 4. A project made before a rule changed keeps its old look and plans (nothing is rewritten without being asked).
+
+---
+
+# Run 3 (2026-11-25): Civilization I–VII, 90 s, 21:9, the owner's ten pictures
+
+Built portable app, Windows, EffectCraft 0.24.1, Ollama `qwen3:8b` as the language model (local, free), no paid calls (budget untouched). Script and on-screen text pasted exactly as written
+([civilization-script.md](civilization-script.md)). Walkthrough with screenshots: [docs/walkthrough](../walkthrough/README.md).
+Result: 2560 × 1080, 24 fps H.264, 90.0 s, with stereo AAC sound; QA 0 errors, 0 warnings (14 accepted by the person); the project opens in EffectCraft.
+
+## Found and fixed (each has a test)
+1. **A script in two tables was misread.** Unlabelled columns put "what we see" in the on-screen-text slot, and the second table (single times) was dropped. Tables are now read by their headings and single-time rows give each scene's on-screen text. `civilization.test.ts`
+2. **The Director dropped the last scene** (nine scenes for ten rows, the last 7 seconds uncovered). Scenes are lined up with the script's rows; a missing row is filled from the script. `reconcileArc`
+3. **Non-ASCII text arrived garbled in the engine helper** ("I–VII" became "Iâ€“VII") because Windows decoded the helper's input with the old code page. The helper now reads and writes UTF-8. `test_sidecar_utf8.py` (fails without the fix)
+4. **Every motion lost its start time** when the page sent the checked plan back to build: all fades began at time zero. Fixed in `validate`. `test_a_motions_start_survives_the_second_check_before_building`
+5. **A fade out after a fade in never showed** (the second motion read the layer's value at time zero, 0, as its own). The Builder reads each layer's own values once. Real-engine test.
+6. **The Builder's text was timed by a guess.** It is now timed to the script's rows, fades in and out, sits in the lower third, is sized from the frame and shrunk to the safe area, and the SPECULATIVE tag is its own small layer under Types IV–VII. Markdown marks the model copied (`*italic*`) are removed.
+7. **Motion names and parameters a small model gets slightly wrong** ("fade-in", "easing") dropped the whole motion and filled the plan with warnings. They are understood, extras ignored, and thirteen empty-layer warnings are one.
+8. **A video clip placed after the start never played** (its own start stayed at zero, so only its last frame showed). Clips are slid into place; looping and holding are real-engine tested.
+9. **The final video was silent.** The score was imported and analysed but never put into the composition; nothing said so. The Builder now adds the project's sound with the layers, and a new QA check, "Sound in the composition", warns when it is missing.
+10. **Dialogs opened scrolled to their buttons**, hiding the plan. Focus no longer scrolls.
+11. **The header wrapped, then ran off the edge, on pages with two actions** at 1440 px. Fixed.
+12. **QA could only be read, not answered.** Warnings can be accepted (and the accepted ones survive the layers being renumbered); eleven imported files can be given their rights in one step; errors cannot be accepted.
+13. **Approving on a page did not move on.** Approving now takes you to the next step's page and says what it is; the Next line no longer says "Press Make it" after Make it has run.
+14. **Make it needed an AI model.** Without one it now drafts from the brief's own words and says so.
+
+## Found, not fixed
+- **Contrast**: the small SPECULATIVE tag measured 2.6 to 2.9 : 1 on two bright pictures (needs 4.5 : 1). Accepted for this film; a text shadow or a darker band behind the lower third would fix it.
+- **Fonts**: "Missing fonts" and "Font licence" stay *Not checked*, because EffectCraft does not report which font a text layer uses. There is no way to choose a font per project yet.
+- Settings, Language model: the model is a free-text box; it does not list what Ollama has installed.
+- The Intent page's "Source evidence" shows the brief's raw markdown marks.
+- Treatment shows "Try another" (a paid picture) on pictures the person supplied; it should say so only for pictures made in the app.
+- The voiceover lines in the script become markers only; nothing speaks them. No music is made; the score is imported.
+- The H.264 file is 172 MB for 90 s (about 15 Mbit/s). Fine for a master, large for the web: no bitrate choice yet.

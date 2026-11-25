@@ -58,7 +58,7 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
       )}
       <span className="grow" />
       {project && <EngineChip engine={engine} onClick={onEngine} />}
-      <button className="search-btn" onClick={onPalette} aria-label="Command search"><Search size={18} strokeWidth={1.75} aria-hidden="true" /><span>Search commands…</span><span className="kbd"><Command size={12} aria-hidden="true" />K</span></button>
+      <button className="search-btn" onClick={onPalette} aria-label="Command search"><Search size={18} strokeWidth={1.75} aria-hidden="true" /><span className="search-label">Search commands…</span><span className="kbd"><Command size={12} aria-hidden="true" />K</span></button>
       {project && <span id="header-actions" className="header-actions" />}
       {!project && <button className="btn" onClick={onSettings} aria-label="Settings"><Settings2 size={18} strokeWidth={1.75} aria-hidden="true" />Settings</button>}
     </header>

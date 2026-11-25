@@ -143,6 +143,126 @@ def phase_audio(app: App):
     shot(app, "19-audio-added")
 
 
+def wait_while(app: App, text: str, timeout: float = 300, first: float = 3):
+    t0 = time.time()
+    time.sleep(first)
+    while time.time() - t0 < timeout and text in app.text():
+        time.sleep(3)
+    return round(time.time() - t0)
+
+
+def phase_build(app: App):
+    stage(app, "Build", 3)
+    shot(app, "20-build-empty")
+    app.click_text("Plan with Builder", "button", exact=True)
+    print("  planned in", wait_while(app, "Planning"), "s")
+    time.sleep(1.5)
+    app.scroll_to_text("Include")
+    shot(app, "21-builder-plan")
+    n = int(app.eval("window.__mc.all('button').map(b => b.innerText.trim()).find(t => /^Build \\d+ layer/.test(t)).match(/\\d+/)[0]"))
+    app.click_text(f"Build {n} layer", "button")
+    app.wait_text("Built ", 240)
+    time.sleep(2)
+    app.scroll_to_text("Built ")
+    shot(app, "22-built")
+    app.click_text("Build preview", "button")
+    print("  preview in", wait_while(app, "Rendering", 400), "s")
+    time.sleep(2)
+    shot(app, "23-preview-ready")
+
+
+def phase_qa(app: App):
+    stage(app, "Review", 3)
+    shot(app, "24-review")
+    app.click_text("Run checks", "button", exact=True)
+    wait_while(app, "Checking")
+    time.sleep(1.5)
+    app.scroll_to_text("Technical findings")
+    shot(app, "25-qa-first-run")
+    # rights: say the pictures and the score are the owner's (the owner supplied them)
+    for _ in range(14):
+        ok = app.eval("""(() => { const s = window.__mc.all('select').find(x => Array.from(x.options).some(o => o.text.startsWith('Say what you may do'))); if (!s) return false; const o = Array.from(s.options).find(x => x.text.startsWith('I made it')); window.__mc.setValue(s, o.value); return true; })()""")
+        if not ok:
+            break
+        time.sleep(wait_while(app, "Checking", 60) and 1.0)
+        time.sleep(1.0)
+    app.scroll_to_text("Technical findings")
+    time.sleep(1)
+    shot(app, "26-qa-after-rights")
+    # the pictures are 1911 px wide and the film is 2560 px wide: a known, accepted softness
+    try:
+        app.click_text("Accept all", "button")
+    except LookupError:
+        pass
+    time.sleep(1)
+    shot(app, "27-qa-accepted")
+
+
+def set_remaining_rights(app: App):
+    for _ in range(20):
+        ok = app.eval("""(() => { const s = window.__mc.all('select').find(x => Array.from(x.options).some(o => o.text.startsWith('Say what you may do'))); if (!s) return false; const o = Array.from(s.options).find(x => x.text.startsWith('I made it')); window.__mc.setValue(s, o.value); return true; })()""")
+        if not ok:
+            return
+        time.sleep(4)
+
+
+def accept_the_rest(app: App):
+    """Accept what is left after the rights are answered: warnings the owner has looked at and keeps (enlarged pictures, a small tag on a bright picture)."""
+    for _ in range(3):
+        try:
+            app.click_text("Accept all", "button")
+            time.sleep(0.6)
+        except LookupError:
+            break
+    for _ in range(12):
+        try:
+            app.click_text("Accept", "button", exact=True)
+            time.sleep(0.4)
+        except LookupError:
+            break
+
+
+def phase_review(app: App):
+    stage(app, "Review", 3)
+    app.click_text("Run checks", "button")
+    time.sleep(8)
+    set_remaining_rights(app)
+    accept_the_rest(app)
+    app.scroll_to_text("Technical findings")
+    time.sleep(1)
+    shot(app, "28-qa-clean")
+    app.scroll_to_text("Notes at the playhead")
+    app.fill_label("Note at", "Opening: the kitchen light should read warm, and the second place at the table should be easy to see.")
+    app.click_text("Add note", "button", exact=True)
+    time.sleep(1)
+    shot(app, "29-review-notes")
+    app.scroll_to_text("History and versions")
+    app.fill_label("Save a version now", "Before sign-off")
+    app.click_text("Save version", "button", exact=True)
+    time.sleep(2)
+    shot(app, "30-versions")
+    app.click_text("Approve for final render", "button", exact=True)
+    time.sleep(2)
+    shot(app, "31-after-signoff")
+
+
+def phase_deliver(app: App):
+    stage(app, "Deliver", 2.5)
+    shot(app, "32-deliver")
+    app.click_selector("button[aria-label='Render H.264']", 0)
+    time.sleep(1.5)
+    shot(app, "33-render-confirm")
+    app.click_text("Confirm and render", ".sheet button", exact=True)
+    t0 = time.time()
+    time.sleep(5)
+    while time.time() - t0 < 900 and "Rendering" in app.text():
+        time.sleep(8)
+    time.sleep(3)
+    print("  render took", round(time.time() - t0), "s")
+    app.scroll_to_text("Rendered video")
+    shot(app, "34-render-done")
+
+
 PHASES = {k[6:]: v for k, v in globals().items() if k.startswith("phase_")}
 
 if __name__ == "__main__":

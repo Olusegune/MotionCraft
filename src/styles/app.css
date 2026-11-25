@@ -566,3 +566,8 @@ button.chip:focus-visible { outline: 2px solid var(--mc-accent); outline-offset:
 /* The shipped example project, offered on the Projects page */
 .example-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; margin: 0 0 16px; border: 1px dashed var(--mc-accent); border-radius: var(--mc-r-card); background: var(--mc-bg-panel); }
 .example-card p { margin: 4px 0 0; max-width: 62ch; }
+
+/* Windows narrower than a wide laptop: the search box shrinks to its icon and shortcut so the header never runs off the edge */
+@media (max-width: 1620px) { .header .search-btn { min-width: 0; flex: 0 0 auto; } .header .search-btn .search-label { display: none; } }
+.header { min-width: 0; }
+.header .project-title, .header [class*="proj"] { min-width: 0; }

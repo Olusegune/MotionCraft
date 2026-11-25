@@ -43,7 +43,7 @@ def test_script_timed_labels_appear_on_their_rows_in_their_slots_and_the_tag_sit
     tl = {l["name"]: l for l in s.handle("timeline_read", {})["layers"]}
     assert tl["Type_I"]["in"] == pytest.approx(8.0, abs=0.05) and tl["Type_I"]["out"] == pytest.approx(18.0, abs=0.05)
     title = bright_box(Image, s, 4.0)                       # the title card, mid-frame
-    assert title and 0.3 < (title[3] + title[5]) / 2 / title[1] < 0.6, title
+    assert title and 0.6 < (title[3] + title[5]) / 2 / title[1] < 0.9, title
     label = bright_box(Image, s, 12.0)                      # a label sits in the lower third
     assert label and (label[3] + label[5]) / 2 / label[1] > 0.75, label
     assert label[3] / label[1] > 0.75, "the label must stay out of the upper two thirds so the picture behind is clean"

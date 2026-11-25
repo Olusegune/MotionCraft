@@ -76,11 +76,13 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
 
   // Warnings and notes can be accepted: the person has looked and chose to live with them. Errors cannot. Accepted findings stay listed, marked, and stop counting.
   const accepted = project.review.accepted ?? [];
-  const keyOf = (f: QaFinding) => `${f.check}|${f.evidence.detail}`;
+  // Layer numbers change when the composition is opened again, so they are not part of what identifies a finding.
+  const keyOf = (f: QaFinding) => `${f.check}|${f.evidence.detail.replace(/\blayer \d+\b/g, "layer")}`;
   const isAccepted = (f: QaFinding) => f.severity !== "error" && accepted.some((a) => a.key === keyOf(f));
   const accept = (f: QaFinding) => update((p) => ({ ...p, review: { ...p.review, accepted: [...(p.review.accepted ?? []), { key: keyOf(f), check: f.check, detail: f.evidence.detail, at: nowIso() }] }, updatedAt: nowIso() }));
   const unaccept = (f: QaFinding) => update((p) => ({ ...p, review: { ...p.review, accepted: (p.review.accepted ?? []).filter((a) => a.key !== keyOf(f)) }, updatedAt: nowIso() }));
   const acceptMany = (fs: QaFinding[]) => update((p) => ({ ...p, review: { ...p.review, accepted: [...(p.review.accepted ?? []), ...fs.filter((f) => !(p.review.accepted ?? []).some((a) => a.key === keyOf(f))).map((f) => ({ key: keyOf(f), check: f.check, detail: f.evidence.detail, at: nowIso() }))] }, updatedAt: nowIso() }));
+  const setManyRights = (ids: string[], v: string) => update((p) => ({ ...p, assets: (p.assets ?? []).map((a) => (ids.includes(a.id) ? setRights(a, (v || undefined) as Rights | undefined) : a)), updatedAt: nowIso() }));
   const setAssetRights = (assetId: string, v: string) => {
     update((p) => ({ ...p, assets: (p.assets ?? []).map((a) => (a.id === assetId ? setRights(a, (v || undefined) as Rights | undefined) : a)), updatedAt: nowIso() }));
   };
@@ -110,6 +112,15 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
                 <span className="sl-label">{c.label}</span>
                 <span className="sl-text">{c.state === "passed" ? "Passed" : c.state === "findings" ? `${c.findings.filter((f) => !isAccepted(f)).length} found${c.findings.some(isAccepted) ? `, ${c.findings.filter(isAccepted).length} accepted` : ""}` : `Not checked: ${c.reason}`}</span>
                 {c.state === "passed" && c.reason && <span className="hint">{c.reason}</span>}
+                {c.check === "rights-unconfirmed" && c.findings.length > 1 && (
+                  <div className="row-actions">
+                    <label className="field"><span className="visually-hidden">Rights for all {c.findings.length} files</span>
+                      <select value="" onChange={(e) => { setManyRights(c.findings.map((f) => (f.evidence as { assetId?: string }).assetId).filter(Boolean) as string[], e.target.value); void run(); }}>
+                        <option value="">Say the same for all {c.findings.length} files…</option>
+                        {RIGHTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                      </select></label>
+                  </div>
+                )}
                 {c.findings.filter((f) => f.severity !== "error" && !isAccepted(f)).length > 1 && c.check !== "rights-unconfirmed" && (
                   <div className="row-actions"><button className="btn quiet" onClick={() => acceptMany(c.findings.filter((f) => f.severity !== "error"))}
                     title="You have looked at these and choose to keep them. They stay listed and stop counting.">Accept all {c.findings.filter((f) => f.severity !== "error" && !isAccepted(f)).length} warnings in this check</button></div>

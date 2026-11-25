@@ -112,3 +112,45 @@ describe("accepting a QA finding", () => {
     expect(screen.getByText(/errors,/)).toHaveTextContent("1 errors, 1 warnings, 0 notes");
   });
 });
+
+describe("rights for many files at once", () => {
+  it("offers one answer for every file the rights check lists", async () => {
+    const user = userEvent.setup();
+    const p = createProject("QA rights");
+    const prov = { actor: "user" as const, provider: "import", model: "file", at: "t", licence: "Imported by you.", costReported: false, costValue: null, costUnit: null };
+    p.assets = [{ id: "a", kind: "image", path: "assets/images/a.png", provenance: prov }, { id: "b", kind: "image", path: "assets/images/b.png", provenance: prov }];
+    const saved: MotionProject[] = [];
+    fake(p);
+    const withRights = { ...REPORT, results: [{ check: "rights-unconfirmed", label: "Rights for your own files", state: "findings" as const, reason: "", count: 2, findings: [
+      { id: "r1", check: "rights-unconfirmed", tier: 1 as const, severity: "warn" as const, evidence: { detail: "a has no rights note.", assetId: "a" } as never, cause: "x" },
+      { id: "r2", check: "rights-unconfirmed", tier: 1 as const, severity: "warn" as const, evidence: { detail: "b has no rights note.", assetId: "b" } as never, cause: "x" }] }], counts: { error: 0, warn: 2, info: 0 }, checked: 1, total: 1 };
+    const api = { async list() { return [{ id: p.id, name: p.name, path: "mem:1", updatedAt: p.updatedAt }]; }, async load() { return JSON.parse(JSON.stringify(p)); }, async save(_x: string, proj: MotionProject) { saved.push(JSON.parse(JSON.stringify(proj))); },
+      async engineStatus() { return { state: "connected", version: "0.24.1", pinned: "0.24.1", detail: "ok" }; }, async effectcraftWindowOpen() { return false; },
+      async keyStatus() { return { byteplus: false, google: false, openai: false, kie: false, fal: false, anthropic: false, openrouter: false }; }, async onMenu() { return () => undefined; },
+      async appReady() { /* unused */ }, async startupStep() { /* unused */ }, async uncleanSession() { return null; }, async sessionBegin() { /* unused */ }, async sessionEnd() { /* unused */ },
+      async engine(method: string) { if (method === "qa_run") return withRights as never; if (method === "llm_status") return { ready: false, reason: "none", config: { provider: null, model: "" }, providers: [] } as never; return { path: "x", dirty: false, activeComp: 1, comps: [], layers: [] } as never; } };
+    setApiForTests(api as unknown as Api);
+    render(<App />);
+    await toReview(user, "QA rights");
+    await user.click(screen.getByRole("button", { name: "Run checks" }));
+    await screen.findByText(/a has no rights note/);
+    await user.selectOptions(screen.getByLabelText(/Rights for all 2 files/), "mine");
+    await new Promise((r) => setTimeout(r, 1300));
+    const last = saved[saved.length - 1];
+    expect(last.assets!.map((a) => a.rights)).toEqual(["mine", "mine"]);
+  });
+});
+
+describe("an accepted finding stays accepted when the layers are renumbered", () => {
+  it("does not use the layer number to recognise a finding", async () => {
+    const user = userEvent.setup();
+    const p = createProject("QA renumber");
+    p.review.accepted = [{ key: "safe-title|“Hello” reaches about 12 px outside the 90% safe area (estimated from its size and position).", check: "safe-title", detail: "x", at: "t" }];
+    fake(p);
+    render(<App />);
+    await toReview(user, "QA renumber");
+    await user.click(screen.getByRole("button", { name: "Run checks" }));
+    await screen.findByText(/3 of 4 checks ran/);
+    expect(screen.getByText(/errors,/)).toHaveTextContent("1 errors, 0 warnings, 0 notes (1 accepted by you)");
+  });
+});

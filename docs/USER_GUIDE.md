@@ -4,6 +4,9 @@ MotionCraft turns a brief, a script or a piece of music into an editable motion-
 anything final or paid happens. This guide takes **one brief from an empty project to a finished 4K video**. Every picture below is a real screen
 from the app.
 
+A second, longer walkthrough, with a 90-second film made from a script and ten pictures, is in [docs/walkthrough](walkthrough/README.md). The finished project
+ships with the app: on the Projects page press **Open the example**.
+
 - [1. Before you start](#1-before-you-start)
 - [2. The walkthrough](#2-the-walkthrough)
 - [3. Spending, privacy and approvals](#3-spending-privacy-and-approvals)
