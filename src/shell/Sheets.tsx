@@ -71,9 +71,10 @@ export function AboutSheet({ engine, onClose }: { engine: EngineStatus | null; o
   );
 }
 
-export function SettingsSheet({ engine, onClose, onRecheck, onModels }: { engine: EngineStatus | null; onClose: () => void; onRecheck: () => void; onModels: () => void }) {
+export function SettingsSheet({ engine, onClose, onRecheck, onModels, onCheckUpdates }: { engine: EngineStatus | null; onCheckUpdates?: () => Promise<string>; onClose: () => void; onRecheck: () => void; onModels: () => void }) {
   const s = useSettings();
   const [path, setPath] = useState(s.enginePath);
+  const [upMsg, setUpMsg] = useState<string | null>(null);
   return (
     <Sheet title="Settings" onClose={onClose} wide footer={<button className="btn primary" onClick={onClose}>Done</button>}>
       <div className="stack">
@@ -85,6 +86,11 @@ export function SettingsSheet({ engine, onClose, onRecheck, onModels }: { engine
         <section><h3>Offline mode</h3>
           <Segmented label="Offline mode" value={s.offline ? "on" : "off"} onChange={(v) => updateSettings({ offline: v === "on" })} options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} />
           <p className="muted">When on, cloud providers are disabled: no model lists are refreshed and nothing is generated.</p></section>
+        <section><h3>Updates</h3>
+          <Segmented label="Check for updates at start" value={s.autoUpdate ? "on" : "off"} onChange={(v) => updateSettings({ autoUpdate: v === "on" })} options={[{ value: "on", label: "Check at start" }, { value: "off", label: "Off" }]} />
+          <div className="row-actions"><button className="btn" onClick={async () => { setUpMsg("Checking…"); setUpMsg(onCheckUpdates ? await onCheckUpdates() : "Updates need the desktop app."); }}>Check now</button></div>
+          {upMsg && <p role="status">{upMsg}</p>}
+          <p className="muted">Updates are signed and checked before they install, and nothing installs without your click. Offline mode never checks.</p></section>
         <section><h3>Engine</h3>
           <p>{engine ? engine.detail : "Checking…"}</p>
           <label className="field"><span className="field-label">Path to effectcraft-cli (optional)</span><input value={path} onChange={(e) => setPath(e.target.value)} placeholder="Leave empty to search the usual install folders" /></label>

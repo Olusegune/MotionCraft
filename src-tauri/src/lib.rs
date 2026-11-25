@@ -1130,6 +1130,46 @@ fn open_docs(app: tauri::AppHandle) {
     open_docs_now(&app);
 }
 
+/// What the updater found. The notes are plain text from the release; the UI shows them as text, never as markup.
+#[derive(Serialize)]
+struct UpdateInfo {
+    version: String,
+    current: String,
+    notes: Option<String>,
+}
+
+/// Look for a newer signed release. Never runs in offline mode. The updater only accepts a package whose signature
+/// verifies against the public key in tauri.conf.json and whose version is newer than this one.
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle, offline: bool) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    if offline {
+        return Ok(None);
+    }
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let found = updater.check().await.map_err(|e| e.to_string())?;
+    Ok(found.map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current: u.current_version.clone(),
+        notes: u.body.clone().map(|b| b.chars().take(2000).collect()),
+    }))
+}
+
+/// Download, verify and install the update, then restart. Only reachable from the person's click on "Install and restart".
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle, offline: bool) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    if offline {
+        return Err("Offline mode is on.".into());
+    }
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        return Err("No update is available.".into());
+    };
+    update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+    app.restart();
+}
+
 /// Menu labels use `&` mnemonics on Windows and Linux; macOS would show the ampersand, so it is dropped there.
 fn lbl(label: &str) -> String {
     if cfg!(target_os = "macos") { label.replace('&', "") } else { label.to_string() }
@@ -1236,6 +1276,7 @@ pub fn run() {
     use tauri::Emitter;
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Every command that takes `State<EngineState>` (engine_call, confirm_spend, effectcraft_window_open, ...) fails with "state not
         // managed" without this. It was lost once and nothing noticed, because the tests call the functions directly.
         .manage(EngineState::default())
@@ -1304,6 +1345,8 @@ pub fn run() {
             load_project,
             save_project,
             engine_status,
+            update_check,
+            update_install,
             open_in_effectcraft,
             effectcraft_window_open,
             engine_call,

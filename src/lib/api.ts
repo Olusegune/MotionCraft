@@ -18,6 +18,9 @@ export interface GenJob {
   asset: null | { path: string; kind: "image" | "video"; provenance: import("../types").AssetReference["provenance"] };
 }
 
+/** A newer signed release found by the desktop app. Notes are plain text. */
+export interface UpdateInfo { version: string; current: string; notes: string | null }
+
 export interface EngineStatus {
   state: "connected" | "missing" | "version-mismatch" | "error";
   found?: string; version?: string; pinned: string; detail: string;
@@ -49,6 +52,8 @@ export interface Api {
   appReady(): Promise<void>;
   startupStep(step: "ui" | "projects" | "engine"): Promise<void>;
   openDocs(): Promise<void>;
+  updateCheck(offline: boolean): Promise<UpdateInfo | null>;
+  updateInstall(offline: boolean): Promise<void>;
   /** Crash recovery (P1-06): is the project file readable, restore the last good copy, and the "a project was open" marker. */
   projectHealth(path: string): Promise<ProjectHealth>;
   restoreBackup(path: string): Promise<void>;
@@ -101,6 +106,8 @@ async function tauriApi(): Promise<Api> {
     appReady: () => invoke("app_ready"),
     startupStep: (step) => invoke("startup_step", { step }),
     openDocs: () => invoke("open_docs"),
+    updateCheck: (offline) => invoke("update_check", { offline }),
+    updateInstall: (offline) => invoke("update_install", { offline }),
     projectHealth: (path) => invoke("project_health", { path }),
     restoreBackup: (path) => invoke("restore_backup", { path }),
     uncleanSession: () => invoke("unclean_session"),
@@ -177,6 +184,8 @@ function webApi(): Api {
     async uncleanSession() { return null; },
     async sessionBegin() { /* desktop only */ },
     async sessionEnd() { /* desktop only */ },
+    async updateCheck() { return null; },
+    async updateInstall() { throw new Error("Updates need the desktop app."); },
     async openDocs() { window.open("https://github.com/Olusegune/MotionCraft/tree/main/docs", "_blank", "noopener"); },
     async pickMedia() { return []; },
     async pickSongMap() { return null; },

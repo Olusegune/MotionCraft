@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ControlMode, Deliverable, GateId, MotionProject, ProjectSummary, RevisionRecord, Stage } from "./types";
 import { STAGES } from "./types";
 import { Ctx, type AppCtx } from "./ctx";
-import { getApi, type EngineStatus } from "./lib/api";
+import { getApi, type EngineStatus, type UpdateInfo } from "./lib/api";
 import { updateSettings, useSettings } from "./lib/settings";
 import { nextStep } from "./lib/nextStep";
 import { approve, createProject, GATE_AFTER, newId, nowIso, reviseApproved, setMode, STAGE_LABEL, STAGE_MODE } from "./lib/project";
@@ -22,6 +22,8 @@ import { BuildPage } from "./pages/BuildPage";
 import { ReviewPage } from "./pages/ReviewPage";
 import { DeliverPage } from "./pages/DeliverPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { Tour } from "./shell/Tour";
+import { UpdateBanner } from "./shell/UpdateBanner";
 import { RecoverySheet } from "./shell/RecoverySheet";
 import { shouldRecheckOnFocus } from "./lib/engineCheck";
 import type { ProjectHealth } from "./lib/api";
@@ -29,7 +31,7 @@ import type { ProjectHealth } from "./lib/api";
 const AUTOSAVE_MS = 30_000; // PRD target: at most 30 s of work lost
 const DEBOUNCE_MS = 1_000;
 
-type Overlay = null | { kind: "palette" } | { kind: "settings" } | { kind: "models" } | { kind: "copy" } | { kind: "manual" } | { kind: "about" } | { kind: "gate"; gate: GateId } | { kind: "impact"; gate: GateId; revKind: RevisionRecord["kind"] };
+type Overlay = null | { kind: "tour" } | { kind: "palette" } | { kind: "settings" } | { kind: "models" } | { kind: "copy" } | { kind: "manual" } | { kind: "about" } | { kind: "gate"; gate: GateId } | { kind: "impact"; gate: GateId; revKind: RevisionRecord["kind"] };
 
 export default function App() {
   const settings = useSettings();
@@ -49,6 +51,8 @@ export default function App() {
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [update_, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [firstRunTour, setFirstRunTour] = useState(false);
   const [recover, setRecover] = useState<null | { kind: "unclean" | "damaged"; summary: ProjectSummary; health: ProjectHealth; busy: boolean; error?: string }>(null);
   const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -71,6 +75,25 @@ export default function App() {
       if (u) setRecover({ kind: "unclean", summary: { id: "", name: u.name, path: u.path, updatedAt: u.updatedAt }, health: u.health, busy: false });
     }).catch(() => undefined);
   }, []);
+  // Look for a newer signed release once at start, unless offline or switched off. Installing is always the person's click.
+  const checkUpdates = useCallback(async (manual: boolean): Promise<string> => {
+    if (settings.offline) return "Offline mode is on, so no check was made.";
+    try {
+      const info = await (await getApi()).updateCheck(settings.offline);
+      setUpdateInfo(info);
+      return info ? `MotionCraft ${info.version} is available.` : "You have the latest version.";
+    } catch (e) { return manual ? `Could not check: ${e instanceof Error ? e.message : String(e)}` : ""; }
+  }, [settings.offline]);
+  useEffect(() => { if (inTauri && settings.autoUpdate && !settings.offline) void checkUpdates(false); }, [inTauri, settings.autoUpdate, settings.offline, checkUpdates]);
+  const installUpdate = async () => {
+    await flush();                                             // never lose work to a restart
+    void (await getApi()).sessionEnd().catch(() => undefined);
+    await (await getApi()).updateInstall(settings.offline);
+  };
+  // First run: show the tour once, on the projects page.
+  useEffect(() => { if (!settings.tourSeen && !project && !listing && !firstRunTour) { setFirstRunTour(true); setOverlay({ kind: "tour" }); } }, [settings.tourSeen, project, listing, firstRunTour]);
+  const closeTour = (start: boolean) => { updateSettings({ tourSeen: true }); setOverlay(null); if (start) { if (project) void home().then(() => setNewOpen(true)); else setNewOpen(true); } };
+
   const refreshProjects = useCallback(async () => {
     setListing(true);
     try { setProjects(await (await getApi()).list()); setListError(null); }
@@ -222,6 +245,7 @@ export default function App() {
       items.push({ id: "viewer-only", label: "Toggle viewer-only mode", run: () => setViewerOnly((v) => !v) });
       items.push({ id: "projects", label: "Back to projects", run: () => void home() });
     }
+    items.push({ id: "tour", label: "Take the tour", run: () => setOverlay({ kind: "tour" }) });
     items.push({ id: "settings", label: "Open settings", run: () => setOverlay({ kind: "settings" }) });
     items.push({ id: "models", label: "Browse image and video models", run: () => setOverlay({ kind: "models" }) });
     return items;
@@ -282,6 +306,7 @@ export default function App() {
     <div className="app">
       <Header project={project} stage={stage} save={save} now={now} engine={engine} onSetMode={setStageMode} onHome={() => void home()}
         onPalette={() => setOverlay({ kind: "palette" })} onSettings={() => setOverlay({ kind: "settings" })} onEngine={() => setOverlay({ kind: "settings" })} onManual={() => setOverlay({ kind: "manual" })} />
+      {update_ && <UpdateBanner info={update_} onInstall={installUpdate} onLater={() => setUpdateInfo(null)} />}
       {notice && <div className="notice" role="status">{notice}<button className="icon-btn" aria-label="Dismiss" onClick={() => setNotice(null)}>×</button></div>}
       {!project || !ctx ? (
         <ProjectsPage projects={projects} loading={listing} error={listError} onOpen={(p) => void open(p)} onCreate={create} newOpen={newOpen} setNewOpen={setNewOpen} onOpenFolder={() => void openFolder()}
@@ -318,7 +343,8 @@ export default function App() {
           }} />
       )}
       {overlay?.kind === "palette" && <Palette items={palette} onClose={() => setOverlay(null)} />}
-      {overlay?.kind === "settings" && <SettingsSheet engine={engine} onClose={() => setOverlay(null)} onRecheck={refreshEngine} onModels={() => setOverlay({ kind: "models" })} />}
+      {overlay?.kind === "settings" && <SettingsSheet engine={engine} onCheckUpdates={() => checkUpdates(true)} onClose={() => setOverlay(null)} onRecheck={refreshEngine} onModels={() => setOverlay({ kind: "models" })} />}
+      {overlay?.kind === "tour" && <Tour onClose={() => closeTour(false)} onStart={() => closeTour(true)} />}
       {overlay?.kind === "models" && <ModelsSheet onClose={() => setOverlay(null)} />}
       {overlay?.kind === "copy" && project && <SaveCopySheet defaultName={`${project.name} copy`} onClose={() => setOverlay(null)} onSave={async (n) => { setOverlay(null); try { await saveCopy(n); } catch (e) { say(e instanceof Error ? e.message : String(e)); } }} />}
       {overlay?.kind === "manual" && <ManualSheet onClose={() => setOverlay(null)} onSettings={() => setOverlay({ kind: "settings" })} />}

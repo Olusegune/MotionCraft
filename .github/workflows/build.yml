@@ -69,7 +69,14 @@ jobs:
         working-directory: src-tauri
         run: cargo test
       - name: Build installers
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: npx tauri build ${{ matrix.args }}
+      - name: Build signed installers and update packages (release tags)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build ${{ matrix.args }} --config src-tauri/tauri.release.conf.json
       - name: Portable zip (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -96,4 +103,31 @@ jobs:
             src-tauri/target/**/release/bundle/nsis/*.exe
             src-tauri/target/**/release/bundle/msi/*.msi
             src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/**/release/bundle/**/*.sig
             MotionCraft_portable_windows-x64.zip
+
+  release:
+    # Only for version tags. Publishes the installers and the signed updater manifest that installed apps check.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: desktop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Assemble release files and latest.json
+        run: python scripts/make_latest_json.py artifacts "${{ github.ref_name }}" release
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp artifacts/MotionCraft-windows-x64/src-tauri/target/release/bundle/msi/*.msi release/ || true
+          cp artifacts/MotionCraft-windows-x64/MotionCraft_portable_windows-x64.zip release/ || true
+          find artifacts -name '*.dmg' -exec cp {} release/ \;
+          rm -f release/*.sig
+          gh release create "${{ github.ref_name }}" release/* --title "MotionCraft ${{ github.ref_name }}" --generate-notes
