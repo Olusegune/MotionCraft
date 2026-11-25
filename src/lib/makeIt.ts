@@ -57,7 +57,7 @@ ${p.brief.script ?? ""}`, p.brief.deliverables[0]?.durationSec);
  * Never replaces a picture a person chose, and never reuses one while there are unused ones left.
  */
 export function fillFrames(p: MotionProject): MotionProject {
-  const images = (p.assets ?? []).filter((a) => a.kind === "image" && a.check?.lettering !== true);   // a picture with lettering in it is not given out
+  const images = (p.assets ?? []).filter((a) => (a.kind === "image" || a.kind === "video") && a.check?.lettering !== true);   // the person's own pictures and clips first; a picture with lettering in it is not given out
   const used = new Set(p.intent.arc.map((b) => p.treatment[b.beatId]?.frameAssetId).filter(Boolean) as string[]);
   const free = images.filter((a) => !used.has(a.id));
   if (!free.length) return p;
@@ -70,10 +70,10 @@ export function fillFrames(p: MotionProject): MotionProject {
   return n ? { ...p, treatment } : p;
 }
 
-/** The pictures to put behind the scenes: one per scene that has a picture chosen, with the scene's time range. At most 16. */
+/** The pictures and clips to put behind the scenes: one per scene that has one chosen, with the scene's time range. At most 16. */
 export function scenePictureItems(p: MotionProject): { rel: string; t_in: number; t_out: number; name: string }[] {
   return p.intent.arc.flatMap((b) => {
-    const a = (p.assets ?? []).find((x) => x.kind === "image" && x.id === p.treatment[b.beatId]?.frameAssetId);
+    const a = (p.assets ?? []).find((x) => (x.kind === "image" || x.kind === "video") && x.id === p.treatment[b.beatId]?.frameAssetId);
     return a ? [{ rel: a.path, t_in: b.startSec, t_out: b.endSec, name: b.primary }] : [];
   }).slice(0, 16);
 }

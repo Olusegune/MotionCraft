@@ -558,22 +558,30 @@ class Service:
         return {"layer": r.results[0].result["layer"], **self._snapshot()}
 
     def place_pictures(self, items: list) -> dict:
-        """Puts each scene's picture into the composition behind that scene: one image layer per item, on screen from `t_in` to `t_out`, below the
-        text and shapes. A background solid stays at the very back only if nothing is in front of the picture, so it is sent behind the pictures.
-        `items`: [{rel, t_in, t_out}]. At most 16. Pictures only; each goes through add_media and layer_timing, so every rule of those applies."""
+        """Puts each scene's picture or video clip into the composition behind that scene: one layer per item, on screen from `t_in` to `t_out`,
+        below the text and shapes. A background solid stays at the very back only if nothing is in front of the picture, so it is sent behind them.
+        `items`: [{rel, t_in, t_out}], `rel` under assets/images or assets/video. At most 16. Each goes through add_media and layer_timing, so every
+        rule of those applies. A clip plays once from its first frame and is trimmed at the end of the scene."""
         if not isinstance(items, list) or not items or len(items) > 16:
-            raise AdapterError("Give between 1 and 16 pictures.")
+            raise AdapterError("Give between 1 and 16 pictures or clips.")
         made: list[int] = []
         for it in items:
             if not isinstance(it, dict):
                 raise AdapterError("Each picture needs a file and a time range.")
             rel = str(it.get("rel") or "")
-            self._asset(rel, ("images",))
+            f = self._asset(rel, ("images", "video"))
+            is_video = rel.split("/")[1] == "video"
             lid = self.add_media(rel)["layer"]
             made.append(lid)
             t0, t1 = float(it.get("t_in", 0)), float(it.get("t_out", 0))
-            self.layer_timing(lid, t_in=t0, t_out=t1)
-            self._frame_picture(lid, self._asset(rel, ("images",)), t0, t1)
+            if is_video:
+                # A new clip layer ends where the clip ends, and EffectCraft will not start a layer after its own end: set the end first, then the start.
+                self.layer_timing(lid, t_out=t1)
+                self.layer_timing(lid, t_in=t0)
+                self._frame_video(lid, f)
+            else:
+                self.layer_timing(lid, t_in=t0, t_out=t1)
+                self._frame_picture(lid, f, t0, t1)
         a = self._need()
         a.execute([Command(id="layer.arrange", params={"layers": made, "to": "back"})], actor=USER)
         comp = a.inspect().comp(None)
@@ -596,6 +604,19 @@ class Service:
         a.execute([Command(id="layer.setTransform", params={"layers": [lid], "prop": "opacity", "value": 70}),
                    Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(t0, 4), "value": [round(cover, 3), round(cover, 3), 100.0]}),
                    Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": round(max(t1 - 1.0 / comp.frame_rate, t0), 4), "value": [round(end, 3), round(end, 3), 100.0]})], actor=USER)
+
+    def _frame_video(self, lid: int, f: Path) -> None:
+        """Fits a scene clip to the whole frame (covering it, never stretched) and dims it a little so text on top stays readable. No push-in:
+        the footage has its own motion. A clip whose size cannot be read keeps its own size."""
+        from .media_info import video_size
+        a = self._need()
+        comp = a.inspect().comp(None)
+        size = video_size(f)
+        if size is None:
+            return
+        cover = max(comp.width / size[0], comp.height / size[1]) * 100.0
+        a.execute([Command(id="layer.setTransform", params={"layers": [lid], "prop": "opacity", "value": 85}),
+                   Command(id="prop.addKey", params={"layer": lid, "path": "transform/scale", "time": 0.0, "value": [round(cover, 3), round(cover, 3), 100.0]})], actor=USER)
 
     def picture_check(self, rel: str, provider: str, model: str, offline: bool = False) -> dict:
         """Asks a language model on this computer whether a picture contains lettering (words, numbers, logos). Pictures never go to a cloud model.

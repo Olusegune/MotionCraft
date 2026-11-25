@@ -21,6 +21,8 @@ export interface GenJob {
 /** A newer signed release found by the desktop app. Notes are plain text. */
 export interface UpdateInfo { version: string; current: string; notes: string | null }
 
+export interface DropEvent { type: "enter" | "leave" | "drop"; paths: string[] }
+
 export interface EngineStatus {
   state: "connected" | "missing" | "version-mismatch" | "error";
   found?: string; version?: string; pinned: string; detail: string;
@@ -52,6 +54,8 @@ export interface Api {
   appReady(): Promise<void>;
   startupStep(step: "ui" | "projects" | "engine"): Promise<void>;
   openDocs(): Promise<void>;
+  /** Files dragged onto the window (desktop only: the browser never gives file paths). Returns the function that stops listening. */
+  onFilesDropped(cb: (e: DropEvent) => void): Promise<() => void>;
   updateCheck(offline: boolean): Promise<UpdateInfo | null>;
   updateInstall(offline: boolean): Promise<void>;
   /** Crash recovery (P1-06): is the project file readable, restore the last good copy, and the "a project was open" marker. */
@@ -106,6 +110,15 @@ async function tauriApi(): Promise<Api> {
     appReady: () => invoke("app_ready"),
     startupStep: (step) => invoke("startup_step", { step }),
     openDocs: () => invoke("open_docs"),
+    async onFilesDropped(cb) {
+      const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+      return getCurrentWebview().onDragDropEvent((e) => {
+        const t = e.payload.type;
+        if (t === "enter") cb({ type: "enter", paths: e.payload.paths });
+        else if (t === "drop") cb({ type: "drop", paths: e.payload.paths });
+        else if (t === "leave") cb({ type: "leave", paths: [] });
+      });
+    },
     updateCheck: (offline) => invoke("update_check", { offline }),
     updateInstall: (offline) => invoke("update_install", { offline }),
     projectHealth: (path) => invoke("project_health", { path }),
@@ -186,6 +199,7 @@ function webApi(): Api {
     async sessionEnd() { /* desktop only */ },
     async updateCheck() { return null; },
     async updateInstall() { throw new Error("Updates need the desktop app."); },
+    async onFilesDropped() { return () => undefined; },
     async openDocs() { window.open("https://github.com/Olusegune/MotionCraft/tree/main/docs", "_blank", "noopener"); },
     async pickMedia() { return []; },
     async pickSongMap() { return null; },

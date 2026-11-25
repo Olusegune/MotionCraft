@@ -23,6 +23,7 @@ import { ReviewPage } from "./pages/ReviewPage";
 import { DeliverPage } from "./pages/DeliverPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { Tour } from "./shell/Tour";
+import { DropZone } from "./shell/Media";
 import { UpdateBanner } from "./shell/UpdateBanner";
 import { RecoverySheet } from "./shell/RecoverySheet";
 import { shouldRecheckOnFocus } from "./lib/engineCheck";
@@ -325,6 +326,7 @@ export default function App() {
             {stage === "deliver" && <DeliverPage {...frame} />}
           </div>
           </div>
+          <DropZone onNotice={say} />
           {viewerOnly && <button className="btn viewer-exit" onClick={() => setViewerOnly(false)}>Exit viewer-only (Esc)</button>}
           {!viewerOnly && (() => { const ns = nextStep(project); return ns ? (
             <div className="next-step" role="region" aria-label="Next step"><span className="next-label">Next</span><span>{ns.text}</span>{ns.stage !== stage && <button className="btn quiet" onClick={() => setStage(ns.stage)}>{ns.label}</button>}</div>

@@ -22,7 +22,7 @@ export function TreatmentPage(f: FrameProps) {
   const d = project.brief.deliverables[0];
   const ratio = `${d.width} / ${d.height}`;
   const state = gateState(project, "C");
-  const images = (project.assets ?? []).filter((a) => a.kind === "image");
+  const images = (project.assets ?? []).filter((a) => a.kind === "image" || a.kind === "video");   // a scene's frame can be a picture or a clip
   const frameOf = (beatId: string) => images.find((a) => a.id === project.treatment[beatId]?.frameAssetId);
   const missing = beats.filter((b) => !(project.treatment[b.beatId]?.plan ?? "").trim());
   const setT = (id: string, patch: Partial<{ plan: string; motion: string; frameAssetId?: string }>) =>
@@ -55,8 +55,12 @@ export function TreatmentPage(f: FrameProps) {
                   <label className="field"><span className="field-label">Frame for beat {n + 1}</span>
                     <select value={project.treatment[b.beatId]?.frameAssetId ?? ""} onChange={(e) => setT(b.beatId, { frameAssetId: e.target.value || undefined })}>
                       <option value="">No frame</option>
-                      {images.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}</option>)}
+                      {images.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}{a.kind === "video" ? " (video)" : ""}</option>)}
                     </select></label>
+                  <div className="row-actions">
+                    <button type="button" className="btn" disabled={locked || imp.busy} onClick={() => void imp.run().then((added) => { const first = added.find((x) => x.kind === "image" || x.kind === "video"); if (first) setT(b.beatId, { frameAssetId: first.id }); })}>Use my own picture or video…</button>
+                    <span className="muted">Or drag files onto the window to add them, then choose one here.</span></div>
+                  {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
                   <label className="field"><span className="field-label">Motion language</span>
                     <textarea rows={2} value={project.treatment[b.beatId]?.motion ?? ""} placeholder="How does it move? Easing, pace, transitions." onChange={(e) => setT(b.beatId, { motion: e.target.value })} /></label>
                 </details>

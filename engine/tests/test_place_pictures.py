@@ -37,3 +37,16 @@ def test_image_sizes_are_read_from_headers(tmp_path):
     bad = tmp_path / "c.png"
     bad.write_bytes(b"not an image")
     assert _image_size(bad) is None
+
+
+def test_a_clip_can_be_a_scenes_background_and_a_wrong_folder_is_refused(tmp_path):
+    s = make(tmp_path)
+    pkg = tmp_path / "P.motioncraft"
+    (pkg / "assets" / "video").mkdir(parents=True)
+    (pkg / "assets" / "video" / "c.mp4").write_bytes(b"\0\0\0\x18ftypmp42" + b"0" * 64)
+    r = s.handle("place_pictures", {"items": [{"rel": "assets/video/c.mp4", "t_in": 2, "t_out": 6}]})
+    assert len(r["placed"]) == 1
+    (pkg / "assets" / "audio").mkdir(parents=True)
+    (pkg / "assets" / "audio" / "t.wav").write_bytes(b"RIFF" + b"0" * 40)
+    with pytest.raises(Exception):
+        s.handle("place_pictures", {"items": [{"rel": "assets/audio/t.wav", "t_in": 0, "t_out": 1}]})
