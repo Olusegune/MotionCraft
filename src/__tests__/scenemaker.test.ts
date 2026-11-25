@@ -22,3 +22,15 @@ describe("the prompt for one scene's picture", () => {
     expect(t.length).toBeLessThanOrEqual(900);
   });
 });
+
+import { shouldRetry } from "../pages/SceneMaker";
+describe("retry when lettering is found", () => {
+  it("retries only when agreed, left, lettering found and not blocked", () => {
+    expect(shouldRetry({ lettering: true }, 1, null)).toBe(true);
+    expect(shouldRetry({ lettering: true }, 0, null)).toBe(false);
+    expect(shouldRetry({ lettering: false }, 2, null)).toBe(false);
+    expect(shouldRetry({ lettering: null }, 2, null)).toBe(false);
+    expect(shouldRetry({ lettering: true }, 2, "Spend limit reached")).toBe(false);
+    expect(shouldRetry(undefined, 2, null)).toBe(false);
+  });
+});

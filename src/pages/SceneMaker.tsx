@@ -23,6 +23,11 @@ export function scenePrompt(p: MotionProject, b: Beat): string {
   return `${NO_LETTERING} ${look}, ${p.brief.deliverables[0]?.aspect ?? "16:9"} film still with generous negative space. Scene: ${b.primary}. ${plan} Mood: ${mood}${palette}`.slice(0, 900);
 }
 
+/** Retry only when the person authorised it up front, a retry is still left, the picture was looked at and has lettering, and the spend limit allows it. */
+export function shouldRetry(check: { lettering: boolean | null } | undefined, left: number, blocked: string | null | undefined): boolean {
+  return left > 0 && check?.lettering === true && !blocked;
+}
+
 /** One button on a scene card: make a picture for that scene with the best image model that has a key. One confirmation, one picture, then it is the scene's frame. */
 export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: boolean; again?: boolean }) {
   const { project, projectPath, update } = useApp();
@@ -33,6 +38,10 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
   const [job, setJob] = useState<GenJob | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const saved = useRef<string | null>(null);
+  const [extra, setExtra] = useState(0);          // retries the person agreed to in the confirmation, 0 to 2
+  const left = useRef(0);                         // retries still allowed for the picture being made
+  const retried = useRef<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try { const api = await getApi(); setModels(((await api.engine<ModelList>("models", {}, "", enginePath)) as Partial<ModelList>).models ?? []); setKeys(await api.keyStatus()); }
@@ -64,8 +73,23 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
     }
   }, [job, update, beat]);
 
-  const run = async () => {
+  // Lettering found in a picture the person allowed retries for: make another, within the limit they confirmed. Each retry is recorded as spend.
+  const made = (project.assets ?? []).find((a) => a.id === job?.id);
+  useEffect(() => {
+    if (!job || job.state !== "done" || !made || retried.current === job.id) return;
+    if (made.check === undefined) return;          // not looked at yet
+    if (made.check.lettering === true && left.current > 0 && shouldRetry(made.check, left.current, capBlock(project, each))) {
+      retried.current = job.id; left.current -= 1;
+      setNote("Lettering found, trying another picture.");
+      void run(true);
+    } else if (made.check.lettering === true) { retried.current = job.id; setNote(extra > 0 ? "Lettering was still found. Use Try another, or add a picture yourself." : null); }
+    else { retried.current = job.id; setNote(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job, made?.check]);
+
+  const run = async (isRetry = false) => {
     if (!picked) return;
+    if (!isRetry) { left.current = extra; retried.current = null; setNote(null); }
     setErr(null); setConfirming(false);
     try {
       const api = await getApi();
@@ -78,12 +102,17 @@ export function MakePicture({ beat, disabled, again }: { beat: Beat; disabled?: 
   return (
     <div className="make-picture">
       <button className="btn" disabled={!!reason} title={reason} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />{running ? "Making…" : again ? "Try another" : "Make picture"}</button>
+      {note && <p className="muted" role="status">{note}</p>}
       {err && <p className="error-text" role="alert">{err}</p>}
       {confirming && picked && (
         <Sheet title="Confirm spending" onClose={() => setConfirming(false)}
-          footer={<><button className="btn" onClick={() => setConfirming(false)}>Cancel</button><button className="btn primary" onClick={() => void run()}>Confirm and make the picture</button></>}>
+          footer={<><button className="btn" onClick={() => setConfirming(false)}>Cancel</button><button className="btn primary" onClick={() => void run()}>Confirm and make the picture{extra > 0 ? ` (up to ${extra + 1})` : ""}</button></>}>
           <dl className="facts"><dt>Scene</dt><dd>{beat.primary}</dd><dt>Model</dt><dd>{picked.name}</dd><dt>Provider</dt><dd>{PROVIDER_LABEL[picked.provider]} ({picked.official ? "official API" : "aggregator"})</dd>
             <dt>Price</dt><dd>{each !== null ? `Estimate $${each.toFixed(3)} (${priceText(picked)})` : "Unknown. The provider has not published a price here."}</dd><dt>Charged to</dt><dd>Your {PROVIDER_LABEL[picked.provider]} account</dd></dl>
+          <label className="check-row"><span>If lettering is found, try again</span>
+            <select value={extra} onChange={(e) => setExtra(Number(e.target.value))} aria-label="Retries if lettering is found">
+              <option value={0}>No, make one picture</option><option value={1}>Up to 1 more picture</option><option value={2}>Up to 2 more pictures</option></select></label>
+          {extra > 0 && <p className="muted">{each !== null ? `Worst case ${(each * (extra + 1)).toFixed(3)} USD for ${extra + 1} pictures.` : `Up to ${extra + 1} pictures, each charged by the provider.`} It stops at once if the picture is clean or your spend limit is reached. Needs the local model to check for lettering.</p>}
           <p className="muted">The picture is made from this scene's plan and your look, with no lettering asked for. Nothing is sent until you confirm; this covers this one picture.</p>
         </Sheet>
       )}
