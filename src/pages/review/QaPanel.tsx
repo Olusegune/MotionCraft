@@ -6,6 +6,8 @@ import { Fold } from "../../shell/Fold";
 import { getApi } from "../../lib/api";
 import { useSettings } from "../../lib/settings";
 import { timecode } from "../../lib/time";
+import { nowIso } from "../../lib/project";
+import { RIGHTS, setRights, type Rights } from "../../lib/rights";
 import { parseFonts } from "../../lib/briefParse";
 import { bindingFor, logQaFix, reconcile, relinkAsset, type EngineSnapshot, type Versions } from "../../lib/layers";
 
@@ -72,8 +74,21 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
   const fixable = (st.report?.results ?? []).flatMap((x) => x.findings).filter((f) => f.fix?.safe && (f.fix.kind === "move" || f.fix.kind === "relink") && !lockedLayer(f.at?.layerId));
   const fixAll = async () => { for (const f of fixable) await fix(f); };
 
+  // Warnings and notes can be accepted: the person has looked and chose to live with them. Errors cannot. Accepted findings stay listed, marked, and stop counting.
+  const accepted = project.review.accepted ?? [];
+  const keyOf = (f: QaFinding) => `${f.check}|${f.evidence.detail}`;
+  const isAccepted = (f: QaFinding) => f.severity !== "error" && accepted.some((a) => a.key === keyOf(f));
+  const accept = (f: QaFinding) => update((p) => ({ ...p, review: { ...p.review, accepted: [...(p.review.accepted ?? []), { key: keyOf(f), check: f.check, detail: f.evidence.detail, at: nowIso() }] }, updatedAt: nowIso() }));
+  const unaccept = (f: QaFinding) => update((p) => ({ ...p, review: { ...p.review, accepted: (p.review.accepted ?? []).filter((a) => a.key !== keyOf(f)) }, updatedAt: nowIso() }));
+  const acceptMany = (fs: QaFinding[]) => update((p) => ({ ...p, review: { ...p.review, accepted: [...(p.review.accepted ?? []), ...fs.filter((f) => !(p.review.accepted ?? []).some((a) => a.key === keyOf(f))).map((f) => ({ key: keyOf(f), check: f.check, detail: f.evidence.detail, at: nowIso() }))] }, updatedAt: nowIso() }));
+  const setAssetRights = (assetId: string, v: string) => {
+    update((p) => ({ ...p, assets: (p.assets ?? []).map((a) => (a.id === assetId ? setRights(a, (v || undefined) as Rights | undefined) : a)), updatedAt: nowIso() }));
+  };
   const r = st.report;
-  const raised = r ? r.counts.error + r.counts.warn + r.counts.info : 0;
+  const open = r ? r.results.flatMap((x) => x.findings).filter((f) => !isAccepted(f)) : [];
+  const nAccepted = r ? r.results.flatMap((x) => x.findings).filter(isAccepted).length : 0;
+  const count = (s: QaFinding["severity"]) => open.filter((f) => f.severity === s).length;
+  const raised = open.length;
   return (
     <Fold title="Technical findings" defaultOpen meta={<span className="count">{r ? `${raised} raised` : "not run"}</span>}>
       <p className="muted">Deterministic checks (tier 1). Each finding shows where it is, the evidence, the likely cause and what to do. A check that could not run says so; it is never counted as a pass.</p>
@@ -86,27 +101,47 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
       {st.done && <p role="status">{st.done}</p>}
       {r && (
         <>
-          <p role="status"><strong>{r.counts.error}</strong> errors, <strong>{r.counts.warn}</strong> warnings, <strong>{r.counts.info}</strong> notes. {r.checked} of {r.total} checks ran
+          <p role="status"><strong>{count("error")}</strong> errors, <strong>{count("warn")}</strong> warnings, <strong>{count("info")}</strong> notes{nAccepted ? ` (${nAccepted} accepted by you)` : ""}. {r.checked} of {r.total} checks ran
             {r.total - r.checked > 0 ? `; ${r.total - r.checked} could not (see below)` : ""}.</p>
           <ul className="statuses">
             {r.results.map((c) => (
               <li key={c.check} className={`status-line ${c.state === "findings" ? "warn" : c.state === "passed" ? "ok" : "warn"}`}>
                 {c.state === "passed" ? <CircleCheck size={16} aria-hidden="true" /> : c.state === "findings" ? <TriangleAlert size={16} aria-hidden="true" /> : <CircleHelp size={16} aria-hidden="true" />}
                 <span className="sl-label">{c.label}</span>
-                <span className="sl-text">{c.state === "passed" ? "Passed" : c.state === "findings" ? `${c.count} found` : `Not checked: ${c.reason}`}</span>
+                <span className="sl-text">{c.state === "passed" ? "Passed" : c.state === "findings" ? `${c.findings.filter((f) => !isAccepted(f)).length} found${c.findings.some(isAccepted) ? `, ${c.findings.filter(isAccepted).length} accepted` : ""}` : `Not checked: ${c.reason}`}</span>
                 {c.state === "passed" && c.reason && <span className="hint">{c.reason}</span>}
+                {c.findings.filter((f) => f.severity !== "error" && !isAccepted(f)).length > 1 && c.check !== "rights-unconfirmed" && (
+                  <div className="row-actions"><button className="btn quiet" onClick={() => acceptMany(c.findings.filter((f) => f.severity !== "error"))}
+                    title="You have looked at these and choose to keep them. They stay listed and stop counting.">Accept all {c.findings.filter((f) => f.severity !== "error" && !isAccepted(f)).length} warnings in this check</button></div>
+                )}
                 {c.findings.length > 0 && (
                   <ul className="plain">
                     {c.findings.map((f) => {
                       const S = SEV[f.severity];
                       return (
-                        <li key={f.id}>
-                          <span className="badge"><S.icon size={14} aria-hidden="true" />{S.label}</span>{" "}
+                        <li key={f.id} className={isAccepted(f) ? "accepted" : undefined}>
+                          <span className="badge"><S.icon size={14} aria-hidden="true" />{isAccepted(f) ? "Accepted" : S.label}</span>{" "}
                           {f.at?.timeSec !== undefined && <span className="mono">{timecode(f.at.timeSec, d.fps)} </span>}
                           {f.at?.layerId !== undefined && <span className="muted">layer {f.at.layerId} </span>}
                           <span>{f.evidence.detail}</span>
                           {f.evidence.measured !== undefined && f.evidence.threshold !== undefined && <span className="hint"> Measured {f.evidence.measured}, threshold {f.evidence.threshold}{f.evidence.estimated ? " (estimated)" : ""}.</span>}
                           <div className="hint">Likely cause: {f.cause}{f.fix ? ` Fix: ${f.fix.label}${f.fix.safe ? "" : " (not automatic)"}.` : ""}</div>
+                          {f.check === "rights-unconfirmed" && (f.evidence as { assetId?: string }).assetId && (
+                            <div className="row-actions">
+                              <label className="field"><span className="visually-hidden">Rights for this file</span>
+                                <select value="" onChange={(e) => { setAssetRights((f.evidence as { assetId?: string }).assetId!, e.target.value); void run(); }}>
+                                  <option value="">Say what you may do with it…</option>
+                                  {RIGHTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                                </select></label>
+                            </div>
+                          )}
+                          {f.severity !== "error" && f.check !== "rights-unconfirmed" && (
+                            <div className="row-actions">
+                              {isAccepted(f)
+                                ? <button className="btn quiet" onClick={() => unaccept(f)}>Undo accept</button>
+                                : <button className="btn quiet" onClick={() => accept(f)} title="You have looked at this and choose to keep it. It stays listed and stops counting.">Accept</button>}
+                            </div>
+                          )}
                           {f.fix?.safe && (f.fix.kind === "move" || f.fix.kind === "relink") && (
                             <div className="row-actions">
                               <button className="btn" disabled={st.busy || lockedLayer(f.at?.layerId) || !!disabledReason} onClick={() => void fix(f)}><Wrench size={16} aria-hidden="true" />{f.fix.kind === "relink" ? "Relink" : "Apply fix"}</button>

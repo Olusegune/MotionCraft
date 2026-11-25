@@ -82,6 +82,67 @@ def phase_makeit(app: App):
     shot(app, "10-make-it-plan")
 
 
+def stage(app: App, name: str, wait: float = 1.8):
+    app.eval(f"(() => {{ const b = Array.from(document.querySelectorAll('nav[aria-label=Stages] button')).find(x => x.innerText.trim() === {name!r}); b.click(); return true; }})()")
+    time.sleep(wait)
+
+
+def phase_intent(app: App):
+    app.click_text("Edit first", "button", exact=True)
+    time.sleep(0.8)
+    stage(app, "Intent")
+    shot(app, "11-intent")
+    app.select_label("Purpose", "Inform")
+    app.click_text("Playful", "button", exact=True)
+    app.click_text("Restrained", "button", exact=True)
+    time.sleep(0.5)
+    shot(app, "12-intent-edited")
+    app.click_text("Approve intent", "button", exact=True)
+    time.sleep(2)
+    shot(app, "13-after-approving-intent")          # the app moves on to the next step by itself
+
+
+def phase_direction(app: App):
+    stage(app, "Direction")
+    for i in (0, 2, 7):
+        app.click_selector("button.wall-item", i, pause=0.3)
+    shot(app, "14-direction-moodboard")
+    app.select_label("Typography", "Swiss")
+    app.scroll_to_text("Style system")
+    shot(app, "15-direction-style-system")
+    app.scroll_to_text("Style presets")
+    app.click_text("Techniques and genres", "button")
+    shot(app, "16-direction-presets")
+    app.click_text("All (", "button")
+    app.click_text("Approve direction", "button", exact=True)
+    time.sleep(2)
+
+
+def phase_treatment(app: App):
+    stage(app, "Treatment")
+    shot(app, "17-treatment")
+    app.click_text("Approve treatment", "button", exact=True)
+    time.sleep(2)
+
+
+WAV = r"C:\Users\eduni\code\_mocraft_test\Civilization-score.wav"
+
+
+def drop_now(app: App, paths: list[str]):
+    app.eval(f"""(async () => {{ await window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{event:'tauri://drag-drop', payload:{{paths:{json.dumps(paths)}, position:{{x:10,y:10}}}}}}); return 'ok'; }})()""", True)
+
+
+def phase_audio(app: App):
+    stage(app, "Brief")
+    app.click_text("Start with audio", "button, [role=tab]")
+    time.sleep(0.8)
+    shot(app, "18-audio-tab")
+    drop_now(app, [WAV])
+    app.wait_text("Civilization-score", 60)
+    time.sleep(1)
+    shot(app, "19-audio-added")
+
+
 PHASES = {k[6:]: v for k, v in globals().items() if k.startswith("phase_")}
 
 if __name__ == "__main__":

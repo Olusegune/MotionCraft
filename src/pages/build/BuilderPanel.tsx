@@ -47,10 +47,14 @@ ${project.brief.script ?? ""}`, d.durationSec) },
     } catch (e) { setSt({ busy: false, error: String(e instanceof Error ? e.message : e) }); }
   };
 
+  // Layers the person takes out of the plan before building (a shape that would sit on top of a picture, say).
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const toggle = (key: string) => setOff((o) => { const n = new Set(o); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+
   const build = async () => {
     const r = st.result; if (!r) return;
     setSt((s) => ({ ...s, busy: true, error: undefined }));
-    const res = await write("build plan", "builder_execute", { plan: r.plan }) as unknown as { created?: Created[]; warnings?: string[]; versions?: Versions } | undefined;
+    const res = await write("build plan", "builder_execute", { plan: { ...r.plan, layers: r.plan.layers.filter((l) => !off.has(l.key)) } }) as unknown as { created?: Created[]; warnings?: string[]; versions?: Versions } | undefined;
     if (res?.created) {
       onBuilt(res.created, res.versions);
       const pics = afterBuild ? await afterBuild() : 0;       // the scenes' pictures go in with the layers: one action
@@ -81,15 +85,16 @@ ${project.brief.script ?? ""}`, d.durationSec) },
           {r.plan.summary && <p>{r.plan.summary}</p>}
           <ol className="layers">
             {r.plan.layers.map((l) => (
-              <li key={l.key}><span className="strong">{l.name}</span> <span className="muted">{l.kind}{l.text ? `: “${l.text.length > 60 ? l.text.slice(0, 60) + "…" : l.text}”` : ""}</span>
+              <li key={l.key} className={off.has(l.key) ? "layer-off" : undefined}>
+                <label className="layer-pick"><input type="checkbox" checked={!off.has(l.key)} onChange={() => toggle(l.key)} aria-label={`Include ${l.name}`} disabled={st.busy} /></label> <span className="strong">{l.name}</span> <span className="muted">{l.kind}{l.text ? `: “${l.text.length > 60 ? l.text.slice(0, 60) + "…" : l.text}”` : ""}</span>
                 {l.animations.length > 0 && <div className="hint">{l.animations.map((a) => a.primitive).join(", ")}</div>}</li>
             ))}
           </ol>
           <dl className="facts"><dt>Models</dt><dd>None. No picture or video is generated.</dd><dt>Cost</dt><dd>{r.cost.known ? `$${r.cost.usd.toFixed(2)}` : "Unknown"}. {r.cost.note}</dd><dt>Planned by</dt><dd>{r.model}</dd></dl>
           {r.warnings.length > 0 && <ul className="plain" role="status">{r.warnings.map((w, i) => <li key={i} className="why">{w}</li>)}</ul>}
           <div className="row-actions">
-            <button className="btn primary" disabled={!!reason || st.busy} onClick={() => void build()}>{st.busy ? "Building…" : `Build ${r.plan.layers.length} layers`}</button>
-            <button className="btn quiet" disabled={st.busy} onClick={() => setSt({ busy: false })}>Discard plan</button>
+            <button className="btn primary" disabled={!!reason || st.busy} onClick={() => void build()}>{st.busy ? "Building…" : `Build ${r.plan.layers.length - off.size} layer${r.plan.layers.length - off.size === 1 ? "" : "s"}`}</button>
+            <button className="btn quiet" disabled={st.busy} onClick={() => { setSt({ busy: false }); setOff(new Set()); }}>Discard plan</button>
           </div>
         </div>
       )}

@@ -110,3 +110,33 @@ def test_a_motions_start_survives_the_second_check_before_building():
     got = [(a["primitive"], a["params"]["start"], a["params"]["duration"]) for a in again["plan"]["layers"][0]["animations"]]
     assert got == [("entrance.fade-in", 4.0, 0.5), ("exit.fade-out", 11.5, 0.5)]
     assert again["plan"]["layers"][0]["animations"] == first["plan"]["layers"][0]["animations"]
+
+
+def test_a_motion_with_a_parameter_the_library_lacks_is_kept_and_the_extra_is_ignored_and_said():
+    out = builder.validate({"layers": [{"kind": "shape", "name": "Glow", "shape": "ellipse", "animations": [
+        {"primitive": "motion-drift", "start": 0, "duration": 5, "params": {"easing": "linear", "wobble": 3}},
+        {"primitive": "entrance.slide-in", "start": 1, "duration": 1, "params": {"easing": "linear", "from": "left"}}]}]}, duration_sec=20, fps=24)
+    layer = out["plan"]["layers"][0]
+    assert [a["primitive"] for a in layer["animations"]] == ["motion.drift", "entrance.slide-in"]       # neither motion was dropped
+    assert layer["animations"][1]["params"]["ease"] == "linear"                                          # "easing" was understood as "ease"
+    assert len(out["warnings"]) == 1 and "wobble" in out["warnings"][0] and "Glow" in out["warnings"][0]     # only the drift had extras: it has no easing at all
+
+
+def test_many_empty_text_layers_are_one_warning():
+    raw = {"layers": [{"kind": "text", "name": f"T{i}", "text": ""} for i in range(13)] + [{"kind": "solid", "name": "Background"}]}
+    out = builder.validate(raw, duration_sec=10, fps=24)
+    assert len([w for w in out["warnings"] if "had no text" in w]) == 1 and "13 text layers" in out["warnings"][0]
+
+
+def test_script_text_is_sized_from_the_frame_and_long_lines_fit_the_safe_area():
+    from motioncraft_engine.qa.checks import text_width_em
+    out = builder.validate({"layers": [{"kind": "text", "name": "L", "text": "BEYOND THE ORIGINAL KARDASHEV SCALE", "size": 300}, {"kind": "text", "name": "T", "text": "SHORT", "size": 300}]}, duration_sec=90, fps=24)
+    builder.apply_script(out, [{"start": 38, "end": 43, "onScreen": "BEYOND THE ORIGINAL KARDASHEV SCALE"}, {"start": 0, "end": 8, "onScreen": "SHORT"}], "", 90, 24, 2560, 1080)
+    by = {l["name"]: l for l in out["plan"]["layers"]}
+    assert by["L"]["size"] == by["T"]["size"] == round(1080 * 0.065)                  # same size for every label, from the frame height
+    # a narrow frame forces the long line smaller, to no more than 80% of the width (QA's safe area is 90%)
+    out2 = builder.validate({"layers": [{"kind": "text", "name": "L", "text": "BEYOND THE ORIGINAL KARDASHEV SCALE", "size": 300}]}, duration_sec=90, fps=24)
+    builder.apply_script(out2, [{"start": 38, "end": 43, "onScreen": "BEYOND THE ORIGINAL KARDASHEV SCALE"}], "", 90, 24, 1080, 1920)
+    size = out2["plan"]["layers"][0]["size"]
+    assert size < round(1920 * 0.065)
+    assert text_width_em("BEYOND THE ORIGINAL KARDASHEV SCALE") * size <= 0.8 * 1080 + 1

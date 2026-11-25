@@ -483,6 +483,22 @@ def orphan_layers(s: Scene) -> Result:
     return _done(r)
 
 
+# ------------------------------------------------------------------------------------------------------------------ 18
+def sound_in_composition(s: Scene) -> Result:
+    """Music or narration that was imported but never put into the composition: the final video would be silent (the Civilization I-VII stress
+    test rendered a silent 90 seconds with its score sitting in the project). Layers are matched by file name, as the engine names them."""
+    r = Result("sound-in-composition", "Sound in the composition")
+    names = {l.name for l in s.layers}
+    for a in s.assets:
+        if a.get("kind") != "audio":
+            continue
+        base = Path(str(a.get("path", ""))).name
+        if base and base not in names:
+            r.findings.append(finding(r.check, "warn", f"{a.get('name') or base} is in the project but not in the composition, so the video would have no sound.",
+                                      "The audio was imported but not added as a layer. Add it in Build, Audio, Add audio to composition.", assetId=a.get("id")))
+    return _done(r)
+
+
 # ------------------------------------------------------------------------------------------------------------------ 17
 def rights_unconfirmed(s: Scene) -> Result:
     """Files the person imported, with no note on whether they may use them. MotionCraft cannot know a file's licence; it only makes sure the
@@ -498,7 +514,7 @@ def rights_unconfirmed(s: Scene) -> Result:
 
 CHECKS: list[Callable[[Scene], Result]] = [
     missing_assets, missing_fonts, requested_fonts, font_licence, frame_rate, aspect_ratio, low_resolution, safe_title, text_collisions, contrast, audio_drift,
-    beat_misalignment, alpha_errors, colour_space, unsupported_effects, orphan_layers, rights_unconfirmed,
+    beat_misalignment, alpha_errors, colour_space, unsupported_effects, orphan_layers, rights_unconfirmed, sound_in_composition,
 ]
 
 

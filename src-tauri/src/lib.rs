@@ -1038,6 +1038,17 @@ fn duplicate_project(app: tauri::AppHandle, path: String, project: Value) -> Res
     Ok(summary(&dst.canonicalize().unwrap_or(dst), &project))
 }
 
+/// The finished example project that ships with the app (the Civilization I-VII walkthrough), as a folder path, or None when this build has no
+/// example (a development build). The page offers it on the Projects page and brings it in with `import_project`, which copies it into the
+/// projects folder, so the shipped copy is never edited.
+const EXAMPLE_NAME: &str = "Civilization I-VII.motioncraft";
+
+#[tauri::command]
+fn example_project(app: tauri::AppHandle) -> Option<String> {
+    let dir = app.path().resource_dir().ok()?.join("examples").join(EXAMPLE_NAME);
+    dir.join("project.json").is_file().then(|| dir.to_string_lossy().into_owned())
+}
+
 /// When the splash was shown, and the minimum time it stays up (so it is not a flash).
 static SPLASH_AT: Mutex<Option<Instant>> = Mutex::new(None);
 const SPLASH_MIN: Duration = Duration::from_millis(1500);
@@ -1347,6 +1358,7 @@ pub fn run() {
             engine_status,
             update_check,
             update_install,
+            example_project,
             open_in_effectcraft,
             effectcraft_window_open,
             engine_call,

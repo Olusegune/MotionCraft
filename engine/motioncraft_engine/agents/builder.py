@@ -21,6 +21,7 @@ SHAPES = ("rect", "rounded", "ellipse", "star", "polygon")
 ROLES = ("title", "body-text", "logo", "background", "texture", "other")
 DEFAULT_ROLE = {"text": "title", "solid": "background", "shape": "other"}
 SLOTS = ("title", "label", "tag")
+PARAM_ALIASES = {"easing": "ease", "start_delay": "start", "delay": "start", "length": "duration", "seconds": "duration"}
 MAX_LAYERS = 40
 MAX_ANIMS = 4
 MAX_TEXT = 400
@@ -131,6 +132,7 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
     frame = 1.0 / max(1.0, float(fps))
     layers: list[dict] = []
     seen: set[str] = set()
+    empty: list[str] = []
     rows = [r for r in (raw.get("layers") or []) if isinstance(r, dict)]
     if len(rows) > MAX_LAYERS:
         rows = rows[:MAX_LAYERS]
@@ -152,7 +154,7 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
         if kind == "text":
             text = _clean_text(r.get("text"), MAX_TEXT)
             if not text:
-                warnings.append(f"Text layer {name!r} had no text and was dropped.")
+                empty.append(name)
                 continue
             layer["text"] = text
             layer["size"] = int(min(600, max(12, round(_num(r.get("size"), 120)))))
@@ -172,6 +174,14 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
                 warnings.append(f"{name}: unknown motion {_clean(pid, 40)!r} was dropped.")
                 continue
             given = dict(a.get("params") if isinstance(a.get("params"), dict) else {})
+            for wrong, right in PARAM_ALIASES.items():           # a model's "easing" for the library's "ease"
+                if wrong in given and right in p.params and right not in given:
+                    given[right] = given.pop(wrong)
+            unknown = [k for k in given if k not in p.params]
+            for k in unknown:
+                del given[k]
+            if unknown:
+                warnings.append(f"{name}: {p.name} ignored {', '.join(repr(k) for k in unknown)}, which it does not have.")
             # A model's raw reply puts start and duration on the motion; a plan that was already checked (what the page sends back to build) carries
             # them inside params. Read both, or every checked motion would lose its start and begin at time zero.
             if "start" in p.params:
@@ -209,6 +219,8 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
         if t0 > 1e-6 or t1 < dur - 1e-6:
             layer["in"], layer["out"] = round(t0, 3), round(t1, 3)
         layers.append(layer)
+    if empty:
+        warnings.append(f"Text layer {empty[0]!r} had no text and was dropped." if len(empty) == 1 else f"{len(empty)} text layers had no text and were dropped ({', '.join(repr(n) for n in empty[:3])}{', ...' if len(empty) > 3 else ''}).")
     if not layers:
         raise PlanError("The model did not propose any layer that can be built. Try again, or build the layers yourself.")
     return {"plan": {"summary": _clean(raw.get("summary"), 400), "layers": layers}, "warnings": warnings, "cost": dict(COST)}
@@ -256,6 +268,18 @@ _TAG = re.compile(r"\bspeculative\b", re.I)
 _SPECULATIVE_TYPES = re.compile(r"\btype\s+(iv|v|vi|vii)\b", re.I)
 
 
+SIZE_OF = {"title": 0.11, "label": 0.065}      # text height as a fraction of the frame height
+
+
+def fit_size(text: str, size: int, width: float) -> int:
+    """The largest size up to `size` at which the longest line is no wider than 80% of the frame (QA's safe area is 90%), by QA's own width estimate."""
+    from ..qa.checks import text_width_em
+    em = max((text_width_em(line) for line in text.split("\n")), default=0.0)
+    if em <= 0:
+        return int(size)
+    return int(max(12, min(size, 0.8 * width / em)))
+
+
 def _fades(kind: str, t0: float, t1: float, dur: float, fps: float, want_in: bool = True, want_out: bool = True) -> list[dict]:
     """A short fade in and out for a line that comes and goes with its scene, if the library accepts them for this layer."""
     out: list[dict] = []
@@ -276,11 +300,12 @@ def _fades(kind: str, t0: float, t1: float, dur: float, fps: float, want_in: boo
     return out
 
 
-def apply_script(out: dict, segments: list, brief: str, duration: float, fps: float) -> None:
+def apply_script(out: dict, segments: list, brief: str, duration: float, fps: float, width: float = 1920.0, height: float = 1080.0) -> None:
     """The script's on-screen text rows are exact: what the words are and when they appear. A small model's timing is only a guess, so for every
     line the script gives, the text layer showing those words is timed to that row; a row no layer shows gets a layer; a "SPECULATIVE" tag
     that was written into a label becomes its own small layer under it. Lines are placed by slot (title card, label, tag) so they sit clear of
-    the picture behind. Lines the script does not mention are left as the model planned them."""
+    the picture behind, sized from the frame (and shrunk until the longest line fits inside the safe area, which QA checks). Lines the script does not
+    mention are left as the model planned them."""
     rows = []
     for sgm in segments if isinstance(segments, list) else []:
         if isinstance(sgm, dict) and str(sgm.get("onScreen") or "").strip():
@@ -304,7 +329,7 @@ def apply_script(out: dict, segments: list, brief: str, duration: float, fps: fl
         return cand
 
     def tag_layer(parent: dict, t0: float, t1: float) -> dict:
-        size = int(max(14, round(parent["size"] * 0.3)))
+        size = int(max(14, round(parent["size"] * 0.45)))
         return {"key": new_key(parent["name"] + " tag"), "kind": "text", "name": parent["name"] + "_tag", "role": "other", "text": "SPECULATIVE", "size": size,
                 "slot": "tag", "animations": _fades("text", t0, t1, duration, fps), "in": round(t0, 3), "out": round(t1, 3)}
 
@@ -313,6 +338,7 @@ def apply_script(out: dict, segments: list, brief: str, duration: float, fps: fl
         has_tag = bool(_TAG.search(L["text"])) or (tag_wanted and bool(_SPECULATIVE_TYPES.search(row["text"])))
         L["text"] = _clean_text(_TAG.sub("", L["text"]).strip(" ·-–—"), MAX_TEXT) or row["text"]
         L["slot"] = "title" if "\n" in L["text"] else "label"
+        L["size"] = fit_size(L["text"], round(height * SIZE_OF[L["slot"]]), width)
         L["in"], L["out"] = round(t0, 3), round(t1, 3)
         has_in = any(a["primitive"].startswith(("entrance.", "text.")) for a in L["animations"])
         has_out = any(a["primitive"].startswith("exit.") for a in L["animations"])
@@ -356,7 +382,8 @@ def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = 
     if not isinstance(raw, dict):
         raise PlanError("The model did not return a plan.")
     out = validate(raw, duration_sec=_num(d.get("durationSec"), 15), fps=_num(d.get("fps"), 30))
-    apply_script(out, ctx.get("segments") or [], str(ctx.get("brief") or "") + "\n" + str(ctx.get("script") or ""), _num(d.get("durationSec"), 15), _num(d.get("fps"), 30))
+    apply_script(out, ctx.get("segments") or [], str(ctx.get("brief") or "") + "\n" + str(ctx.get("script") or ""), _num(d.get("durationSec"), 15), _num(d.get("fps"), 30),
+                 _num(d.get("width"), 1920), _num(d.get("height"), 1080))
     spread_text(out, [b.get("startSec") for b in ((ctx.get("intent") or {}).get("arc") or []) if isinstance(b.get("startSec"), (int, float))], _num(d.get("durationSec"), 15))
     return {**out, "provider": provider, "model": model, "usage": r.get("usage") or {}}
 

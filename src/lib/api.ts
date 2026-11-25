@@ -46,6 +46,8 @@ export interface Api {
   projectsFolder(): Promise<string>;
   revealProjectsFolder(): Promise<void>;
   importProject(source: string): Promise<ProjectSummary>;
+  /** The example project that ships with the app, as a folder path; null when this build has none. */
+  exampleProject(): Promise<string | null>;
   duplicateProject(path: string, project: MotionProject): Promise<ProjectSummary>;
   /** Native menu clicks (File, Edit, ...) arrive here as ids. Returns an unsubscribe function. */
   onMenu(cb: (id: string) => void): Promise<() => void>;
@@ -95,6 +97,7 @@ async function tauriApi(): Promise<Api> {
     projectsFolder: () => invoke("projects_folder"),
     revealProjectsFolder: () => invoke("reveal_projects_folder"),
     importProject: (source) => invoke("import_project", { source }),
+    exampleProject: () => invoke("example_project"),
     duplicateProject: (path, project) => invoke("duplicate_project", { path, project }),
     async onMenu(cb) {
       const { listen } = await import("@tauri-apps/api/event");
@@ -183,6 +186,7 @@ function webApi(): Api {
     async projectsFolder() { return "(browser storage)"; },
     async revealProjectsFolder() { throw new Error("Needs the desktop app."); },
     async importProject() { throw new Error("Needs the desktop app."); },
+    async exampleProject() { return null; },
     async duplicateProject(_path: string, p: MotionProject) {
       localStorage.setItem(`motioncraft.web.${p.id}`, JSON.stringify(p));
       localStorage.setItem(idx, JSON.stringify([...readIdx().filter((x) => x.id !== p.id), summary(p)]));

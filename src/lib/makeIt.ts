@@ -130,3 +130,9 @@ export function reconcileArc(arc: Beat[], text: string, durationSec: number): Be
     return m ? { ...m, beatId: sb.beatId, startSec: sb.startSec, endSec: sb.endSec } : sb;
   });
 }
+
+/** The sound files of the project that are not in the composition yet (matched by file name, as the engine names layers). The Builder adds them with the layers so a render has sound. */
+export function audioToAdd(p: MotionProject, layerNames: string[]): string[] {
+  const names = new Set(layerNames);
+  return (p.assets ?? []).filter((a) => a.kind === "audio" && !names.has(a.path.split("/").pop() ?? "")).map((a) => a.path).slice(0, 4);
+}

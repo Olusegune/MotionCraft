@@ -90,3 +90,25 @@ describe("QA panel (P4-02)", () => {
     expect(log.calls.some((c) => c.method === "qa_run")).toBe(false);
   });
 });
+
+
+describe("accepting a QA finding", () => {
+  it("lets a warning be accepted and undone, never an error, and stops counting it", async () => {
+    const user = userEvent.setup();
+    const p = createProject("QA accept");
+    fake(p);
+    render(<App />);
+    await toReview(user, "QA accept");
+    await user.click(screen.getByRole("button", { name: "Run checks" }));
+    await screen.findByText(/3 of 4 checks ran/);
+    const warn = screen.getByText(/reaches about 12 px/).closest("li")!;
+    const err = screen.getByText(/gone.png is not in the project folder/).closest("li")!;
+    expect(within(err).queryByRole("button", { name: "Accept" })).toBeNull();          // errors must be fixed
+    expect(screen.getByText(/errors,/)).toHaveTextContent("1 errors, 1 warnings, 0 notes");
+    await user.click(within(warn).getByRole("button", { name: "Accept" }));
+    expect(screen.getByText(/errors,/)).toHaveTextContent("1 errors, 0 warnings, 0 notes (1 accepted by you)");
+    expect(screen.getByText("Safe-title violations").parentElement).toHaveTextContent("0 found, 1 accepted");
+    await user.click(within(warn).getByRole("button", { name: "Undo accept" }));
+    expect(screen.getByText(/errors,/)).toHaveTextContent("1 errors, 1 warnings, 0 notes");
+  });
+});

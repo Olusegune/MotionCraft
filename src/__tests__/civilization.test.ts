@@ -68,3 +68,15 @@ describe("lining the Director's scenes up with the script", () => {
     expect(reconcileArc(arc, "Just a brief with no table.", 5)).toBe(arc);
   });
 });
+
+import { audioToAdd } from "../lib/makeIt";
+describe("the project's sound goes into the composition", () => {
+  const prov = { actor: "user" as const, provider: "import", model: "file", at: "t", licence: "own", costReported: false, costValue: null, costUnit: null };
+  it("lists audio files that are not layers yet and leaves pictures alone", () => {
+    const p = createProject("a");
+    p.assets = [{ id: "i", kind: "image", path: "assets/images/a.png", provenance: prov }, { id: "s", kind: "audio", path: "assets/audio/imp-1-score.wav", provenance: prov }, { id: "t", kind: "audio", path: "assets/audio/imp-2-vo.wav", provenance: prov }];
+    expect(audioToAdd(p, ["Background"])).toEqual(["assets/audio/imp-1-score.wav", "assets/audio/imp-2-vo.wav"]);
+    expect(audioToAdd(p, ["imp-1-score.wav"])).toEqual(["assets/audio/imp-2-vo.wav"]);
+    expect(audioToAdd(p, ["imp-1-score.wav", "imp-2-vo.wav"])).toEqual([]);
+  });
+});

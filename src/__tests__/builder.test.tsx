@@ -111,3 +111,21 @@ describe("Builder agent panel (P2-08)", () => {
     expect(markBuilt(p0, [])).toBe(p0);
   });
 });
+
+
+describe("leaving a layer out of the Builder's plan", () => {
+  it("builds only the layers that are ticked", async () => {
+    const user = userEvent.setup();
+    const log = fake(createProject("Pick demo"));
+    render(<App />);
+    await toBuild(user, "Pick demo");
+    await user.click(await screen.findByRole("button", { name: "Plan with Builder" }));
+    await screen.findByLabelText("Builder plan");
+    await user.click(screen.getByRole("checkbox", { name: "Include Background" }));
+    const go = screen.getByRole("button", { name: "Build 1 layer" });
+    await user.click(go);
+    await waitFor(() => expect(log.calls.some((c) => c.method === "builder_execute")).toBe(true));
+    const sent = (log.calls.find((c) => c.method === "builder_execute")!.params as { plan: { layers: { key: string }[] } }).plan.layers.map((l) => l.key);
+    expect(sent).toEqual(["title"]);
+  });
+});

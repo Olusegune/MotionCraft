@@ -65,7 +65,8 @@
     ],
     "resources": {
       "../THIRD_PARTY_NOTICES/*": "THIRD_PARTY_NOTICES/",
-      "../docs/*.md": "docs/"
+      "../docs/*.md": "docs/",
+      "../examples": "examples"
     },
     "category": "Video",
     "shortDescription": "Direct motion design: brief to delivery.",

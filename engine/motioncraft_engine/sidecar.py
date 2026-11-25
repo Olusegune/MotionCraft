@@ -861,7 +861,18 @@ def serve(service: Service, rin=sys.stdin, rout=sys.stdout) -> None:
     service.close()
 
 
+def use_utf8_streams() -> None:
+    """The page sends UTF-8. On Windows a program's standard input is decoded with the old code page unless told otherwise, so an en dash or a
+    curly quote in a brief arrived as three wrong characters ("Iâ€“VII" for "I–VII"). Read and write UTF-8 whatever the locale says."""
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")      # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    use_utf8_streams()
     ap = argparse.ArgumentParser()
     ap.add_argument("--effectcraft-cli", help="path to effectcraft-cli (the pinned version)")
     ap.add_argument("--data-dir", help="where the model registry cache lives (the app data folder)")

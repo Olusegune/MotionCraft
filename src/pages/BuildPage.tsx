@@ -13,7 +13,7 @@ import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write 
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
 import { ScenePictures } from "./build/ScenePictures";
-import { scenePictureItems } from "../lib/makeIt";
+import { audioToAdd, scenePictureItems } from "../lib/makeIt";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
 import { beatAt, clampDock, readDock, sceneStatus, writeDock } from "../lib/timelineMath";
 import { TimelinePanel, type SceneCard, type TLLayer, type TLMark, type TimingChange } from "./build/TimelinePanel";
@@ -267,7 +267,13 @@ export function BuildPage(f: FrameProps) {
       <PrimitivesPanel write={write} selected={sel} locked={selLocked} playhead={playhead} disabled={writesOff} onApplied={() => undefined} />
       <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} onStructure={setStructure} />
       <ScenePictures write={write} disabled={writesOff} />
-      <BuilderPanel write={write} disabled={writesOff} afterBuild={async () => { const items = scenePictureItems(project); if (!items.length) return 0; const r = await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}) })) }); return r ? items.length : 0; }} onBuilt={(created, versions) => update((p) => markBuilt(p, created, versions))} />
+      <BuilderPanel write={write} disabled={writesOff} afterBuild={async () => {
+        let note = 0;
+        const items = scenePictureItems(project);
+        if (items.length) { const r = await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}) })) }); if (r) note = items.length; }
+        for (const rel of audioToAdd(project, layers.map((l) => l.name))) await write("add audio", "add_media", { rel });      // the sound goes in with the layers, so the render is not silent
+        return note;
+      }} onBuilt={(created, versions) => update((p) => markBuilt(p, created, versions))} />
       {unlocking && (
         <Sheet title="Unlock approved layer" onClose={() => setUnlocking(null)}
           footer={<><button className="btn" onClick={() => setUnlocking(null)}>Keep it approved</button>

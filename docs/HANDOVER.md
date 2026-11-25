@@ -95,7 +95,7 @@ The director layer for motion design. A person writes a brief, script or music, 
 **Works and verified in the app on Windows:** a brief with a timed script is read (length, shape, 4K, scenes, sound cues); **Make it** drafts the intent,
 chooses a look from what the piece is about and writes each scene's plan from the script, with one review; the Builder builds timed text, rimmed
 translucent spheres, hairline connections and bright points; scene pictures (made with **Make picture**, or added) go behind each scene, fill the frame, are dimmed
-and push in slowly; sound is analysed and its beats become markers; QA runs 17 checks (text overlap, safe area, contrast, missing media, fonts the brief names and
+and push in slowly; sound is analysed and its beats become markers; QA runs 18 checks (text overlap, safe area, contrast, missing media, fonts the brief names and
 more) and can fix the safe ones; versions, compare, notes, sign-off; a final 4K H.264 render with sound; package export; spend limits (dollars for known prices,
 a call count for unpriced providers); the lettering check on pictures (a local model); the yellow interface with a colour for each tool.
 

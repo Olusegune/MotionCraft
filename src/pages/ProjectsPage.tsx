@@ -9,10 +9,13 @@ import { BASE_SIZES, FRAME_RATES, RESOLUTIONS, sizeFor } from "../lib/formats";
 const ASPECTS = BASE_SIZES;
 const FPS = FRAME_RATES;
 
-export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOpen, setNewOpen, onOpenFolder, onReveal }: {
+export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOpen, setNewOpen, onOpenFolder, onReveal, onExample }: {
   projects: ProjectSummary[]; loading: boolean; error: string | null; onOpen: (p: ProjectSummary) => void; onCreate: (name: string, d: Deliverable) => Promise<void>;
   newOpen: boolean; setNewOpen: (v: boolean) => void; onOpenFolder: () => void; onReveal: () => void;
+  /** Brings in the example project that ships with the app; undefined when this build has none. */
+  onExample?: () => Promise<void>;
 }) {
+  const [exampleBusy, setExampleBusy] = useState(false);
   const sheet = newOpen;
   const setSheet = setNewOpen;
   return (
@@ -21,6 +24,13 @@ export function ProjectsPage({ projects, loading, error, onOpen, onCreate, newOp
         <div className="row-actions"><button className="btn" onClick={onOpenFolder}>Open project folder…</button><button className="btn" onClick={onReveal}>Show projects folder</button>
         <button className="btn primary" onClick={() => setSheet(true)}><FilePlus2 size={18} strokeWidth={1.75} aria-hidden="true" />New project</button></div></div>
       {error && <p className="error-text" role="alert">{error}</p>}
+      {onExample && !loading && !projects.some((p) => p.name === "Civilization I-VII") && (
+        <aside className="example-card" aria-label="Example project">
+          <div><strong>See a finished project</strong>
+            <p className="muted">Civilization I–VII: a 90-second film made from a script, ten pictures and a score, with its checks, notes and render. Open a copy to see how every page was filled in, then change anything.</p></div>
+          <button className="btn" disabled={exampleBusy} onClick={() => { setExampleBusy(true); void onExample().finally(() => setExampleBusy(false)); }}>{exampleBusy ? "Opening…" : "Open the example"}</button>
+        </aside>
+      )}
       {loading ? <p className="muted" role="status">Loading projects…</p> : projects.length === 0 ? (
         <div className="empty-page"><BrandMark size={48} /><p className="strong">No projects yet</p><p>A project holds your brief, your decisions and your approvals. The composition itself lives in an EffectCraft file inside it.</p>
           <ol className="first-run" aria-label="How it works">

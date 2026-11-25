@@ -54,6 +54,8 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [update_, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [firstRunTour, setFirstRunTour] = useState(false);
+  const [examplePath, setExamplePath] = useState<string | null>(null);
+  useEffect(() => { getApi().then((a) => a.exampleProject()).then(setExamplePath).catch(() => setExamplePath(null)); }, []);
   const [recover, setRecover] = useState<null | { kind: "unclean" | "damaged"; summary: ProjectSummary; health: ProjectHealth; busy: boolean; error?: string }>(null);
   const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -315,7 +317,7 @@ export default function App() {
       {update_ && <UpdateBanner info={update_} onInstall={installUpdate} onLater={() => setUpdateInfo(null)} />}
       {notice && <div className="notice" role="status">{notice}<button className="icon-btn" aria-label="Dismiss" onClick={() => setNotice(null)}>×</button></div>}
       {!project || !ctx ? (
-        <ProjectsPage projects={projects} loading={listing} error={listError} onOpen={(p) => void open(p)} onCreate={create} newOpen={newOpen} setNewOpen={setNewOpen} onOpenFolder={() => void openFolder()}
+        <ProjectsPage projects={projects} loading={listing} error={listError} onExample={examplePath ? async () => { try { const api = await getApi(); await open(await api.importProject(examplePath)); } catch (e) { say(e instanceof Error ? e.message : String(e)); } } : undefined} onOpen={(p) => void open(p)} onCreate={create} newOpen={newOpen} setNewOpen={setNewOpen} onOpenFolder={() => void openFolder()}
           onReveal={() => getApi().then((a) => a.revealProjectsFolder()).catch((e) => say(String(e instanceof Error ? e.message : e)))} />
       ) : (
         <Ctx.Provider value={ctx}>
