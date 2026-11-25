@@ -60,35 +60,70 @@ const toSec = (v: string): number => (v.includes(":") ? v.split(":").reduce((acc
 const strip = (v: string): string => v.replace(/\*+|`/g, "").replace(/\s+/g, " ").trim();
 const unlabel = (v: string, ...labels: string[]): string => v.replace(new RegExp(String.raw`^(?:${labels.join("|")})\s*[:\-]\s*`, "i"), "").trim();
 
+const SINGLE = new RegExp(String.raw`^\s*${NUM}\s*s?\s*$`);
+const DASHES = /^[—–-]+$/;
+const NO_TEXT = /\b(without text|no text|no on-?screen text|plays without)\b/i;
+
+/** Which columns of a table are the picture, the on-screen text and the sound, from its header row ("Time | Shot | What we see | Voiceover"). */
+interface Columns { visual: number[]; onScreen: number[]; audio: number[] }
+function columnsOf(header: string[]): Columns | null {
+  if (!/^time/i.test(header[0] ?? "")) return null;
+  const c: Columns = { visual: [], onScreen: [], audio: [] };
+  header.forEach((h, i) => {
+    if (i === 0) return;
+    if (/on[- ]?screen|^text|title|caption|label/i.test(h)) c.onScreen.push(i);
+    else if (/voice|audio|sound|music|narration|^vo\b|sfx/i.test(h)) c.audio.push(i);
+    else if (/shot|visual|what we see|action|picture|image|scene|description|movement/i.test(h)) c.visual.push(i);
+  });
+  return c.visual.length || c.onScreen.length || c.audio.length ? c : null;
+}
+
 /**
  * Rows that start with a time range, as a table or as pipe-separated lines: "0:00–0:02 | what happens | on-screen text | audio".
- * Cells can carry the labels "On-screen text:" and "Audio:", in any order. Rows must go forward in time and sit inside `maxSec` when given.
+ * Cells can carry the labels "On-screen text:" and "Audio:", in any order. When the table has a header row ("Time | Shot | What we see | Voiceover"),
+ * the columns are read by their headings instead, and several picture columns are joined (the shot's name first). A second table of
+ * single times ("00:08 | TYPE I") gives the on-screen text of the scene that starts then. A dash alone means nothing. Rows must go forward in
+ * time and sit inside `maxSec` when given.
  */
 export function parseTimedScript(text: string, maxSec?: number): ScriptSegment[] {
   const rows: ScriptSegment[] = [];
+  const cues: { t: number; text: string }[] = [];
+  let columns: Columns | null = null;
   for (const line of String(text || "").split(/\r?\n/)) {
     if (!line.includes("|") && !line.includes("\t")) continue;
     if (/^[\s|:\-]+$/.test(line)) continue;                                   // a table's separator row
-    const cells = line.split(/\||\t/).map(strip);
+    const cells = line.split(/\||\t/).map(strip).map((c) => (DASHES.test(c) ? "" : c));
     while (cells.length && !cells[0]) cells.shift();                          // a table's outer borders, not its empty cells
     while (cells.length && !cells[cells.length - 1]) cells.pop();
     if (cells.length < 2) continue;
     const m = RANGE.exec(cells[0]);
-    if (!m) continue;
+    if (!m) {
+      const one = SINGLE.exec(cells[0]);
+      if (one && cells[1] && !NO_TEXT.test(cells[1])) cues.push({ t: toSec(one[1]), text: cells[1] });       // a single time: on-screen text for the scene that starts then
+      else if (!one) columns = columnsOf(cells) ?? columns;                   // a header row
+      continue;
+    }
     const start = toSec(m[1]), end = toSec(m[2]);
     if (!(end > start) || start < 0) continue;
-    const rest = cells.slice(1);
     let visual = "", onScreen = "", audio = "";
-    const loose: string[] = [];
-    for (const c of rest) {
-      if (/^(?:on[- ]?screen(?: text)?|text|title|caption)\s*[:\-]/i.test(c)) onScreen = unlabel(c, "on-?screen(?: text)?", "text", "title", "caption");
-      else if (/^(?:audio|sound|music|sfx|vo|narration)\s*[:\-]/i.test(c)) audio = unlabel(c, "audio", "sound", "music", "sfx", "vo", "narration");
-      else if (/^(?:visual|picture|image|action)\s*[:\-]/i.test(c)) visual = unlabel(c, "visual", "picture", "image", "action");
-      else loose.push(c);
+    if (columns) {
+      const pick = (idx: number[]) => idx.map((i) => cells[i] ?? "").filter(Boolean);
+      visual = pick(columns.visual).map((v, i, all) => (i < all.length - 1 && !/[.!?]$/.test(v) ? `${v}.` : v)).join(" ");
+      onScreen = pick(columns.onScreen).join(" ");
+      audio = pick(columns.audio).join(" ");
+    } else {
+      const rest = cells.slice(1);
+      const loose: string[] = [];
+      for (const c of rest) {
+        if (/^(?:on[- ]?screen(?: text)?|text|title|caption)\s*[:\-]/i.test(c)) onScreen = unlabel(c, "on-?screen(?: text)?", "text", "title", "caption");
+        else if (/^(?:audio|sound|music|sfx|vo|narration)\s*[:\-]/i.test(c)) audio = unlabel(c, "audio", "sound", "music", "sfx", "vo", "narration");
+        else if (/^(?:visual|picture|image|action)\s*[:\-]/i.test(c)) visual = unlabel(c, "visual", "picture", "image", "action");
+        else loose.push(c);
+      }
+      if (!visual && loose.length) visual = loose.shift()!;
+      if (!onScreen && loose.length) onScreen = loose.shift()!;
+      if (!audio && loose.length) audio = loose.shift()!;
     }
-    if (!visual && loose.length) visual = loose.shift()!;
-    if (!onScreen && loose.length) onScreen = loose.shift()!;
-    if (!audio && loose.length) audio = loose.shift()!;
     rows.push({ start, end, visual, onScreen, audio });
   }
   rows.sort((a, b) => a.start - b.start);
@@ -98,6 +133,10 @@ export function parseTimedScript(text: string, maxSec?: number): ScriptSegment[]
     const prev = kept[kept.length - 1];
     if (prev && r.start < prev.end - 1e-6) continue;                          // overlapping rows: keep the first
     kept.push(maxSec !== undefined ? { ...r, end: Math.min(r.end, maxSec) } : r);
+  }
+  for (const c of cues) {
+    const seg = kept.find((x) => Math.abs(x.start - c.t) <= 0.5);
+    if (seg && !seg.onScreen) seg.onScreen = c.text;
   }
   return kept;
 }
@@ -117,13 +156,21 @@ const SOFT = /(quiet|silence|delicate|soft|resolve|resonance|fade|hush|calm|gent
  * One beat for every row of the timed script. The names come from the emotional journey when there is one, spread over the piece by where each row sits;
  * otherwise the row's own opening words. Intensity rises across the piece; energy follows the sound the script describes (a bass impact is higher than a hush).
  */
+/** A scene's name from its first words: whole words, at most 48 characters. */
+const shortName = (v: string): string => {
+  const t = v.trim();
+  if (t.length <= 48) return t;
+  const cut = t.slice(0, 48);
+  return cut.slice(0, Math.max(cut.lastIndexOf(" "), 24)).trim();
+};
+
 export function beatsFromScript(segments: ScriptSegment[], journey: string[] = [], durationSec?: number): Beat[] {
   if (!segments.length) return [];
   const total = durationSec ?? segments[segments.length - 1].end;
   return segments.map((s, i) => {
     const mid = (s.start + s.end) / 2;
     const name = journey.length ? journey[Math.min(journey.length - 1, Math.floor((mid / Math.max(total, 1e-6)) * journey.length))]
-      : (s.visual.split(/[.;,]/)[0] || `Scene ${i + 1}`).slice(0, 32).trim();
+      : shortName(s.visual.split(/[.;,]/)[0] || `Scene ${i + 1}`);
     const progress = segments.length > 1 ? i / (segments.length - 1) : 0.5;
     const sound = `${s.audio} ${s.visual}`;
     const energy = clamp5(2 + (LOUD.test(sound) ? 1.5 : 0) - (SOFT.test(sound) ? 1 : 0) + (progress > 0.3 && progress < 0.8 ? 0.5 : 0));

@@ -266,7 +266,7 @@ class Service:
         try:
             for L in checked["plan"]["layers"]:
                 if L["kind"] == "text":
-                    cmd = Command(id="layer.newText", params={"text": L["text"], "size": L["size"], "name": L["name"]})
+                    cmd = Command(id="layer.newText", params=builder.text_params(L, comp.width, comp.height))
                 elif L["kind"] == "shape":
                     nth = round_names.index(L["name"]) if L["name"] in round_names else 0
                     cmd = Command(id="layer.newShape", params=builder.shape_params(L, comp.width, comp.height, nth, len(round_names)))
@@ -279,9 +279,10 @@ class Service:
                     except (CommandFailed, AdapterContractError) as e:
                         warnings.append(f"{L['name']}: its timing was not applied. {e}")
                 applied: list[str] = []
+                rest = self._rest_values(lid) if L["animations"] else None
                 for an in L["animations"]:
                     try:
-                        self._apply(lid, an["primitive"], an["params"], BUILDER)
+                        self._apply(lid, an["primitive"], an["params"], BUILDER, rest)
                         applied.append(an["primitive"])
                     except (prim.PrimitiveError, CommandFailed, AdapterContractError) as e:   # one motion failing does not stop the build
                         warnings.append(f"{L['name']}: {an['primitive']} was not applied. {e}")
@@ -683,8 +684,23 @@ class Service:
         self._need().save()
         return {"applied": primitive, "commands": n, **self._snapshot()}
 
-    def _apply(self, layer: int, primitive: str, params: dict | None, actor) -> int:
-        """Builds a primitive's commands for one layer and runs them as `actor`. Returns the command count. Does not save."""
+    def _rest_values(self, layer: int) -> dict:
+        """The layer's own position, scale and opacity, read before any motion is added. Once a layer has keyframes, reading it again gives the
+        value at time zero (a fade in reads as 0), so a second motion on the same layer would start from the wrong place: a fade out after a
+        fade in faded from 0 to 0 and the line never showed. The Builder reads this once per layer and passes it to every motion on it."""
+        a = self._need()
+        comp = a.inspect().comp(None)
+        props = a.layer_props(comp.id, int(layer))["props"]
+
+        def val(path: str, default):
+            v = (props.get(path) or {}).get("value")
+            return list(v) if isinstance(v, list) else (v if v is not None else default)
+        return {"position": [float(x) for x in val("transform/position", [0, 0, 0])], "scale": [float(x) for x in val("transform/scale", [100, 100, 100])],
+                "opacity": float(val("transform/opacity", 100.0))}
+
+    def _apply(self, layer: int, primitive: str, params: dict | None, actor, rest: dict | None = None) -> int:
+        """Builds a primitive's commands for one layer and runs them as `actor`. Returns the command count. Does not save.
+        `rest` is the layer's own position, scale and opacity from `_rest_values`; without it they are read now."""
         a = self._need()
         snap = a.inspect()
         comp = snap.comp(None)
@@ -699,9 +715,9 @@ class Service:
             v = (props.get(path) or {}).get("value")
             return list(v) if isinstance(v, list) else (v if v is not None else default)
         ctx = prim.Ctx(layer=int(layer), layer_kind=info.kind, fps=comp.frame_rate, comp_duration=comp.duration,
-                       rest_position=[float(x) for x in val("transform/position", [0, 0, 0])],
-                       rest_scale=[float(x) for x in val("transform/scale", [100, 100, 100])],
-                       rest_opacity=float(val("transform/opacity", 100.0)),
+                       rest_position=list(rest["position"]) if rest else [float(x) for x in val("transform/position", [0, 0, 0])],
+                       rest_scale=list(rest["scale"]) if rest else [float(x) for x in val("transform/scale", [100, 100, 100])],
+                       rest_opacity=float(rest["opacity"]) if rest else float(val("transform/opacity", 100.0)),
                        has_animators=any(k.startswith("text/animators/") for k in props))
         cmds = prim.build(primitive, ctx, params)
         # Keyframe recipes replace nothing: an existing key at the same time is overwritten by the engine. Stop at the first error.

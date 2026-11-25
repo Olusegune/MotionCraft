@@ -1,3 +1,4 @@
+import { parseTimedScript } from "../../lib/briefParse";
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useApp } from "../../ctx";
@@ -37,7 +38,9 @@ export function BuilderPanel({ write, disabled, onBuilt, afterBuild }: { write: 
       const params: Record<string, unknown> = {
         provider, model, offline,
         context: { intent: project.intent, firedRules: firedRules(project), brief: project.brief.text, script: project.brief.script ?? "",
-                   deliverable: { width: d.width, height: d.height, fps: d.fps, durationSec: d.durationSec } },
+                   deliverable: { width: d.width, height: d.height, fps: d.fps, durationSec: d.durationSec },
+                   segments: parseTimedScript(`${project.brief.text}
+${project.brief.script ?? ""}`, d.durationSec) },
       };
       if (!info.local) params.spend_token = await api.confirmSpend(provider, model);   // only reachable from the confirm click
       setSt({ busy: false, result: await api.engine<PlanResult>("builder_plan", params, "", enginePath) });

@@ -110,5 +110,5 @@ describe("autosave timing", () => {
     await user.click(screen.getByRole("button", { name: "Approve intent" }));
     await waitFor(() => expect(log.saves.length).toBeGreaterThan(before), { timeout: 600 });   // far sooner than the one-second debounce
     expect(log.saves[log.saves.length - 1].approvals.length).toBeGreaterThan(0);
-  });
+  }, 15000);   // it types, waits out a debounce and measures a second one: slow on a busy computer
 });

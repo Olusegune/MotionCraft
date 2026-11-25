@@ -59,6 +59,10 @@ describe("shell", () => {
     await user.type(screen.getByLabelText("Primary emotion"), "calm");
     await waitFor(() => expect(screen.getByRole("button", { name: "Approve intent" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Approve intent" }));
+    // Golden path: approving takes you to the page the next step is on and says what to do there. This project has no brief yet, so that is the Brief.
+    await waitFor(() => expect(screen.getAllByText(/Approved\. Next: Write or paste your brief/).length).toBeGreaterThan(0));
+    expect(await screen.findByRole("heading", { name: "Brief" })).toBeInTheDocument();
+    await user.click(nav("Intent"));
     expect(await screen.findByText(/Approved at Gate A/)).toBeInTheDocument();
     expect(screen.getByLabelText("Summary")).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Unlock to edit" }));

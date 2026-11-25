@@ -14,7 +14,7 @@ export function Sheet({ title, onClose, children, footer, wide }: {
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     const first = ref.current?.querySelector<HTMLElement>("input,select,textarea,button:not([data-sheet-close])") ?? ref.current;
-    first?.focus();
+    first?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.stopPropagation(); closeRef.current(); return; }
       if (e.key !== "Tab" || !ref.current) return;

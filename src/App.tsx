@@ -232,7 +232,12 @@ export default function App() {
 
   const ctx: AppCtx | null = useMemo(() => !project ? null : ({
     project, projectPath: pathRef.current, stage, engine, update, go: setStage, refreshEngine,
-    approveGate: (g) => update((p) => approve(p, g), true),
+    // Golden path: approving on a page takes the person to the page the next step is on, and says what to do there.
+    approveGate: (g, advance = true) => {
+      const after = nextStep(approve(project, g));
+      update((p) => approve(p, g), true);
+      if (advance) { if (after) { setStage(after.stage); say(`Approved. Next: ${after.text}`); } else say("Approved. Everything is done."); }
+    },
     unlockGate: (gate, revKind) => setOverlay({ kind: "impact", gate, revKind }),
     openEffectCraft: async () => { await (await getApi()).openEffectCraft(pathRef.current, settings.enginePath); },
     showSettings: () => setOverlay({ kind: "settings" }),

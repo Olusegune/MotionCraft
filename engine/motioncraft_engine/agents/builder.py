@@ -20,7 +20,8 @@ ENGINE_KIND = {"text": "Text", "solid": "Solid", "shape": "Shape"}
 SHAPES = ("rect", "rounded", "ellipse", "star", "polygon")
 ROLES = ("title", "body-text", "logo", "background", "texture", "other")
 DEFAULT_ROLE = {"text": "title", "solid": "background", "shape": "other"}
-MAX_LAYERS = 24
+SLOTS = ("title", "label", "tag")
+MAX_LAYERS = 40
 MAX_ANIMS = 4
 MAX_TEXT = 400
 MAX_BRIEF = 8000
@@ -51,6 +52,28 @@ class PlanError(Exception):
 
 def _clean(v: Any, n: int) -> str:
     return re.sub(r"[\r\t]+", " ", str(v or "")).strip()[:n]
+
+
+def _clean_text(v: Any, n: int) -> str:
+    """On-screen words: no markdown marks (a model copies `*italic*` from the brief), and " / " between two lines becomes a line break."""
+    t = re.sub(r"[\r\t]+", " ", str(v or ""))
+    t = re.sub(r"(\*\*|__|\*|`)", "", t)
+    t = re.sub(r"\s+/\s+", "\n", t)
+    return "\n".join(x.strip() for x in t.split("\n")).strip()[:n]
+
+
+def resolve_primitive(pid: Any):
+    """A motion by its id, or by the short name a model tends to use ("fade-in" for entrance.fade-in, "motion-drift" for motion.drift)."""
+    if not isinstance(pid, str):
+        return None
+    k = pid.strip().lower().replace("_", "-")
+    if k in prim.LIBRARY:
+        return prim.LIBRARY[k]
+    short = [p for i, p in prim.LIBRARY.items() if i.split(".", 1)[-1] == k]
+    if len(short) == 1:
+        return short[0]
+    dotted = k.replace("-", ".", 1)
+    return prim.LIBRARY.get(dotted)
 
 
 def _num(v: Any, default: float) -> float:
@@ -124,8 +147,10 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
             key, n = f"{base}-{n}", n + 1
         seen.add(key)
         layer: dict[str, Any] = {"key": key, "kind": kind, "name": name, "role": r.get("role") if r.get("role") in ROLES else DEFAULT_ROLE[kind]}
+        if kind == "text" and r.get("slot") in SLOTS:        # where a script-timed line sits in the frame; set by apply_script, kept when the plan is checked again
+            layer["slot"] = r["slot"]
         if kind == "text":
-            text = _clean(r.get("text"), MAX_TEXT)
+            text = _clean_text(r.get("text"), MAX_TEXT)
             if not text:
                 warnings.append(f"Text layer {name!r} had no text and was dropped.")
                 continue
@@ -142,15 +167,17 @@ def validate(raw: dict, *, duration_sec: float, fps: float = 30.0) -> dict:
                 warnings.append(f"{name}: only the first {MAX_ANIMS} motions on a layer were kept.")
                 break
             pid = a.get("primitive")
-            p = prim.LIBRARY.get(pid) if isinstance(pid, str) else None
+            p = resolve_primitive(pid)
             if p is None:
                 warnings.append(f"{name}: unknown motion {_clean(pid, 40)!r} was dropped.")
                 continue
             given = dict(a.get("params") if isinstance(a.get("params"), dict) else {})
+            # A model's raw reply puts start and duration on the motion; a plan that was already checked (what the page sends back to build) carries
+            # them inside params. Read both, or every checked motion would lose its start and begin at time zero.
             if "start" in p.params:
-                given["start"] = max(0.0, _num(a.get("start"), p.params["start"].default))
+                given["start"] = max(0.0, _num(a.get("start") if a.get("start") is not None else given.get("start"), p.params["start"].default))
             if "duration" in p.params:
-                given["duration"] = _num(a.get("duration"), p.params["duration"].default)
+                given["duration"] = _num(a.get("duration") if a.get("duration") is not None else given.get("duration"), p.params["duration"].default)
             try:
                 prim.build(p.id, _probe_ctx(kind, dur, fps), given)   # checks layer kind, ranges and the end of the composition
             except prim.PrimitiveError as e:
@@ -221,6 +248,103 @@ def spread_text(out: dict, beat_starts: list[float], duration: float) -> None:
     out["warnings"].append("The model did not time the text lines, so each now has its own stretch of the piece, starting at a scene. Retime them on the timeline.")
 
 
+def _norm(t: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", re.sub(r"(\*\*|__|\*|`)", "", str(t or "")).lower()).strip()
+
+
+_TAG = re.compile(r"\bspeculative\b", re.I)
+_SPECULATIVE_TYPES = re.compile(r"\btype\s+(iv|v|vi|vii)\b", re.I)
+
+
+def _fades(kind: str, t0: float, t1: float, dur: float, fps: float, want_in: bool = True, want_out: bool = True) -> list[dict]:
+    """A short fade in and out for a line that comes and goes with its scene, if the library accepts them for this layer."""
+    out: list[dict] = []
+    span = max(0.0, t1 - t0)
+    length = round(min(0.5, span / 4), 3)
+    if length <= 0:
+        return out
+    for pid, start, wanted in (("entrance.fade-in", t0, want_in), ("exit.fade-out", t1 - length, want_out)):
+        p = prim.LIBRARY.get(pid) if wanted else None
+        if p is None:
+            continue
+        given = {"start": round(start, 3), "duration": length}
+        try:
+            prim.build(p.id, _probe_ctx(kind, dur, fps), given)
+        except prim.PrimitiveError:
+            continue
+        out.append({"primitive": p.id, "params": prim.resolve_params(p, given)})
+    return out
+
+
+def apply_script(out: dict, segments: list, brief: str, duration: float, fps: float) -> None:
+    """The script's on-screen text rows are exact: what the words are and when they appear. A small model's timing is only a guess, so for every
+    line the script gives, the text layer showing those words is timed to that row; a row no layer shows gets a layer; a "SPECULATIVE" tag
+    that was written into a label becomes its own small layer under it. Lines are placed by slot (title card, label, tag) so they sit clear of
+    the picture behind. Lines the script does not mention are left as the model planned them."""
+    rows = []
+    for sgm in segments if isinstance(segments, list) else []:
+        if isinstance(sgm, dict) and str(sgm.get("onScreen") or "").strip():
+            a, b = _num(sgm.get("start"), -1), _num(sgm.get("end"), -1)
+            if 0 <= a < b <= duration + 1e-6:
+                rows.append({"start": a, "end": min(b, duration), "text": _clean_text(sgm["onScreen"], MAX_TEXT)})
+    if not rows:
+        return
+    layers = out["plan"]["layers"]
+    tag_wanted = bool(_TAG.search(str(brief or "")))
+    used: set[int] = set()
+    result: list[dict] = []
+    seen_keys = {l["key"] for l in layers}
+
+    def new_key(base: str) -> str:
+        k = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-") or "text"
+        n, cand = 2, k
+        while cand in seen_keys:
+            cand, n = f"{k}-{n}", n + 1
+        seen_keys.add(cand)
+        return cand
+
+    def tag_layer(parent: dict, t0: float, t1: float) -> dict:
+        size = int(max(14, round(parent["size"] * 0.3)))
+        return {"key": new_key(parent["name"] + " tag"), "kind": "text", "name": parent["name"] + "_tag", "role": "other", "text": "SPECULATIVE", "size": size,
+                "slot": "tag", "animations": _fades("text", t0, t1, duration, fps), "in": round(t0, 3), "out": round(t1, 3)}
+
+    def place(L: dict, row: dict, i: int) -> list[dict]:
+        t0, t1 = row["start"], row["end"]
+        has_tag = bool(_TAG.search(L["text"])) or (tag_wanted and bool(_SPECULATIVE_TYPES.search(row["text"])))
+        L["text"] = _clean_text(_TAG.sub("", L["text"]).strip(" ·-–—"), MAX_TEXT) or row["text"]
+        L["slot"] = "title" if "\n" in L["text"] else "label"
+        L["in"], L["out"] = round(t0, 3), round(t1, 3)
+        has_in = any(a["primitive"].startswith(("entrance.", "text.")) for a in L["animations"])
+        has_out = any(a["primitive"].startswith("exit.") for a in L["animations"])
+        L["animations"] = _fades("text", t0, t1, duration, fps, want_in=not has_in, want_out=not has_out) + L["animations"]
+        extra = [tag_layer(L, t0, t1)] if has_tag else []
+        return [L, *extra]
+
+    for L in layers:
+        if L["kind"] != "text":
+            result.append(L)
+            continue
+        base = _norm(_TAG.sub("", L["text"]))
+        if not base:                                           # a bare tag the model made itself: the script's rows decide where tags go
+            if _TAG.search(L["text"]):
+                continue
+            result.append(L)
+            continue
+        hit = next((i for i, r in enumerate(rows) if i not in used and _norm(r["text"]) == base), None)
+        if hit is None:
+            result.append(L)
+            continue
+        used.add(hit)
+        result.extend(place(L, rows[hit], hit))
+    for i, r in enumerate(rows):
+        if i in used:
+            continue
+        L = {"key": new_key(r["text"][:24]), "kind": "text", "name": f"Text_{int(r['start'] // 60):02d}:{int(r['start'] % 60):02d}", "role": "title", "text": r["text"], "size": 110, "animations": []}
+        result.extend(place(L, r, i))
+    out["plan"]["layers"] = result[:MAX_LAYERS]
+    out["warnings"].append(f"On-screen text was timed to the script ({len(rows)} lines).")
+
+
 def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = "", spend_token: str = "", offline: bool = False) -> dict:
     ctx = context or {}
     has_material = any(str(ctx.get(k) or "").strip() for k in ("brief", "script")) or bool((ctx.get("intent") or {}).get("summary"))
@@ -232,6 +356,7 @@ def draft_plan(llm, *, provider: str, model: str, context: dict, api_key: str = 
     if not isinstance(raw, dict):
         raise PlanError("The model did not return a plan.")
     out = validate(raw, duration_sec=_num(d.get("durationSec"), 15), fps=_num(d.get("fps"), 30))
+    apply_script(out, ctx.get("segments") or [], str(ctx.get("brief") or "") + "\n" + str(ctx.get("script") or ""), _num(d.get("durationSec"), 15), _num(d.get("fps"), 30))
     spread_text(out, [b.get("startSec") for b in ((ctx.get("intent") or {}).get("arc") or []) if isinstance(b.get("startSec"), (int, float))], _num(d.get("durationSec"), 15))
     return {**out, "provider": provider, "model": model, "usage": r.get("usage") or {}}
 
@@ -255,6 +380,19 @@ def shape_role(name: str, kind: str) -> str:
     if any(w in n for w in ROUND) or kind == "ellipse":
         return "round"
     return "plain"
+
+
+# Where script-timed text sits, as fractions of the frame (centre of the text). A title card is in the middle; a label sits in the lower third so the picture
+# behind stays clean; a tag sits just under its label.
+SLOT_AT = {"title": (0.5, 0.46), "label": (0.5, 0.86), "tag": (0.5, 0.935)}
+
+
+def text_params(L: dict, width: int, height: int) -> dict:
+    params: dict[str, Any] = {"text": L["text"], "size": L["size"], "name": L["name"]}
+    at = SLOT_AT.get(L.get("slot", ""))
+    if at:
+        params["position"] = [round(width * at[0]), round(height * at[1])]
+    return params
 
 
 def shape_params(L: dict, width: int, height: int, nth: int = 0, of: int = 1) -> dict:

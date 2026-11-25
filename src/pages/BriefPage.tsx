@@ -7,7 +7,7 @@ import { PageFrame } from "../shell/PageFrame";
 import { Segmented } from "../shell/Segmented";
 import { Field, useLocked, type FrameProps } from "./common";
 import { hasAnyProvider } from "../lib/project";
-import { fillFrames, fillTreatment, offlineIntent, suggestLook } from "../lib/makeIt";
+import { fillFrames, fillTreatment, offlineIntent, reconcileArc, suggestLook } from "../lib/makeIt";
 import { applyLook, currentLook, familyLabel } from "../lib/styles";
 import { firedRules } from "../lib/rules";
 import { getApi } from "../lib/api";
@@ -88,12 +88,13 @@ export function BriefPage(f: FrameProps) {
       const params: Record<string, unknown> = { provider, model, brief: project.brief.text, script: project.brief.script ?? "", duration_sec: d.durationSec, offline };
       if (!info.local) params.spend_token = await api.confirmSpend(provider, model);   // only reachable from the confirm click
       const r = await api.engine<{ intent: typeof project.intent; warnings: string[] }>("director_intent", params, "", enginePath);
-      applyDraft(r.intent);
+      applyDraft({ ...r.intent, arc: reconcileArc(r.intent.arc, `${project.brief.text}
+${project.brief.script ?? ""}`, d.durationSec) });
       setMk({ busy: false, notes: r.warnings, review: true });
     } catch (e) { setMk({ busy: false, notes: [], error: String(e instanceof Error ? e.message : e) }); }
   };
   const approveAll = () => {
-    approveGate("A"); approveGate("B"); approveGate("C");
+    approveGate("A", false); approveGate("B", false); approveGate("C", false);
     try { sessionStorage.setItem("mc.autoplan", "1"); } catch { /* no storage: the plan is one click away in Build */ }
     closeMk(); go("build");
   };

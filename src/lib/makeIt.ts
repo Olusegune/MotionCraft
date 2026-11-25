@@ -116,3 +116,17 @@ ${p.brief.script ?? ""}`;
     : /\b(story|film|trailer|music|cosmic)/i.test(text) ? "entertain" : "inform";
   return { purpose, tone, arc, summary: first.slice(0, 220), firedRules: [], source: "user" };
 }
+
+/**
+ * The Director's scenes lined up with the script's rows. A language model can drop or merge a row (it gave nine scenes for a ten-row script and
+ * left the last seven seconds uncovered). Where a script has timed rows, there is one scene per row: the model's emotion and intensity are kept for
+ * every row it covered (matched by start time), and a row it missed gets a scene from the script itself.
+ */
+export function reconcileArc(arc: Beat[], text: string, durationSec: number): Beat[] {
+  const segs = parseTimedScript(text, durationSec);
+  if (segs.length < 2) return arc;
+  return beatsFromScript(segs, [], durationSec).map((sb) => {
+    const m = arc.find((b) => Math.abs(b.startSec - sb.startSec) <= 0.6);
+    return m ? { ...m, beatId: sb.beatId, startSec: sb.startSec, endSec: sb.endSec } : sb;
+  });
+}
