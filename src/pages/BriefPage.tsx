@@ -7,7 +7,7 @@ import { PageFrame } from "../shell/PageFrame";
 import { Segmented } from "../shell/Segmented";
 import { Field, useLocked, type FrameProps } from "./common";
 import { hasAnyProvider } from "../lib/project";
-import { fillFrames, fillTreatment, suggestLook } from "../lib/makeIt";
+import { fillFrames, fillTreatment, offlineIntent, suggestLook } from "../lib/makeIt";
 import { applyLook, currentLook, familyLabel } from "../lib/styles";
 import { firedRules } from "../lib/rules";
 import { getApi } from "../lib/api";
@@ -68,20 +68,27 @@ export function BriefPage(f: FrameProps) {
     setMk({ busy: true, notes: [] });
     try {
       const api = await getApi();
-      const st = await api.engine<{ ready: boolean; reason: string; config: { provider: string | null; model: string }; providers: { id: string; label: string; local: boolean }[] }>("llm_status", { offline }, "", enginePath);
-      const { provider, model } = st.config;
-      const info = st.providers.find((x) => x.id === provider);
-      if (!st.ready || !provider || !info) { setMk({ busy: false, notes: [], error: st.reason || "Choose a language model in Settings first. You can write the intent yourself instead." }); return; }
+      const applyDraft = (intent: typeof project.intent) => update((p) => {
+        let q: typeof p = { ...p, intent, updatedAt: nowIso() };
+        q = { ...q, intent: { ...intent, firedRules: firedRules(q).map((x) => x.id) } };
+        if (!currentLook(q) && Object.keys(q.style.dimensions).length === 0) q = applyLook(q, suggestLook({ ...q, brief: q.brief }));
+        return fillFrames(fillTreatment(q));
+      });
+      type Llm = { ready: boolean; reason: string; config: { provider: string | null; model: string }; providers: { id: string; label: string; local: boolean }[] };
+      const st = await api.engine<Llm>("llm_status", { offline }, "", enginePath).catch(() => null);
+      const provider = st?.config.provider ?? null, model = st?.config.model ?? "";
+      const info = st?.providers.find((x) => x.id === provider);
+      if (!st || !st.ready || !provider || !info) {
+        // No language model: Make it still works, from the brief's own words, and says so. Manual use never needs an AI account.
+        applyDraft(offlineIntent(project));
+        setMk({ busy: false, notes: ["Drafted without an AI model, from the words in your brief. Add a language model in Settings for a richer draft."], review: true });
+        return;
+      }
       if (!info.local && !confirmed) { setMk({ busy: false, notes: [], ask: { provider, model, label: info.label } }); return; }
       const params: Record<string, unknown> = { provider, model, brief: project.brief.text, script: project.brief.script ?? "", duration_sec: d.durationSec, offline };
       if (!info.local) params.spend_token = await api.confirmSpend(provider, model);   // only reachable from the confirm click
       const r = await api.engine<{ intent: typeof project.intent; warnings: string[] }>("director_intent", params, "", enginePath);
-      update((p) => {
-        let q: typeof p = { ...p, intent: r.intent, updatedAt: nowIso() };
-        q = { ...q, intent: { ...r.intent, firedRules: firedRules(q).map((x) => x.id) } };
-        if (!currentLook(q) && Object.keys(q.style.dimensions).length === 0) q = applyLook(q, suggestLook({ ...q, brief: q.brief }));
-        return fillFrames(fillTreatment(q));
-      });
+      applyDraft(r.intent);
       setMk({ busy: false, notes: r.warnings, review: true });
     } catch (e) { setMk({ busy: false, notes: [], error: String(e instanceof Error ? e.message : e) }); }
   };
@@ -237,7 +244,7 @@ export function BriefPage(f: FrameProps) {
     <PageFrame {...f} title="Brief" intro="" inspector={inspector}
       action={{
         label: mk.busy ? "Making it…" : "Make it",
-        disabledReason: !hasAnyProvider() ? noAi : !canMake ? "Write a brief first." : intentLocked ? "The intent is approved, so it will not be redrafted. Unlock it on the Intent page to start over." : mk.busy ? "The Director is drafting." : undefined,
+        disabledReason: !canMake ? "Write a brief first." : intentLocked ? "The intent is approved, so it will not be redrafted. Unlock it on the Intent page to start over." : mk.busy ? "The Director is drafting." : undefined,
         onClick: () => void makeIt(false),
         secondary: { label: "Start with a blank project", onClick: () => go("intent") },
       }}

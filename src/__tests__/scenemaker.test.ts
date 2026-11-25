@@ -13,7 +13,7 @@ describe("the prompt for one scene's picture", () => {
     p.treatment = { b1: { plan: "curiosity (2 seconds): one point of light in the dark.", motion: "" } };
     const t = scenePrompt(p, b);
     expect(t.startsWith(NO_LETTERING)).toBe(true);
-    expect(t).toContain("cinematic title look");
+    expect(t).toContain("cinematic title");
     expect(t).toContain("Scene: curiosity");
     expect(t).toContain("one point of light in the dark");
     expect(t).not.toContain("(2 seconds)");

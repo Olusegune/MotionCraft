@@ -6,6 +6,7 @@ export interface NextStep { text: string; stage: Stage; label: string }
 
 export function nextStep(p: MotionProject): NextStep | null {
   if (!p.brief.text.trim() && !(p.brief.script ?? "").trim()) return { text: "Write or paste your brief", stage: "brief", label: "Open Brief" };
+  if (gateState(p, "A") !== "approved" && p.intent.arc.length > 0) return { text: "Check the scenes, say what the piece is for, then approve the intent", stage: "intent", label: "Open Intent" };
   if (gateState(p, "A") !== "approved") return { text: "Press Make it to draft the plan, or fill in the intent yourself", stage: "brief", label: "Open Brief" };
   if (gateState(p, "B") !== "approved") return { text: "Approve the look on the Direction page", stage: "direction", label: "Open Direction" };
   if (gateState(p, "C") !== "approved") return { text: "Check each scene's plan and picture, then approve the treatment", stage: "treatment", label: "Open Treatment" };

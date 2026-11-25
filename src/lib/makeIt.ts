@@ -1,5 +1,5 @@
-import type { Beat, MotionProject, Tone } from "../types";
-import { parseTimedScript } from "./briefParse";
+import type { Beat, MotionProject, Purpose, Tone } from "../types";
+import { beatsFromScript, parseEmotionArc, parseTimedScript } from "./briefParse";
 
 /**
  * "Make it": the Director's draft turned into a starting look and a plan for every scene, so nobody fills three pages before seeing anything.
@@ -76,4 +76,43 @@ export function scenePictureItems(p: MotionProject): { rel: string; t_in: number
     const a = (p.assets ?? []).find((x) => x.kind === "image" && x.id === p.treatment[b.beatId]?.frameAssetId);
     return a ? [{ rel: a.path, t_in: b.startSec, t_out: b.endSec, name: b.primary }] : [];
   }).slice(0, 16);
+}
+
+const TONE_WORDS: [RegExp, Tone][] = [
+  [/\b(playful|fun|joy|whimsical|cheeky)/i, "playful"], [/\b(elegant|luxur|refined|premium|graceful)/i, "elegant"],
+  [/\b(authorit|expert|official|bold claim)/i, "authoritative"], [/\b(trust|reliable|safe|honest|secure)/i, "trustworthy"],
+  [/\b(explain|tutorial|how to|learn|instruct|guide)/i, "instructional"], [/\b(provocat|shock|disrupt|rebel|edgy)/i, "provocative"],
+  [/\b(calm|quiet|minimal|restrained|still|understated)/i, "restrained"],
+];
+const DEFAULT_SCENES = ["Opening", "Build", "Peak", "Resolution"];
+
+/**
+ * A starting intent with no language model: the scenes from a timed script when there is one, otherwise four even scenes; the tone
+ * from the words in the brief. It is a plain draft for the person to review and change, and says so. Never needs a key or the network.
+ */
+export function offlineIntent(p: Pick<MotionProject, "brief">): MotionProject["intent"] {
+  const text = `${p.brief.text}
+${p.brief.script ?? ""}`;
+  const dur = Math.max(1, p.brief.deliverables[0]?.durationSec ?? 15);
+  const segs = parseTimedScript(text, dur);
+  const journey = parseEmotionArc(p.brief.text).map((j) => j.charAt(0).toUpperCase() + j.slice(1));
+  let arc: Beat[];
+  if (segs.length) arc = beatsFromScript(segs, journey, dur);
+  else {
+    // The emotional journey the brief names ("curiosity -> awe -> quiet mastery") gives the scenes; otherwise four even ones.
+    const names = journey.length >= 2 ? journey : DEFAULT_SCENES;
+    const n = names.length, len = dur / n;
+    arc = names.map((name, i) => {
+      const progress = n > 1 ? i / (n - 1) : 0.5;
+      const energy = Math.min(5, Math.max(1, Math.round(i === n - 1 && n > 2 ? 2 : 2 + progress * 3))) as Beat["energy"];
+      return { beatId: `b${i + 1}`, startSec: Math.round(i * len * 10) / 10, endSec: Math.round((i + 1) * len * 10) / 10, primary: name, intensity: Math.min(5, Math.max(1, Math.round(2 + progress * 3))) as Beat["intensity"], energy };
+    });
+  }
+  const tone = TONE_WORDS.filter(([re]) => re.test(text)).map(([, t]) => t).slice(0, 3);
+  const first = p.brief.text.trim().split(/(?<=[.!?])\s+/)[0] ?? "";
+  const purpose: Purpose = /\b(sell|launch|buy|offer|sale|product)/i.test(text) ? "sell" : /\b(teach|tutorial|how to|learn|lesson)/i.test(text) ? "teach"
+    : /\b(announce|introducing|unveil|reveal)/i.test(text) ? "announce" : /\b(celebrate|birthday|anniversary|thank)/i.test(text) ? "celebrate"
+    : /\b(remember|memorial|tribute|in memory)/i.test(text) ? "memorialize" : /\b(persuade|convince|campaign|cause)/i.test(text) ? "persuade"
+    : /\b(story|film|trailer|music|cosmic)/i.test(text) ? "entertain" : "inform";
+  return { purpose, tone, arc, summary: first.slice(0, 220), firedRules: [], source: "user" };
 }

@@ -8,6 +8,8 @@ describe("the next step on the golden path", () => {
     expect(nextStep(p)).toMatchObject({ stage: "brief", text: expect.stringMatching(/brief/) });
     p.brief.text = "A short piece.";
     expect(nextStep(p)).toMatchObject({ stage: "brief", text: expect.stringMatching(/Make it/) });
+    p.intent.arc = [{ beatId: "a", startSec: 0, endSec: 5, primary: "one", intensity: 2, energy: 2 }];
+    expect(nextStep(p)).toMatchObject({ stage: "intent", text: expect.stringMatching(/approve the intent/) });   // Make it has run: do not say Make it again
     p.intent.purpose = "inform"; p.intent.summary = "One idea."; p.intent.arc = [{ beatId: "a", startSec: 0, endSec: 5, primary: "one", intensity: 2, energy: 2 }];
     p = approve(p, "A");
     expect(nextStep(p)?.stage).toBe("direction");

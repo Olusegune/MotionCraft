@@ -88,13 +88,13 @@ describe("looks: one family for every dimension", () => {
 });
 
 describe("style presets on Direction and Brief", () => {
-  it("Direction offers all twelve families as cards, and clicking one uses it for every dimension, saved with the project", async () => {
+  it("Direction offers every family as a card, and clicking one uses it for every dimension, saved with the project", async () => {
     const user = userEvent.setup();
     const saved = fake(createProject("Looks demo"));
     render(<App />);
     await open(user, "Direction");
     const group = screen.getByRole("group", { name: "Style presets" });
-    expect(within(group).getAllByRole("button")).toHaveLength(12);
+    expect(within(group).getAllByRole("button")).toHaveLength(FAMILIES.length);
     const card = within(group).getByRole("button", { name: /Bauhaus/ });
     expect(card).toHaveAttribute("aria-pressed", "false");
     await user.click(card);

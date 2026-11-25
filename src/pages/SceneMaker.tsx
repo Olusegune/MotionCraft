@@ -7,14 +7,14 @@ import { capBlock, recordSpend } from "../lib/spend";
 import { getApi, type GenJob, type ModelEntry, type ModelList } from "../lib/api";
 import { rankForStills, rankProviders } from "../lib/models";
 import { useSettings } from "../lib/settings";
-import { familyLabel } from "../lib/styles";
+import { familyPrompt } from "../lib/styles";
 import { NO_LETTERING } from "./Proposals";
 import type { Beat, MotionProject } from "../types";
 
 /** The prompt for one scene's picture, from what the project already says about it: the look, the scene's own plan and the intent. Never asks for words. */
 export function scenePrompt(p: MotionProject, b: Beat): string {
   const fam = p.style.dimensions.composition?.familyId ?? p.style.dimensions.typography?.familyId;
-  const look = fam ? `${familyLabel(fam).toLowerCase()} look` : "restrained, precise look";
+  const look = fam ? familyPrompt(fam) : "restrained, precise look";
   const plan = (p.treatment[b.beatId]?.plan ?? "").replace(/\(\d+(\.\d+)? seconds\):/, ":").trim();
   const mood = (p.intent.summary || p.brief.text).trim().slice(0, 220);
   // The colours the brief asks for, in its own words: a picture of a "black cosmos" must not come back beige.

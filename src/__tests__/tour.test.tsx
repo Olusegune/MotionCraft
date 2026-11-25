@@ -40,3 +40,32 @@ describe("update banner", () => {
     expect(await screen.findByText(/signature mismatch/)).toBeInTheDocument();
   });
 });
+
+import { offlineIntent } from "../lib/makeIt";
+import { createProject } from "../lib/project";
+describe("Make it without an AI model", () => {
+  it("drafts four scenes and a tone from a plain brief", () => {
+    const p = createProject("x", { aspect: "16:9", width: 1920, height: 1080, fps: 30, durationSec: 20, alpha: false });
+    p.brief.text = "An elegant, calm launch film for a watch. Quiet confidence.";
+    const i = offlineIntent(p);
+    expect(i.arc).toHaveLength(4);
+    const j = createProject("j", p.brief.deliverables[0]); j.brief.text = "A film. Journey: curiosity → awe → quiet mastery."; expect(offlineIntent(j).arc.map((b) => b.primary)).toEqual(["Curiosity", "Awe", "Quiet mastery"]);
+    expect(i.arc[3].endSec).toBe(20);
+    expect(i.tone).toEqual(expect.arrayContaining(["elegant", "restrained"]));
+    expect(i.summary).toMatch(/elegant/);
+  });
+  it("uses the scenes of a timed script", () => {
+    const p = createProject("x", { aspect: "16:9", width: 1920, height: 1080, fps: 30, durationSec: 10, alpha: false });
+    p.brief.script = "0:00-0:05 Visual: a dark sky. Audio: quiet hum\n0:05-0:10 Visual: a bright sun. Audio: bass impact";
+    expect(offlineIntent(p).arc.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+import { readdirSync, readFileSync } from "node:fs";
+describe("source hygiene", () => {
+  it("has no stray backspace characters (a regex written through a shell can turn word-boundary escapes into them)", () => {
+    const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${d}/${e.name}`) : [`${d}/${e.name}`]));
+    const bad = walk("src").filter((f) => /\.(ts|tsx|css)$/.test(f) && readFileSync(f, "utf-8").includes(String.fromCharCode(8)));
+    expect(bad).toEqual([]);
+  });
+});
