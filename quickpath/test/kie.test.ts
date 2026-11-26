@@ -302,3 +302,35 @@ test("without a Kie key a script still opens, with no voices chosen", async () =
     assert.equal(r.json.scenes[0].say, "Hello there.");
   } finally { process.env.KIE_API_KEY = saved; set(new Mem()); }
 });
+
+test("several clips on one confirmation: the whole price is shown first, it works only for its project and only that many times, and each real cost is counted", { skip: skipVideo }, async () => {
+  const id = await newProject(), other = await newProject();
+  const dir = join(HOME, "projects", id, "assets");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "0123456789ab.png"), solidPng(64, 36, [120, 80, 40]));
+  for (const bad of [0, 25, -1, "x", 1.5 * 0]) assert.equal((await post("/api/ai/animate/batch/quote", { id, clips: bad })).status, 400, `clips ${bad}`);
+  const q = (await post("/api/ai/animate/batch/quote", { id, clips: 3 })).json;
+  assert.ok(Math.abs(q.estimateUsd - 1.2) < 0.0001, `3 clips at $0.40, got ${q.estimateUsd}`);
+  assert.match(q.what, /3 short video clips/);
+  const one = { id, picture: "0123456789ab.png", prompt: "a", token: q.token };
+  assert.equal((await post("/api/ai/animate", one)).status, 400, "a batch token is refused unless the page says it is a batch use");
+  assert.equal((await post("/api/ai/animate", { ...one, id: other, batch: true })).status, 400, "and it is refused for another project");
+  const before = await spent();
+  for (const p of ["first", "second", "third"]) {
+    const r = await post("/api/ai/animate", { ...one, prompt: p, batch: true });
+    assert.equal(r.status, 200, r.text);
+  }
+  assert.equal((await post("/api/ai/animate", { ...one, prompt: "fourth", batch: true })).status, 400, "a fourth use is refused");
+  assert.ok(Math.abs((await spent()) - before - 3 * 40 * 0.005) < 0.0001, "three real costs recorded");
+  const cost = (await call("GET", `/api/film/cost?id=${id}`)).json;
+  assert.ok(Math.abs(cost.filmUsd - 3 * 0.2) < 0.0001, `this film's cost is its own, got ${cost.filmUsd}`);
+  assert.equal((await call("GET", `/api/film/cost?id=${other}`)).json.filmUsd, 0);
+  // a batch that would pass the limit is refused up front, naming the limit
+  const capBefore = (await call("GET", "/api/settings")).json.capUsd as number;
+  assert.equal((await post("/api/settings/cap", { usd: (await spent()) + 1 })).status, 200);
+  const over = await post("/api/ai/animate/batch/quote", { id, clips: 3 });
+  assert.equal(over.status, 400);
+  assert.match(over.json.error, /spending limit/);
+  assert.equal((await post("/api/ai/animate/batch/quote", { id, clips: 2 })).status, 200, "two clips ($0.80) fit under a $1.00 margin");
+  await post("/api/settings/cap", { usd: capBefore });
+});

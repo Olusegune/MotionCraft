@@ -2,7 +2,7 @@
 // Nothing here needs a key or the network beyond 127.0.0.1.
 import { LOOKS, suggestLook, lookById } from "./looks.ts";
 
-export type Scene = { headline: string; sub: string; seconds: number; picture?: string; say?: string; card?: string; note?: string; voice?: string };
+export type Scene = { headline: string; sub: string; seconds: number; picture?: string; say?: string; card?: string; note?: string; voice?: string; more?: string[] };
 export type Ref = { name: string; label: string };
 export type Music = { mood?: string; file?: string; level?: "soft" | "medium" | "loud" };
 export type Plan = { title: string; look: string; scenes: Scene[]; source: "model" | "words"; voice?: string; music?: Music; refs?: Ref[] };

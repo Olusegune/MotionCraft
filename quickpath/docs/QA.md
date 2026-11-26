@@ -207,3 +207,7 @@ The sample script was imported, given your three reference sheets, voiced (narra
 | F4 | If the page stops, picture choices made since the last render are lost | open: needs autosave |
 | F5 | The page can look idle while a paid request is running (throttled hidden window) | open: show the busy state more clearly |
 | F6 | The clips are 5 s, scenes are 10-16 s | open: chain or loop clips |
+
+## Clips that fill a scene (2026-11-26)
+
+Tests added: a batch quote (price shown first, refused for another project or without the batch flag, works exactly N times, each real cost counted, film cost per project), a chained-clip render on the real engine (red, green, blue clips play in order and the last holds), autosave. Bug found by a test: the first version of the batch quote ignored the spending limit; fixed and covered. Not checked: the continuation clips themselves on real Kie (the limit was reached first), and whether continuation frames join smoothly by eye.

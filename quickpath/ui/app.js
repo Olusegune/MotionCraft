@@ -57,7 +57,7 @@ function shapeClass() { const sc = $("screen"), r = ratioOf(state.shape); sc.cla
 
 function drawScenes() {
   const ol = $("scenes"); ol.textContent = "";
-  if (state.plan && state.id) drawRefs();
+  if (state.plan && state.id) { drawRefs(); drawMotion(); }
   state.plan.scenes.forEach((s, i) => {
     const li = document.createElement("li"); li.className = "scene"; li.dataset.i = String(i);
     const top = document.createElement("div"); top.className = "top2";
@@ -100,7 +100,9 @@ function drawScenes() {
       note.addEventListener("input", () => { s.note = note.value; touch(); });
       li.append(note);
     }
-    li.append(mediaRow(s, i)); ol.appendChild(li);
+    li.append(mediaRow(s, i));
+    const rv = reviewRow(s, i); if (rv) li.append(rv);
+    ol.appendChild(li);
   });
   drawTimeline();
 }
@@ -152,7 +154,11 @@ function mediaRow(s, i) {
       an.addEventListener("click", () => askAnimate(s, i));
       row.append(thumb, rm, an); return row;
     }
-    row.append(thumb, rm); return row;
+    const more = document.createElement("button"); more.type = "button"; more.className = "btn quiet small"; more.textContent = "Continue this clip";
+    more.addEventListener("click", () => continueClip(s, i));
+    const need = missingClips(s);
+    if (need) { const fill = document.createElement("button"); fill.type = "button"; fill.className = "btn quiet small"; fill.textContent = `Fill the scene (${need} more, about $${(need * 0.4).toFixed(2)})`; fill.addEventListener("click", () => makeMissing(i)); row.append(thumb, rm, more, fill); return row; }
+    row.append(thumb, rm, more); return row;
   }
   const label = document.createElement("label"); label.className = "btn quiet small";
   label.textContent = "Add picture or clip";
@@ -191,6 +197,146 @@ async function addRef(blob, label) {
   if (!r.ok) throw new Error(j.error || "Could not add that picture.");
   state.plan.refs = [...(state.plan.refs || []), { name: j.name, label: label.slice(0, 40) || "Reference" }].slice(-24);
 }
+
+// ---- Motion: clips that fill a scene, frames to check, and what the film has cost.
+const CLIP_SECONDS = 5;
+const clipsOf = (s) => (s.picture && s.picture.endsWith(".mp4") ? [s.picture, ...(s.more || [])] : []);
+const missingClips = (s) => (s.picture ? Math.max(0, Math.ceil((s.seconds - 0.2) / CLIP_SECONDS) - clipsOf(s).length) : 0);
+const motionWords = (s) => ((s.note || s.headline || "").replace(/ Sound:.*$/, "").replace(/\s+/g, " ").trim().slice(0, 300) + " Slow, smooth camera movement. No people unless the picture already shows them.").trim();
+const CONTINUE_WORDS = "Continue the same shot without a cut: the camera keeps moving slowly the same way, same light, same place, no new people.";
+
+// One frame of a video as a PNG, taken in the page (no extra program needed). `at` is seconds, or "end" for the last frame.
+function frameOf(url, at, width = 0) {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.crossOrigin = "anonymous";
+    const fail = (m) => reject(new Error(m || "Could not read a frame from that clip."));
+    const timer = setTimeout(() => fail("Reading the clip took too long."), 20000);
+    v.addEventListener("error", () => { clearTimeout(timer); fail(); });
+    v.addEventListener("loadedmetadata", () => { v.currentTime = at === "end" ? Math.max(0, v.duration - 0.06) : Math.min(at, Math.max(0, v.duration - 0.06)); });
+    v.addEventListener("seeked", () => {
+      clearTimeout(timer);
+      const w = width || v.videoWidth, h = Math.round((v.videoHeight * w) / v.videoWidth);
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(v, 0, 0, w, h);
+      cv.toBlob((b) => (b ? resolve(b) : fail()), "image/png");
+    }, { once: true });
+    v.src = url;
+  });
+}
+async function uploadPng(blob) {
+  const r = await fetch(`/api/upload?id=${encodeURIComponent(state.id)}`, { method: "POST", headers: { "content-type": "image/png" }, body: blob });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Could not save that frame.");
+  return j.name;
+}
+
+async function refreshCost() {
+  const el = $("filmCost"); if (!el || !state.id) return;
+  try { const c = await (await fetch(`/api/film/cost?id=${encodeURIComponent(state.id)}`)).json(); el.textContent = `This film has cost $${c.filmUsd.toFixed(2)} so far. All your videos: $${c.spentUsd.toFixed(2)} of your $${c.capUsd.toFixed(2)} limit.`; } catch { el.textContent = ""; }
+}
+
+function drawMotion() {
+  let box = $("motion");
+  if (!box) { box = document.createElement("section"); box.id = "motion"; box.className = "refs"; $("scenes").before(box); }
+  box.textContent = "";
+  const h = document.createElement("h3"); h.textContent = "Motion"; box.append(h);
+  const cost = document.createElement("p"); cost.id = "filmCost"; cost.className = "note"; box.append(cost);
+  const rows = state.plan.scenes.map((s, i) => ({ s, i, need: missingClips(s) })).filter((r) => r.need > 0);
+  const total = rows.reduce((n, r) => n + r.need, 0);
+  const p = document.createElement("p"); p.className = "note";
+  p.textContent = total ? `Each AI clip is about ${CLIP_SECONDS} seconds. ${rows.length} scene${rows.length === 1 ? "" : "s"} could use ${total} more clip${total === 1 ? "" : "s"} to play all the way through: ${rows.map((r) => `scene ${r.i + 1} +${r.need}`).join(", ")}.` : "Every scene that has a picture or clip is covered by clips for its whole length.";
+  box.append(p);
+  if (total) {
+    const go = document.createElement("button"); go.type = "button"; go.className = "btn quiet small"; go.id = "makeMissing";
+    go.textContent = `Make the ${total} missing clip${total === 1 ? "" : "s"} (about $${(total * 0.4).toFixed(2)})`;
+    go.addEventListener("click", () => makeMissing());
+    box.append(go);
+  }
+  refreshCost();
+}
+
+// One confirmation for all the missing clips. Each clip starts from the scene's picture, or from the last frame of the clip before it, so the shot carries on.
+async function continueClip(s, i) {
+  say("");
+  const have = clipsOf(s); if (!have.length) return;
+  let picture;
+  try { setBusy(true, "Taking the last frame of the clip…"); picture = await uploadPng(await frameOf(`/media/${state.id}/assets/${have[have.length - 1]}`, "end")); setBusy(false); } catch (e) { setBusy(false); say(e.message, "error"); return; }
+  let quote;
+  try { quote = await api("/api/ai/animate/quote", { id: state.id, picture, prompt: CONTINUE_WORDS }); } catch (e) { say(e.message, "error"); return; }
+  const ok = await confirmSpend(quote, { title: "Continue this clip?", forWhat: `Scene ${i + 1}`, words: quote.prompt, editable: true, button: "Confirm and make the next clip" });
+  if (!ok) return;
+  try {
+    let token = quote.token, prompt = quote.prompt;
+    if (ok.edited && ok.edited !== prompt) { const q2 = await api("/api/ai/animate/quote", { id: state.id, picture, prompt: ok.edited }); token = q2.token; prompt = q2.prompt; }
+    setBusy(true, "Making the next clip. This usually takes one to three minutes…");
+    const out = await api("/api/ai/animate", { id: state.id, token, picture, prompt });
+    s.more = [...(s.more || []), out.name]; setBusy(false); drawScenes(); touch();
+    say(`Clip added (${out.seconds} s). Used so far: $${out.spentUsd.toFixed(2)}. Press Update video to see it.`, "ok");
+  } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); }
+}
+
+async function makeMissing(only) {
+  const rows = state.plan.scenes.map((s, i) => ({ s, i, need: missingClips(s) })).filter((r) => r.need > 0 && (typeof only !== "number" || r.i === only));
+  const total = rows.reduce((n, r) => n + r.need, 0);
+  if (!total) return;
+  say("");
+  let quote;
+  try { quote = await api("/api/ai/animate/batch/quote", { id: state.id, clips: total }); } catch (e) { say(e.message, "error"); return; }
+  const words = rows.map((r) => `Scene ${r.i + 1}: ${r.need} more clip${r.need === 1 ? "" : "s"} (${r.s.seconds} s long, ${clipsOf(r.s).length} clip${clipsOf(r.s).length === 1 ? "" : "s"} now)`).join("\n");
+  const ok = await confirmSpend(quote, { title: `Make ${total} clips?`, forWhat: `${rows.length} scene${rows.length === 1 ? "" : "s"}`, words, editable: false, label: "What will be made:", button: `Confirm and make ${total} clip${total === 1 ? "" : "s"}` });
+  if (!ok) return;
+  let done = 0;
+  try {
+    for (const r of rows) {
+      for (let k = 0; k < r.need; k++) {
+        const s = r.s;
+        setBusy(true, `Making clip ${done + 1} of ${total} (scene ${r.i + 1}). Each takes one to three minutes…`);
+        const have = clipsOf(s);
+        let picture, prompt;
+        if (have.length) { picture = await uploadPng(await frameOf(`/media/${state.id}/assets/${have[have.length - 1]}`, "end")); prompt = CONTINUE_WORDS; }
+        else { picture = s.picture; prompt = motionWords(s); }
+        const out = await api("/api/ai/animate", { id: state.id, token: quote.token, picture, prompt, batch: true });
+        if (have.length) s.more = [...(s.more || []), out.name]; else s.picture = out.name;
+        done++; touch();
+      }
+    }
+    setBusy(false); drawScenes();
+    say(`${done} clip${done === 1 ? "" : "s"} made. Check them under each scene, then press Update video.`, "ok");
+  } catch (e) {
+    setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; drawScenes();
+    say(`${e.message} ${done} of ${total} clips were made; you were only charged for those.`, "error");
+  }
+}
+
+// Frames from each clip of a scene, to look at before the video is made, and a way to drop a clip you do not like.
+function reviewRow(s, i) {
+  const clips = clipsOf(s);
+  if (!clips.length) return null;
+  const d = document.createElement("details"); d.className = "review";
+  const sum = document.createElement("summary"); sum.textContent = `Check the ${clips.length === 1 ? "clip" : clips.length + " clips"}`; d.append(sum);
+  let filled = false;
+  d.addEventListener("toggle", async () => {
+    if (!d.open || filled) return; filled = true;
+    for (const [k, name] of clips.entries()) {
+      const row = document.createElement("div"); row.className = "pic";
+      const lab = document.createElement("span"); lab.className = "note"; lab.textContent = `Clip ${k + 1}`; row.append(lab);
+      for (const at of [0, 1.7, 3.4, "end"]) {
+        const img = document.createElement("img"); img.alt = `Clip ${k + 1} frame`; img.style.height = "54px"; img.style.borderRadius = "5px";
+        try { img.src = URL.createObjectURL(await frameOf(`/media/${state.id}/assets/${name}`, at, 240)); } catch { img.alt = "frame unavailable"; }
+        row.append(img);
+      }
+      const drop = document.createElement("button"); drop.type = "button"; drop.className = "btn quiet small"; drop.textContent = "Discard this clip";
+      drop.addEventListener("click", () => {
+        const rest = clips.filter((c) => c !== name);
+        if (rest.length) { s.picture = rest[0]; if (rest.length > 1) s.more = rest.slice(1); else delete s.more; } else { delete s.picture; delete s.more; }
+        drawScenes(); touch();
+      });
+      row.append(drop); d.append(row);
+    }
+  });
+  return d;
+}
+
 function drawRefs() {
   let box = $("refs");
   if (!box) { box = document.createElement("section"); box.id = "refs"; box.className = "refs"; $("scenes").before(box); }
@@ -245,7 +391,7 @@ function confirmSpend(quote, opts) {
     $("spendModel").textContent = `${quote.model} via ${quote.provider}`;
     $("spendPrice").textContent = `About $${quote.estimateUsd.toFixed(quote.estimateUsd < 0.01 ? 4 : 2)} for ${quote.what}. ${quote.note}`;
     $("spendLimit").textContent = `Used so far: $${quote.spentUsd.toFixed(2)} of your $${quote.capUsd.toFixed(2)} limit.`;
-    $("spendPromptLabel").textContent = opts.editable ? "The words sent to the model. You can change them." : "The words that will be spoken.";
+    $("spendPromptLabel").textContent = opts.label ? opts.label : opts.editable ? "The words sent to the model. You can change them." : "The words that will be spoken.";
     $("spendPrompt").value = opts.words; $("spendPrompt").readOnly = !opts.editable;
     $("spendFoot").textContent = `Nothing is sent until you press Confirm. This pays for ${quote.what}.`;
     $("spendConfirm").textContent = opts.button;

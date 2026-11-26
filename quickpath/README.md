@@ -171,3 +171,10 @@ from https addresses, and only accepted if the bytes really are a picture.
 - **References.** The shelf above the scenes holds pictures for the whole video. Choose a sheet, say how many panels across and down and how much title or caption band to trim, and each panel becomes a PNG you can use on any scene.
 - **Clips never freeze.** Pictures and clips keep a slow push-in for the whole scene, so a 5 second clip in a longer scene still moves.
 - **Menu bar** in the desktop app: File (New video, Open a script, folder, Update, Save final, Settings), Edit, View, Window, Help (guides, About).
+
+## Motion that fills a scene (new)
+
+- Each AI clip is about 5 seconds, so a scene can hold several. A scene's `more` clips play one after the other, each starting where the one before ended; the last holds to the end of the scene.
+- **Motion panel** (studio, above the scenes): shows what the film has cost so far, how many more clips each scene needs to play all the way through, and one button to make them all. One confirmation shows the whole price first; it works only for this video, only for that many clips, stops if one fails, and every real cost is counted.
+- **Continue this clip** and **Fill the scene** on a scene: the next clip starts from the last frame of the one before (taken in the page, no extra program), so the shot carries on.
+- **Check the clips** under each scene: four frames from every clip, and a button to discard one.

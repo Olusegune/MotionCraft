@@ -138,7 +138,7 @@ const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSy
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}) }));
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}) }));
   if (scenes.some((s: { headline: string; card?: string; picture?: string; note?: string }) => !s.headline && !s.card && !s.picture && !s.note)) throw new Refused("Every scene needs some words (or a picture or clip).");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
@@ -430,6 +430,19 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         spend.record(String(b.id), usd, "music track", held.offer);
         return send(res, 200, { name, seconds: Math.round(info.seconds * 10) / 10, usd, spentUsd: spend.spent() });
       }
+      if (req.method === "POST" && url.pathname === "/api/ai/animate/batch/quote") {      // one price for several clips, confirmed once
+        const b = await readJson(req);
+        projectDir(String(b.id ?? ""));
+        const clips = Math.floor(Number(b.clips));
+        if (!(clips >= 1 && clips <= 24)) throw new Refused("Choose between 1 and 24 clips.");
+        if (!(await providerKey("kie"))) throw new Refused(NO_KIE);
+        return send(res, 200, spend.quote(String(b.id), `batch|${clips}`, "16:9", { provider: "Kie.ai", model: "Wan 2.2 Turbo (picture to video, 720p)", usd: 0.4, note: `${clips} clips at about $0.40 each (measured: 9 real clips cost $0.40 each). Each is started from a picture, or from the last frame of the clip before it. This one confirmation covers all ${clips}; it stops if a clip fails, and the real cost of each is read back and counted.`, what: `${clips} short video clips` }, clips));
+      }
+      if (req.method === "GET" && url.pathname === "/api/film/cost") {
+        const id = url.searchParams.get("id") ?? "";
+        projectDir(id);
+        return send(res, 200, { filmUsd: spend.spentFor(id), spentUsd: spend.spent(), capUsd: effectiveCap(HOME) });
+      }
       if (req.method === "POST" && url.pathname === "/api/ai/animate/quote") {
         const b = await readJson(req);
         const dir = projectDir(String(b.id ?? ""));
@@ -445,7 +458,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const picture = String(b.picture ?? "");
         if (!PICTURE_NAME.test(picture)) throw new Refused("That picture is not in this video.");
         const prompt = String(b.prompt ?? "");
-        const held = spend.redeem(String(b.token ?? ""), String(b.id), `${picture}|${prompt}`);
+        const held = spend.redeem(String(b.token ?? ""), String(b.id), `${picture}|${prompt}`, { batch: b.batch === true });
         const key = await providerKey("kie");
         if (!key) throw new Refused(NO_KIE);
         let src: Buffer;

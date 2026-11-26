@@ -11,6 +11,7 @@ export const PROVIDER = "Kie.ai";
 /** Kie.ai does not publish a price through its API, so this is an estimate, and the confirmation says so. */
 export const ESTIMATE_USD = 0.02;
 export const QUOTE_SECONDS = 300;
+export const BATCH_SECONDS = 60 * 60;
 export const NO_LETTERING = "A purely visual still image with no lettering, words, numbers, symbols, logos or watermarks anywhere in it.";
 // Imagen 4 Fast offers 1:1, 16:9, 9:16, 3:4 and 4:3. For 21:9 a 16:9 picture is made and the sides are trimmed to fill the frame; for 4:5, a 3:4 one.
 export const ASPECT: Record<Shape, string> = { "16:9": "16:9", "9:16": "9:16", "1:1": "1:1", "4:5": "3:4", "21:9": "16:9", "4:3": "4:3" };
@@ -20,7 +21,7 @@ export class SpendRefused extends Error {}
 export type Offer = { provider: string; model: string; usd: number; note: string; what: string };
 export type Quote = { token: string; provider: string; model: string; estimateUsd: number; note: string; prompt: string; what: string; spentUsd: number; capUsd: number };
 
-type Held = { project: string; prompt: string; shape: Shape; expires: number; offer: Offer };
+type Held = { project: string; prompt: string; shape: Shape; expires: number; offer: Offer; left?: number };
 
 const PICTURE_OFFER: Offer = { provider: PROVIDER, model: MODEL, usd: ESTIMATE_USD, note: "An estimate: Kie.ai does not publish an exact price.", what: "one picture" };
 
@@ -44,22 +45,39 @@ export class Spend {
   }
 
   /** Makes a quote the person must confirm. Refused when the cap would be passed. */
-  quote(project: string, prompt: string, shape: Shape, offer: Offer = PICTURE_OFFER): Quote {
+  quote(project: string, prompt: string, shape: Shape, offer: Offer = PICTURE_OFFER, batch = 0): Quote {
     const spentUsd = this.spent(), cap = this.capNow();
-    if (spentUsd + offer.usd > cap) throw new SpendRefused(`This would pass your spending limit of $${cap.toFixed(2)} (about $${spentUsd.toFixed(2)} used so far). You can change the limit in Settings.`);
+    if (spentUsd + offer.usd * Math.max(1, batch) > cap) throw new SpendRefused(`This would pass your spending limit of $${cap.toFixed(2)} (about $${spentUsd.toFixed(2)} used so far). You can change the limit in Settings.`);
     const token = randomBytes(16).toString("hex");
     for (const [k, v] of this.held) if (v.expires < this.now()) this.held.delete(k);
-    this.held.set(token, { project, prompt, shape, expires: this.now() + QUOTE_SECONDS * 1000, offer });
-    return { token, provider: offer.provider, model: offer.model, estimateUsd: offer.usd, note: offer.note, prompt, what: offer.what, spentUsd, capUsd: cap };
+    // a batch quote is one confirmation for a counted number of identical purchases (the whole price was shown): it is for one project, works that many times, and lasts long enough to make them
+    this.held.set(token, { project, prompt, shape, expires: this.now() + (batch ? BATCH_SECONDS : QUOTE_SECONDS) * 1000, offer, ...(batch ? { left: batch } : {}) });
+    return { token, provider: offer.provider, model: offer.model, estimateUsd: Math.round(offer.usd * Math.max(1, batch) * 10000) / 10000, note: offer.note, prompt, what: offer.what, spentUsd, capUsd: cap };
   }
 
-  /** Uses the quote up. It works once, for the project and prompt it was made for, before it expires. */
-  redeem(token: string, project: string, prompt: string): Held {
+  /** Uses the quote up. It works once, for the project and prompt it was made for, before it expires. A batch quote works that many times for the project, whatever each prompt. */
+  redeem(token: string, project: string, prompt: string, opts: { batch?: boolean } = {}): Held {
     const h = this.held.get(token);
+    if (!h || h.expires < this.now()) { this.held.delete(token); throw new SpendRefused("That confirmation has run out. Ask again."); }
+    if (h.left !== undefined) {
+      if (!opts.batch || h.project !== project) throw new SpendRefused("That confirmation was for something else.");
+      h.left -= 1;
+      if (h.left <= 0) this.held.delete(token);
+      return h;
+    }
     this.held.delete(token);
-    if (!h || h.expires < this.now()) throw new SpendRefused("That confirmation has run out. Ask again.");
     if (h.project !== project || h.prompt !== prompt) throw new SpendRefused("That confirmation was for something else.");
     return h;
+  }
+
+  /** What one project has cost so far, from the ledger. */
+  spentFor(project: string): number {
+    if (!existsSync(this.ledger)) return 0;
+    let n = 0;
+    for (const line of readFileSync(this.ledger, "utf-8").split("\n")) {
+      try { const j = JSON.parse(line); if (j.project === project) n += Number(j.usd) || 0; } catch { /* a half-written line counts for nothing */ }
+    }
+    return Math.round(n * 1000) / 1000;
   }
 
   record(project: string, usd: number, what: string, offer: Offer = PICTURE_OFFER): void {

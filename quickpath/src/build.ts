@@ -99,7 +99,7 @@ async function text(ec: EffectCraft, name: string, value: string, size: number, 
 
 /** A scene's own picture or clip, filling the frame (never stretched), under a dark veil so the words stay readable. A picture pushes in slowly;
  * a clip plays from the start of its scene, and is trimmed if it is longer than the scene or holds its last frame if shorter. */
-async function media(ec: EffectCraft, dir: string, name: string, scene: number, t0: number, t1: number, width: number, height: number, veilPct = 45): Promise<boolean> {
+async function media(ec: EffectCraft, dir: string, name: string, scene: number, t0: number, t1: number, width: number, height: number, veilPct = 45, veil = true, span: [number, number] = [0, 1], tEnd = t1): Promise<boolean> {
   if (!MEDIA_NAME.test(name)) return false;
   const file = join(dir, "assets", name);
   let bytes: Buffer;
@@ -119,16 +119,17 @@ async function media(ec: EffectCraft, dir: string, name: string, scene: number, 
     if (t0 > 0.001) await ec.run("layer.timing", { layers: [layer], delta: r4(t0) });                         // slide: in, out and the clip's own start move together
     if (natural < window - 0.05) await ec.run("layer.timing", { layers: [layer], out: r4(t1) });              // shorter than the scene: hold the last frame
     // never a frozen frame: the picture keeps a slow push-in for the whole scene (a short clip holds its last frame, but still moving), and starting 5% in hides any thin border on the source picture
-    await key(t0, cover * 1.05);
-    await key(Math.max(t1 - 0.04, t0 + 0.1), cover * 1.11);
+    await key(t0, cover * (1.05 + 0.06 * span[0]));
+    await key(Math.max(t1 - 0.04, t0 + 0.1), cover * (1.05 + 0.06 * span[1]));
   } else {
     await ec.run("layer.timing", { layers: [layer], in: t0, out: t1 });
     await key(t0, cover);
     await key(Math.max(t1 - 0.04, t0), cover * 1.07);
   }
-  const veil = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${scene} veil`, size: [width, height], fill: [0, 0, 0], position: [width / 2, height / 2] });
-  await ec.run("layer.setTransform", { layers: [veil.layer], prop: "opacity", value: veilPct });
-  await ec.run("layer.timing", { layers: [veil.layer], in: t0, out: t1 });
+  if (!veil) return true;                                                             // later clips of a scene share the first one's veil
+  const veilLayer = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${scene} veil`, size: [width, height], fill: [0, 0, 0], position: [width / 2, height / 2] });
+  await ec.run("layer.setTransform", { layers: [veilLayer.layer], prop: "opacity", value: veilPct });
+  await ec.run("layer.timing", { layers: [veilLayer.layer], in: t0, out: tEnd });
   return true;
 }
 
@@ -175,7 +176,22 @@ export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape
     const lay = layoutScene(s.headline || " ", s.sub, width, height);
     const bg = await ec.run<{ layer: number }>("layer.newSolid", { name: `Scene ${n} background`, color: i % 2 ? look.bg2 : look.bg });
     await ec.run("layer.timing", { layers: [bg.layer], in: t0, out: t1 });
-    const pictured = s.picture ? await media(ec, dir, s.picture, n, t0, t1, width, height, words || !!s.card ? 45 : 18) : false;
+    const veilPct = words || !!s.card ? 45 : 18;
+    let pictured = false;
+    if (s.picture) {                                                                  // the scene's picture or clip, then any further clips one after the other (each starts where the one before ends)
+      const names = [s.picture, ...(s.more ?? [])];
+      let a = t0;
+      for (const [k, name] of names.entries()) {
+        const last = k === names.length - 1 || a >= t1 - 0.05;
+        const natural = name.endsWith(".mp4") ? (() => { try { return mp4Info(readFileSync(join(dir, "assets", name)))?.seconds ?? 5; } catch { return 5; } })() : t1 - a;
+        const end = last ? t1 : Math.min(t1, a + natural);
+        if (end - a < 0.05) break;
+        const ok = await media(ec, dir, name, n, a, end, width, height, veilPct, k === 0, [(a - t0) / (t1 - t0), (end - t0) / (t1 - t0)], t1);
+        if (k === 0) pictured = ok;
+        a = end;
+        if (last) break;
+      }
+    }
     const ink: Rgb = pictured ? [1, 1, 1] : look.text;
     if (words) {
       const bar = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${n} accent`, size: [lay.barW, lay.barH], fill: look.accent, position: [width / 2, lay.barY] });

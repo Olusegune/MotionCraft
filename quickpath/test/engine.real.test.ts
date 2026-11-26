@@ -149,3 +149,23 @@ function PNG_PIXEL(buf: Buffer, x: number, y: number): { r: number; g: number; b
   const o = x * bpp;
   return { r: rows[y][o], g: rows[y][o + 1], b: rows[y][o + 2] };
 }
+
+test("chained clips: a scene plays its clips one after the other, each from its own start, and the last one holds", { skip: have && ffmpegOk ? false : "EffectCraft or ffmpeg missing: NOT CHECKED" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "qp-real-chain-"));
+  mkdirSync(join(dir, "assets"), { recursive: true });
+  const make = (name: string, color: string) => execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", `color=c=${color}:size=320x180:duration=2:rate=30`, "-pix_fmt", "yuv420p", join(dir, "assets", name)]);
+  make("aaaaaaaaaaaa.mp4", "0xC81E1E"); make("bbbbbbbbbbbb.mp4", "0x1EC81E"); make("cccccccccccc.mp4", "0x1E1EC8");     // red, green, blue: 2 s each
+  const ec = new EffectCraft(cli, [dir]);
+  try {
+    await ec.start();
+    const plan = planFromWords("One long scene made of three clips. Then a short one.", 8);
+    plan.scenes = [{ ...plan.scenes[0], seconds: 7, picture: "aaaaaaaaaaaa.mp4", more: ["bbbbbbbbbbbb.mp4", "cccccccccccc.mp4"] }, { ...plan.scenes[1], seconds: 2 }];
+    const built = await buildComposition(ec, plan, "16:9", dir);
+    const at = async (t: number) => PNG_PIXEL(await ec.still(built.comp, t, 320), 8, 8);
+    const red = await at(1.0), green = await at(3.0), blue = await at(5.0), held = await at(6.8);
+    assert.ok(red.r > red.g + 20 && red.r > red.b + 20, `red first, got ${JSON.stringify(red)}`);
+    assert.ok(green.g > green.r + 20 && green.g > green.b + 20, `green second, got ${JSON.stringify(green)}`);
+    assert.ok(blue.b > blue.r + 20 && blue.b > blue.g + 20, `blue third, got ${JSON.stringify(blue)}`);
+    assert.ok(held.b > held.r + 20 && held.b > held.g + 20, `the last clip holds to the end of the scene, got ${JSON.stringify(held)}`);
+  } finally { ec.stop(); }
+});
