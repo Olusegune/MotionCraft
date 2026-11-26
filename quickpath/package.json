@@ -43,7 +43,7 @@
       {
         "from": "docs",
         "to": "docs",
-        "filter": ["USER_GUIDE.md", "SETUP_KEYS.md", "ROADMAP.md", "QA.md"]
+        "filter": ["USER_GUIDE.md", "SETUP_KEYS.md", "ROADMAP.md", "QA.md", "SIGNING.md"]
       }
     ],
     "asar": true,
@@ -66,7 +66,13 @@
         "dmg"
       ],
       "icon": "build/icon.png",
-      "category": "public.app-category.video"
+      "category": "public.app-category.video",
+      "artifactName": "QuickPath_${version}_${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
     }
   }
 }

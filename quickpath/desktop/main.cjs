@@ -28,6 +28,7 @@ function open() {
   win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith(origin + "/")) e.preventDefault(); });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  if (process.env.QUICKPATH_SMOKE) win.webContents.once("did-finish-load", smoke);
   win.loadURL(origin);
   win.on("closed", () => { win = null; });
 }
@@ -55,9 +56,30 @@ async function openScript() {
   win.webContents.executeJavaScript(`(() => { const a = document.getElementById("again"); if (a && !a.disabled && document.getElementById("start").hidden) a.click(); const i = document.getElementById("idea"); if (i) { i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event("input", { bubbles: true })); i.focus(); } })()`).catch(() => {});
 }
 
+// A self-check for the build pipeline: with QUICKPATH_SMOKE=1 the app starts, loads its own page, checks what it can see and exits 0 (all good), 1 (something wrong) or 2 (no answer in time).
+// It is how CI proves the packaged app really starts on each system, without a person.
+async function smoke() {
+  const out = { platform: process.platform, arch: process.arch, version: app.getVersion(), packaged };
+  try {
+    const port = server.address().port;
+    const status = await (await fetch(`http://127.0.0.1:${port}/api/status`)).json();
+    out.shapes = Array.isArray(status.shapes) ? status.shapes.length : 0;
+    out.title = await win.webContents.executeJavaScript("document.title");
+    out.page = await win.webContents.executeJavaScript("!!document.getElementById('make') && !!document.getElementById('idea')");
+    out.menu = (Menu.getApplicationMenu()?.items ?? []).map((i) => String(i.label).replace(/&/g, ""));
+    out.docs = !packaged || ["USER_GUIDE.md", "SETUP_KEYS.md", "ROADMAP.md", "QA.md"].every((f) => fs.existsSync(docPath(f)));
+    out.ok = out.shapes === 6 && out.title === "QuickPath" && out.page === true && out.docs && ["File", "Edit", "View", "Window", "Help"].every((m) => out.menu.includes(m));
+  } catch (e) { out.ok = false; out.error = String(e && e.message || e).slice(0, 200); }
+  console.log("QUICKPATH_SMOKE " + JSON.stringify(out));
+  app.exit(out.ok ? 0 : 1);
+}
+if (process.env.QUICKPATH_SMOKE) setTimeout(() => { console.log("QUICKPATH_SMOKE timeout"); app.exit(2); }, 60000).unref();
+
 function buildMenu() {
   const dev = !packaged;
+  const mac = process.platform === "darwin";
   return Menu.buildFromTemplate([
+    ...(mac ? [{ role: "appMenu" }] : []),
     { label: "&File", submenu: [
       { label: "&New video", accelerator: "CmdOrCtrl+N", click: () => press("again") },
       { label: "Open a &script…", accelerator: "CmdOrCtrl+O", click: openScript },
@@ -67,18 +89,19 @@ function buildMenu() {
       { label: "Save &final video", accelerator: "CmdOrCtrl+S", click: () => press("final") },
       { type: "separator" },
       { label: "S&ettings and keys…", accelerator: "CmdOrCtrl+,", click: () => press("gear") },
-      { type: "separator" }, { role: "quit", label: "E&xit" } ] },
+      ...(mac ? [] : [{ type: "separator" }, { role: "quit", label: "E&xit" }]) ] },
     { label: "&Edit", submenu: [
       { role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" } ] },
     { label: "&View", submenu: [
       { role: "reload" }, { type: "separator" }, { role: "zoomIn" }, { role: "zoomOut" }, { role: "resetZoom" }, { type: "separator" }, { role: "togglefullscreen" },
       ...(dev ? [{ type: "separator" }, { role: "toggleDevTools" }] : []) ] },
-    { label: "&Window", submenu: [{ role: "minimize" }, { role: "close" }] },
+    { label: "&Window", submenu: [{ role: "minimize" }, { role: "close" }, ...(mac ? [{ type: "separator" }, { role: "front" }] : [])] },
     { label: "&Help", submenu: [
       { label: "&User guide", accelerator: "F1", click: () => openDoc("USER_GUIDE.md") },
       { label: "Setting up &keys", click: () => openDoc("SETUP_KEYS.md") },
       { label: "What is &planned", click: () => openDoc("ROADMAP.md") },
       { label: "How it was &tested", click: () => openDoc("QA.md") },
+      { label: "&Signing and first launch", click: () => openDoc("SIGNING.md") },
       { type: "separator" },
       { label: "&About QuickPath", click: () => dialog.showMessageBox(win, { type: "info", title: "About QuickPath", message: `QuickPath ${app.getVersion()}`, detail: "Type an idea or open a script, get a finished video.\nVideos are made on this computer with EffectCraft. Paid AI parts (pictures, voices, music, clips) only run after you confirm a price, and stop at your spending limit.\nYour keys stay in Windows Credential Manager." }) } ] },
   ]);

@@ -178,3 +178,7 @@ from https addresses, and only accepted if the bytes really are a picture.
 - **Motion panel** (studio, above the scenes): shows what the film has cost so far, how many more clips each scene needs to play all the way through, and one button to make them all. One confirmation shows the whole price first; it works only for this video, only for that many clips, stops if one fails, and every real cost is counted.
 - **Continue this clip** and **Fill the scene** on a scene: the next clip starts from the last frame of the one before (taken in the page, no extra program), so the shot carries on.
 - **Check the clips** under each scene: four frames from every clip, and a button to discard one.
+
+## Signing and Mac (status)
+
+Wired up and waiting for your identity: Mac hardened runtime and notarisation, Apple Silicon and Intel disk images, Windows signing from a certificate, and a smoke test in CI that starts the packaged app on Windows and macOS (it checks the page, the menu bar and the guides). What only you can do: join the Apple Developer Program, get a Windows certificate or Azure Artifact Signing, and add the secrets (see `docs/SIGNING.md`). Still unproven: the Mac app on a real Mac, and the Intel build is built but not started.

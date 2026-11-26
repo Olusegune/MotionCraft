@@ -30,8 +30,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, name: windows, command: "npm run dist" }
-          - { os: macos-latest, name: macos, command: "npm run bundle && npx electron-builder --mac dmg --publish never" }
+          - { os: windows-latest, name: windows, command: "npm run dist", app: "release/win-unpacked/QuickPath.exe" }
+          - { os: macos-latest, name: macos, command: "npm run bundle && npx electron-builder --mac dmg --arm64 --x64 --publish never", app: "release/mac-arm64/QuickPath.app/Contents/MacOS/QuickPath" }
     runs-on: ${{ matrix.os }}
     defaults: { run: { working-directory: quickpath } }
     steps:
@@ -39,9 +39,22 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm, cache-dependency-path: quickpath/package-lock.json }
       - run: npm ci
+      # Signing happens only when the secrets exist (see quickpath/docs/SIGNING.md); without them the build is unsigned, as before.
       - run: ${{ matrix.command }}
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"   # unsigned for now
+          CSC_LINK: ${{ matrix.name == 'windows' && secrets.WIN_CSC_LINK || secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ matrix.name == 'windows' && secrets.WIN_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ ((matrix.name == 'windows' && secrets.WIN_CSC_LINK == '') || (matrix.name == 'macos' && secrets.MAC_CSC_LINK == '')) && 'false' || 'true' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Prove the packaged app really starts on this system: it loads its own page, checks the menu, the guides and the server, and exits 0.
+      - name: Smoke test the packaged app
+        shell: bash
+        run: |
+          set -o pipefail
+          QUICKPATH_SMOKE=1 timeout 120 "${{ matrix.app }}" 2>&1 | tee smoke.log
+          grep -q '"ok":true' smoke.log
       - uses: actions/upload-artifact@v4
         with:
           name: QuickPath-${{ matrix.name }}
