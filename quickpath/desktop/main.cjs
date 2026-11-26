@@ -87,6 +87,7 @@ function buildMenu() {
       { type: "separator" },
       { label: "&Update video", accelerator: "CmdOrCtrl+Return", click: () => press("update") },
       { label: "Save &final video", accelerator: "CmdOrCtrl+S", click: () => press("final") },
+      { label: "Open in &EffectCraft", accelerator: "CmdOrCtrl+E", click: () => press("editor") },
       { type: "separator" },
       { label: "S&ettings and keys…", accelerator: "CmdOrCtrl+,", click: () => press("gear") },
       ...(mac ? [] : [{ type: "separator" }, { role: "quit", label: "E&xit" }]) ] },

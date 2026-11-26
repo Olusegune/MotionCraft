@@ -5,13 +5,13 @@
 // The names read and written are fixed here: nothing the page sends ever decides which entry is touched.
 import { spawn } from "node:child_process";
 
-export type Provider = "kie" | "openai" | "fal";
-export const PROVIDERS: Provider[] = ["kie", "openai", "fal"];
+export type Provider = "kie" | "openai" | "fal" | "elevenlabs" | "voicekiller";
+export const PROVIDERS: Provider[] = ["kie", "openai", "elevenlabs", "voicekiller", "fal"];
 export type KeySource = "env" | "saved" | "motioncraft" | null;
 
-const ENV: Record<Provider, string> = { kie: "KIE_API_KEY", openai: "OPENAI_API_KEY", fal: "FAL_KEY" };
+const ENV: Record<Provider, string> = { kie: "KIE_API_KEY", openai: "OPENAI_API_KEY", fal: "FAL_KEY", elevenlabs: "ELEVENLABS_API_KEY", voicekiller: "VOICEKILLER_API_KEY" };
 const SAVED = (p: Provider) => `QuickPath/${p}`;
-const MOTIONCRAFT: Record<Provider, string> = { kie: "kie-api-key.motioncraft", openai: "openai-api-key.motioncraft", fal: "fal-api-key.motioncraft" };
+const MOTIONCRAFT: Record<Provider, string> = { kie: "kie-api-key.motioncraft", openai: "openai-api-key.motioncraft", fal: "fal-api-key.motioncraft", elevenlabs: "elevenlabs-api-key.motioncraft", voicekiller: "voicekiller-api-key.motioncraft" };
 
 /** A place to keep secrets. Windows Credential Manager in the real app; a plain object in tests. */
 export interface Store {
@@ -57,7 +57,7 @@ ${op === "get" ? `[Console]::Out.Write([QpCred]::Get('${target}'))`
   : `if ([QpCred]::Remove('${target}')) { [Console]::Out.Write('ok') }`}
 `;
 
-const TARGET_OK = /^(?:QuickPath\/(?:kie|openai|fal)|(?:kie|openai|fal)-api-key\.motioncraft)$/;
+const TARGET_OK = /^(?:QuickPath\/(?:kie|openai|fal|elevenlabs|voicekiller)|(?:kie|openai|fal|elevenlabs|voicekiller)-api-key\.motioncraft)$/;
 
 function powershell(script: string, stdin?: string): Promise<string> {
   return new Promise((resolve) => {
@@ -87,20 +87,21 @@ export function setStore(s: Store | null) { store = s; cache.clear(); }
 export const canSaveKeys = () => store !== null;
 
 const cache = new Map<Provider, { key: string | null; source: KeySource }>();
-const plausible = (k: string) => /^[A-Za-z0-9_\-.]{16,200}$/.test(k);
+// A key is letters, digits and a few marks. Voicekiller's is two parts, a User ID and a key, written USERID:APIKEY.
+const plausibleFor = (p: Provider, k: string) => (p === "voicekiller" ? /^[A-Za-z0-9_\-.]{1,100}:[A-Za-z0-9_\-.]{8,200}$/ : /^[A-Za-z0-9_\-.]{16,200}$/).test(k);
 
 async function look(p: Provider): Promise<{ key: string | null; source: KeySource }> {
   const hit = cache.get(p);
   if (hit) return hit;
   let found: { key: string | null; source: KeySource } = { key: null, source: null };
   const env = (process.env[ENV[p]] ?? "").trim();
-  if (plausible(env)) found = { key: env, source: "env" };
+  if (plausibleFor(p, env)) found = { key: env, source: "env" };
   else if (store) {
     const saved = (await store.get(SAVED(p))).trim();
-    if (plausible(saved)) found = { key: saved, source: "saved" };
+    if (plausibleFor(p, saved)) found = { key: saved, source: "saved" };
     else if (process.platform === "win32" || store instanceof MemoryStore) {
       const other = (await store.get(MOTIONCRAFT[p])).trim();
-      if (plausible(other)) found = { key: other, source: "motioncraft" };
+      if (plausibleFor(p, other)) found = { key: other, source: "motioncraft" };
     }
   }
   cache.set(p, found);
@@ -117,7 +118,7 @@ export async function saveKey(p: Provider, raw: string): Promise<void> {
   if (!PROVIDERS.includes(p)) throw new Error("Unknown provider.");
   if (!store) throw new Error("Saving keys from here works on Windows. On this system, set the " + ENV[p] + " setting instead.");
   const key = raw.trim();
-  if (!plausible(key)) throw new Error("That does not look like a key. Copy the whole key from your account page and paste it again.");
+  if (!plausibleFor(p, key)) throw new Error(p === "voicekiller" ? "That does not look right. Write your Voicekiller User ID, a colon, then your key, with no spaces (USERID:APIKEY)." : "That does not look like a key. Copy the whole key from your account page and paste it again.");
   await store.set(SAVED(p), key);
   cache.delete(p);
 }

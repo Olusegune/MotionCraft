@@ -17,7 +17,7 @@ import { canSaveKeys, keyStatus, kieKey, PROVIDERS, providerKey, removeKey, save
 import { effectiveCap, saveCap } from "./settings.ts";
 import { MOODS } from "./music.ts";
 import { resolveSound, sceneVoice, SoundRefused, type Level } from "./sound.ts";
-import { KIE_VOICES, knownVoice, makeKieLines, makeOpenAILines, OPENAI_VOICES, spokenText, voiceMissing, windowsVoices } from "./voice.ts";
+import { ELEVEN_BASE, isPaidVoice, KIE_VOICES, knownVoice, makeElevenLines, makeKieLines, makeOpenAILines, makeVoicekillerLines, OPENAI_VOICES, parseVoicekillerVoices, spokenText, splitVoicekillerKey, voiceKind, voiceMissing, VOICEKILLER_BASE, windowsVoices } from "./voice.ts";
 import { dollars, download, KieError, runTask, uploadPicture, type KieOpts } from "./kie.ts";
 import { isNarrator, parseScript } from "./script.ts";
 import { EFFECTS, effectById } from "./fx.ts";
@@ -83,17 +83,67 @@ export async function removeProject(id: string): Promise<"recycled" | "deleted">
   return "deleted";
 }
 
+
+/** What the voice windows and errors say about each paid voice provider. */
+const VOICE_PROVIDER: Record<VoiceKind, { key: "kie" | "openai" | "elevenlabs" | "voicekiller"; name: string; model: string; missing: string; note: string }> = {
+  kie: { key: "kie", name: "Kie.ai", model: "ElevenLabs voices", get missing() { return NO_KIE; }, note: "Kie.ai charges about $0.03 for each line of speech (up to 1,000 characters), so every scene costs about that, however short. The real cost is read back from Kie afterwards." },
+  openai: { key: "openai", name: "OpenAI", model: "tts-1 voices", get missing() { return NO_OPENAI; }, note: "OpenAI charges $15 per million characters." },
+  eleven: { key: "elevenlabs", name: "ElevenLabs", model: "ElevenLabs voices", get missing() { return NO_ELEVEN; }, note: "Billed by ElevenLabs against your own plan (about $0.15 per 1,000 characters if you go past it). The price shown is an estimate; your ElevenLabs account shows the real use." },
+  vk: { key: "voicekiller", name: "Voicekiller", model: "Voicekiller voices", get missing() { return NO_VK; }, note: "Billed by Voicekiller through your own plan. QuickPath cannot see that price, so it adds nothing to its own spending total; each line uses some of your plan." },
+};
+/** A voice's name for a window: Kie and ElevenLabs ids are looked up in the known lists, Voicekiller's choice is its name, OpenAI's is the voice. */
+const voiceLabel = (v: string) => (v.startsWith("kie:") || v.startsWith("eleven:") ? (KIE_VOICES.find((x) => x.id === v.slice(v.indexOf(":") + 1))?.name ?? elevenNames.get(v.slice(7)) ?? "") : v.startsWith("vk:") ? v.slice(3) : v.startsWith("openai:") ? v.slice(7) : "");
+const elevenNames = new Map<string, string>();
+
 /** The paid voices a plan uses (a scene's own voice, else the video's), each with the distinct words it must speak. */
 function paidJobs(plan: Plan): { voice: string; texts: string[] }[] {
   const by = new Map<string, Set<string>>();
   for (const s of plan.scenes) {
     const v = sceneVoice(plan, s);
-    if (!v.startsWith("kie:") && !v.startsWith("openai:")) continue;
+    if (!isPaidVoice(v)) continue;
     (by.get(v) ?? by.set(v, new Set()).get(v)!).add(spokenText(s));
   }
   return [...by].map(([voice, set]) => ({ voice, texts: [...set] }));
 }
 const jobKey = (jobs: { voice: string; texts: string[] }[]) => jobs.map((j) => `${j.voice}:${j.texts.join("|")}`).join("||");
+
+
+// Voice lists for the pickers: asked for once and kept ten minutes. A failure gives the safe fallback (ElevenLabs' standard voices, no Voicekiller voices) rather than an error.
+const listCache = new Map<string, { at: number; value: unknown }>();
+async function cached<T>(name: string, make: () => Promise<T>): Promise<T> {
+  const hit = listCache.get(name);
+  if (hit && Date.now() - hit.at < 600_000) return hit.value as T;
+  const value = await make();
+  listCache.set(name, { at: Date.now(), value });
+  return value;
+}
+async function elevenVoiceList(): Promise<{ id: string; name: string }[]> {
+  const key = await providerKey("elevenlabs");
+  if (!key) return [];
+  return cached(`eleven:${key.slice(-6)}`, async () => {
+    try {
+      const r = await fetch(`${process.env.QUICKPATH_ELEVEN_BASE ?? ELEVEN_BASE}/v1/voices`, { headers: { "xi-api-key": key }, signal: AbortSignal.timeout(8_000) });
+      if (r.ok) {
+        const j = (await r.json()) as { voices?: { voice_id?: string; name?: string }[] };
+        const out = (j.voices ?? []).filter((v) => /^[A-Za-z0-9]{20}$/.test(String(v.voice_id)) && v.name).map((v) => ({ id: String(v.voice_id), name: String(v.name).slice(0, 40) })).slice(0, 100);
+        for (const v of out) elevenNames.set(v.id, v.name);
+        if (out.length) return out;
+      }
+    } catch { /* fall back */ }
+    return KIE_VOICES;       // ElevenLabs' standard voices: the same ids work in every account
+  });
+}
+async function vkVoiceList(): Promise<string[]> {
+  const key = await providerKey("voicekiller");
+  const k = key ? splitVoicekillerKey(key) : null;
+  if (!k) return [];
+  return cached(`vk:${k.userId}`, async () => {
+    try {
+      const r = await fetch(`${process.env.QUICKPATH_VOICEKILLER_BASE ?? VOICEKILLER_BASE}/api/generate-speech/voicelist`, { method: "POST", headers: { "api-key": k.apiKey, userid: k.userId }, signal: AbortSignal.timeout(8_000) });
+      return r.ok ? parseVoicekillerVoices(await r.json().catch(() => null)) : [];
+    } catch { return []; }
+  });
+}
 
 /** What Settings shows. Whether each key is set and where it comes from, never the key. */
 async function settingsView() {
@@ -107,6 +157,29 @@ async function settingsView() {
 async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> {
   const key = await providerKey(p);
   if (!key) return { ok: false, message: "No key is saved yet." };
+  if (p === "elevenlabs") {
+    try {
+      const r = await fetch(`${process.env.QUICKPATH_ELEVEN_BASE ?? ELEVEN_BASE}/v1/user`, { headers: { "xi-api-key": key }, signal: AbortSignal.timeout(15_000) });
+      if (r.status === 401) return { ok: false, message: "ElevenLabs did not accept this key. Copy it again from your ElevenLabs profile (Developers, API keys)." };
+      if (r.status === 403) return { ok: true, message: "ElevenLabs accepted the key, but this key may not be allowed to read your account (voices can still work). Try Make the voiceover to find out." };
+      if (!r.ok) return { ok: false, message: `ElevenLabs answered with an error (${r.status}). Try again in a moment.` };
+      const j = (await r.json().catch(() => ({}))) as { subscription?: { character_count?: number; character_limit?: number; tier?: string } };
+      const s = j.subscription;
+      const left = s && Number.isFinite(s.character_limit) && Number.isFinite(s.character_count) ? Math.max(0, (s.character_limit as number) - (s.character_count as number)) : null;
+      return { ok: true, message: left === null ? "The key works." : `The key works${s?.tier ? ` (${s.tier} plan)` : ""}. Characters left this period: ${left.toLocaleString("en-US")}.` };
+    } catch { return { ok: false, message: "Could not reach ElevenLabs. Check your internet connection." }; }
+  }
+  if (p === "voicekiller") {
+    const k = splitVoicekillerKey(key);
+    if (!k) return { ok: false, message: "The Voicekiller key must be written USERID:APIKEY (both are on your Voicekiller API page). Save it again." };
+    try {
+      const r = await fetch(`${process.env.QUICKPATH_VOICEKILLER_BASE ?? VOICEKILLER_BASE}/api/generate-speech/voicelist`, { method: "POST", headers: { "api-key": k.apiKey, userid: k.userId }, signal: AbortSignal.timeout(15_000) });
+      if (r.status === 401 || r.status === 403) return { ok: false, message: "Voicekiller did not accept the User ID and key. Copy them again from your Voicekiller API page." };
+      if (!r.ok) return { ok: false, message: `Voicekiller answered with an error (${r.status}). Try again in a moment.` };
+      const n = parseVoicekillerVoices(await r.json().catch(() => null)).length;
+      return { ok: true, message: n ? `The key works. ${n} voices available.` : "The key was accepted, but the voice list was not in a shape QuickPath understands." };
+    } catch { return { ok: false, message: "Could not reach Voicekiller. Check your internet connection." }; }
+  }
   if (p === "fal") {
     // fal has no balance question, so ask for a request that cannot exist: a wrong key is refused outright (401 or 403), a good key gets "not found" or similar.
     try {
@@ -133,6 +206,8 @@ async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> 
 /** Where Kie.ai is, and how patiently to wait. Tests point these at a fake; otherwise they are Kie's own. */
 const kieOpts = (): KieOpts => (process.env.QUICKPATH_KIE_BASE ? { base: process.env.QUICKPATH_KIE_BASE, allowLocalHttp: true, pollMs: 20 } : {});
 const NO_KIE = "No Kie.ai key was found. Add one in Settings (the sliders button at the top right), then try again.";
+const NO_ELEVEN = "No ElevenLabs key was found. Add one in Settings (the sliders button at the top right), then try again.";
+const NO_VK = "No Voicekiller key was found. Add it in Settings as USERID:APIKEY (the sliders button at the top right), then try again.";
 const NO_OPENAI = "No OpenAI key was found. Add one in Settings (the sliders button at the top right), then try again.";
 const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first."); return join(HOME, "projects", id); };
 
@@ -213,6 +288,15 @@ function serveFile(req: IncomingMessage, res: ServerResponse, file: string) {
   createReadStream(file).pipe(res);
 }
 
+/** The EffectCraft program that goes with the command-line tool found: on Windows the .exe beside it, on a Mac the app, else null. */
+function editorApp(): { cmd: string; args: (file: string) => string[] } | null {
+  const cli = cliPath();
+  if (!cli) return null;
+  if (process.platform === "darwin") { const app = cli.replace(/\/Contents\/.*$/, ""); return app.endsWith(".app") ? { cmd: "open", args: (f) => ["-a", app, f] } : null; }
+  const exe = join(resolve(cli, ".."), process.platform === "win32" ? "effectcraft.exe" : "effectcraft");
+  return existsSync(exe) ? { cmd: exe, args: (f) => [f] } : null;
+}
+
 function openFolder(path: string) {
   const [cmd, args] = process.platform === "win32" ? ["explorer.exe", ["/select,", path]] : process.platform === "darwin" ? ["open", ["-R", path]] : ["xdg-open", [resolve(path, "..")]];
   try { spawn(cmd as string, args as string[], { shell: false, detached: true, stdio: "ignore" }).unref(); } catch { /* the person can still find it from the path shown */ }
@@ -232,7 +316,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       const url = new URL(req.url ?? "/", `http://${host}`);
 
       if (req.method === "GET" && url.pathname === "/api/status") {
-        return send(res, 200, { shapes: SHAPE_LIST, recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], kieVoices: (await providerKey("kie")) ? KIE_VOICES : [], moods: MOODS, effects: EFFECTS.map((e) => ({ id: e.id, name: e.name })), looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
+        return send(res, 200, { shapes: SHAPE_LIST, recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], elevenVoices: await elevenVoiceList(), vkVoices: await vkVoiceList(), kieVoices: (await providerKey("kie")) ? KIE_VOICES : [], moods: MOODS, effects: EFFECTS.map((e) => ({ id: e.id, name: e.name })), looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
       }
       if (req.method === "GET" && url.pathname === "/api/projects") {
         return send(res, 200, { projects: listProjects() });
@@ -308,6 +392,16 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const dir = projectDir(String(b.id ?? ""));
         if (!saveLevel(dir, String(b.file ?? ""), b.db)) throw new Refused("That sound level could not be saved.");
         return send(res, 200, { saved: true });
+      }
+      if (req.method === "POST" && url.pathname === "/api/open-editor") {          // opens this video's project in EffectCraft itself: every scene is real layers there
+        const b = await readJson(req);
+        const dir = projectDir(String(b.id ?? ""));
+        const file = join(dir, "video.ecproj");
+        if (!existsSync(file)) throw new Refused("Press Update video first, so there is a project to open.");
+        const app = editorApp();
+        if (!app) throw new Refused("EffectCraft was not found. Open the folder instead and open video.ecproj with EffectCraft yourself.");
+        try { spawn(app.cmd, app.args(file), { shell: false, detached: true, stdio: "ignore" }).unref(); } catch { throw new Refused("EffectCraft would not start. Open video.ecproj from your QuickPath folder instead."); }
+        return send(res, 200, { opened: true, file });
       }
       if (req.method === "POST" && url.pathname === "/api/plan/save") {      // keeps edits safe between renders: the same checks as a render, nothing is made or paid for
         const b = await readJson(req);
@@ -390,13 +484,10 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         let usd = 0, lines = 0, chars = 0;
         for (const j of jobs) { const m = voiceMissing(dir, j.voice, j.texts); usd += m.usd; lines += m.lines; chars += m.chars; }
         if (chars === 0) return send(res, 200, { needed: false });
-        const kie = jobs.some((j) => j.voice.startsWith("kie:")), openai = jobs.some((j) => j.voice.startsWith("openai:"));
-        if (kie && !(await providerKey("kie"))) throw new Refused(NO_KIE);
-        if (openai && !(await providerKey("openai"))) throw new Refused(NO_OPENAI);
-        const names = [...new Set(jobs.map((j) => j.voice.startsWith("kie:") ? (KIE_VOICES.find((v) => v.id === j.voice.slice(4))?.name ?? "") : j.voice.slice(7)))].filter(Boolean).join(", ");
-        const offer = kie && !openai
-          ? { provider: "Kie.ai", model: `ElevenLabs voice${names.includes(",") ? "s" : ""} ${names}`.trim(), usd: Math.max(0.001, Math.round(usd * 10000) / 10000), note: "Kie.ai charges about $0.03 for each line of speech (up to 1,000 characters), so every scene costs about that, however short. The real cost is read back from Kie afterwards.", what: `${lines} line${lines === 1 ? "" : "s"} of speech` }
-          : { provider: kie ? "Kie.ai and OpenAI" : "OpenAI", model: `voice ${names}`.trim(), usd: Math.max(0.001, Math.round(usd * 10000) / 10000), note: kie ? "Kie.ai charges about $0.03 a line; OpenAI $15 per million characters." : "Priced by OpenAI at $15 per million characters.", what: `${chars} characters of speech` };
+        const kinds = [...new Set(jobs.map((j) => voiceKind(j.voice)!))];
+        for (const k of kinds) if (!(await providerKey(VOICE_PROVIDER[k].key))) throw new Refused(VOICE_PROVIDER[k].missing);
+        const names = [...new Set(jobs.map((j) => voiceLabel(j.voice)))].filter(Boolean).join(", ");
+        const offer = { provider: kinds.map((k) => VOICE_PROVIDER[k].name).join(" and "), model: `${kinds.length === 1 ? (names.includes(",") ? VOICE_PROVIDER[kinds[0]].model : VOICE_PROVIDER[kinds[0]].model.replace("voices", "voice")) : "voices"} ${names}`.trim(), usd: Math.max(0.001, Math.round(usd * 10000) / 10000), note: kinds.map((k) => VOICE_PROVIDER[k].note).join(" "), what: kinds.length === 1 && kinds[0] === "kie" ? `${lines} line${lines === 1 ? "" : "s"} of speech` : `${chars} characters of speech (${lines} line${lines === 1 ? "" : "s"})` };
         return send(res, 200, { needed: true, ...spend.quote(b.id, jobKey(jobs), "16:9", offer) });
       }
       if (req.method === "POST" && url.pathname === "/api/voice/make") {
@@ -406,16 +497,17 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const jobs = paidJobs(plan);
         if (!jobs.length) throw new Refused("Only paid voices need to be made first.");
         const held = spend.redeem(String(b.token ?? ""), String(b.id), jobKey(jobs));
-        const kieKey = jobs.some((j) => j.voice.startsWith("kie:")) ? await providerKey("kie") : null;
-        const openaiKey = jobs.some((j) => j.voice.startsWith("openai:")) ? await providerKey("openai") : null;
-        if (jobs.some((j) => j.voice.startsWith("kie:")) && !kieKey) throw new Refused(NO_KIE);
-        if (jobs.some((j) => j.voice.startsWith("openai:")) && !openaiKey) throw new Refused(NO_OPENAI);
+        const keys: Partial<Record<VoiceKind, string>> = {};
+        for (const j of jobs) { const k = voiceKind(j.voice)!; if (!keys[k]) { const v = await providerKey(VOICE_PROVIDER[k].key); if (!v) throw new Refused(VOICE_PROVIDER[k].missing); keys[k] = v; } }
         let made = 0, usd = 0;
         for (const j of jobs) {
-          if (j.voice.startsWith("kie:")) { const r = await makeKieLines(dir, j.voice, j.texts, kieKey!, kieOpts()); made += r.made; usd += r.usd; }
-          else { const n = await makeOpenAILines(dir, j.voice, j.texts, openaiKey!, { base: process.env.QUICKPATH_OPENAI_BASE }); made += n; }
+          const k = voiceKind(j.voice)!, estimate = voiceMissing(dir, j.voice, j.texts).usd;
+          if (k === "kie") { const r = await makeKieLines(dir, j.voice, j.texts, keys.kie!, kieOpts()); made += r.made; usd += r.usd; }
+          else if (k === "eleven") { const r = await makeElevenLines(dir, j.voice, j.texts, keys.eleven!, { base: process.env.QUICKPATH_ELEVEN_BASE }).catch((e) => { throw new Refused((e as Error).message); }); made += r.made; usd += r.usd; }
+          else if (k === "vk") { const r = await makeVoicekillerLines(dir, j.voice, j.texts, keys.vk!, { base: process.env.QUICKPATH_VOICEKILLER_BASE }).catch((e) => { throw new Refused((e as Error).message); }); made += r.made; }
+          else { made += await makeOpenAILines(dir, j.voice, j.texts, keys.openai!, { base: process.env.QUICKPATH_OPENAI_BASE }).catch((e) => { throw new Refused((e as Error).message); }); usd += estimate; }
         }
-        spend.record(String(b.id), kieKey && !openaiKey ? usd : held.offer.usd, `${made} spoken lines`, held.offer);
+        spend.record(String(b.id), Math.round(usd * 10000) / 10000, `${made} spoken lines`, held.offer);
         return send(res, 200, { made, spentUsd: spend.spent() });
       }
       if (req.method === "POST" && url.pathname === "/api/ai/music/quote") {

@@ -45,7 +45,7 @@ function shapePicker(host, current, onPick) {
 function say(text, kind = "") { const s = $("status"); s.textContent = text; s.className = "muted " + kind; }
 function setBusy(on, text = "") {
   state.busy = on;
-  for (const id of ["make", "update", "final", "again", "add"]) $(id).disabled = on;
+  for (const id of ["make", "update", "final", "editor", "again", "add"]) $(id).disabled = on;
   $("empty").hidden = !on; $("busy").textContent = text;
   if (on) { $("video").hidden = true; $("video").pause(); }
 }
@@ -508,7 +508,7 @@ async function askAnimate(s, i) {
 
 // A paid voice must be made, and confirmed, before the video is. Windows voices need nothing.
 async function ensureVoice() {
-  const paid = (v) => !!v && (v.startsWith("openai:") || v.startsWith("kie:"));
+  const paid = (v) => !!v && /^(?:openai|kie|eleven|vk):/.test(v);
   if (!paid(state.plan.voice) && !state.plan.scenes.some((x) => paid(x.voice))) return true;
   const q = await api("/api/voice/quote", { id: state.id, plan: state.plan });
   if (!q.needed) return true;
@@ -590,6 +590,8 @@ function fillSound(s) {
   opt(v, "", "No voiceover");
   for (const n of s.voices || []) opt(v, "win:" + n, `${n.replace(/^Microsoft /, "").replace(/ Desktop$/, "")} (Windows, free)`);
   for (const k of s.kieVoices || []) opt(v, "kie:" + k.id, `${k.name} (Kie, ElevenLabs, paid)`);
+  for (const k of s.elevenVoices || []) opt(v, "eleven:" + k.id, `${k.name} (ElevenLabs, your plan)`);
+  for (const n of s.vkVoices || []) opt(v, "vk:" + n, `${n} (Voicekiller, your plan)`);
   for (const n of s.openaiVoices || []) opt(v, "openai:" + n, `${n[0].toUpperCase() + n.slice(1)} (OpenAI, paid)`);
   v.addEventListener("change", () => { if (!state.plan) return; if (v.value) state.plan.voice = v.value; else delete state.plan.voice; drawScenes(); touch(); });
   const m = $("music"); m.textContent = "";
@@ -736,6 +738,8 @@ async function renderSettings() {
   };
   body.append(row("kie", "Pictures, voices, music and video (Kie.ai)", "One account for AI pictures (Imagen), voices (ElevenLabs), music (Suno) and video clips (Wan).", "Create a key in your Kie.ai account (kie.ai, API Key page), then paste it here.", "Pictures about $0.02, voices about $0.03 per 1,000 characters, a music track or a video clip a few cents to a few tens of cents. Always asked first."));
   body.append(row("openai", "Voices (OpenAI)", "More natural voiceovers. The free Windows voices need no key.", "Create a key in your OpenAI account (platform.openai.com, API keys), then paste it here.", "About $0.002 for a 15 second video, always asked first."));
+  body.append(row("elevenlabs", "Voices (ElevenLabs, your own account)", "Voiceovers straight from your ElevenLabs account and plan, including voices you made or cloned there.", "In ElevenLabs open your profile, Developers, API keys, create a key, and paste it here.", "Billed against your ElevenLabs plan (about $0.15 per 1,000 characters if you go past it), always asked first."));
+  body.append(row("voicekiller", "Voices (Voicekiller, your own account)", "Voiceovers from your Voicekiller account, with its voices and cloned voices.", "On your Voicekiller API page copy your User ID and your API key, then paste them here written as USERID:APIKEY (the User ID, a colon, the key, no spaces).", "Billed by Voicekiller through your plan; QuickPath cannot see the price."));
   body.append(row("fal", "fal (optional, not used yet)", "A second place to make AI pictures and videos. QuickPath does not use fal yet: saving a key now is safe, and a later version will.", "Create a key in your fal account (fal.ai, Keys page), then paste it here.", "Nothing is charged by saving it."));
 
   // The spending limit
@@ -763,6 +767,10 @@ function init() {
   $("update").addEventListener("click", () => render("draft"));
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && state.plan && !state.busy && $("studio").hidden === false) { e.preventDefault(); render("draft"); } });
   $("final").addEventListener("click", () => render("final"));
+  $("editor").addEventListener("click", async () => {
+    if (state.dirty && !confirm("You changed something since the last video. EffectCraft will open the last version you made. Open it anyway?")) return;
+    try { await api("/api/open-editor", { id: state.id }); say("Opening EffectCraft with your project. Every scene is real, editable layers there.", "ok"); } catch (e) { say(e.message, "error"); }
+  });
   $("add").addEventListener("click", () => { if (state.plan.scenes.length >= 12) return; state.plan.scenes.push({ headline: "New scene", sub: "", seconds: 3 }); drawScenes(); touch(); });
   $("gear").addEventListener("click", openSettings);
   $("aiLink").addEventListener("click", openSettings);

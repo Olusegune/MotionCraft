@@ -84,3 +84,17 @@ Saving keys from the Settings window works on **Windows** for now. On a Mac, set
 ## fal
 
 A fal key can be saved and checked in Settings (it is kept as `QuickPath/fal` or in `FAL_KEY`). Nothing uses it yet: Kie.ai already does pictures, voices, music and clips.
+
+## ElevenLabs and Voicekiller (your own accounts)
+
+Both are for voiceovers made with the plans you already pay for. Neither is needed for anything else.
+
+| Service | Where to get the key | What to paste in Settings |
+|---|---|---|
+| **ElevenLabs** | elevenlabs.io, your profile, Developers, API keys, create a key | the key |
+| **Voicekiller** | voicekiller.com, your API page: copy your **User ID** and your **API key** | `USERID:APIKEY`: the User ID, a colon, the key, no spaces |
+
+- Settings then offers your own ElevenLabs voices (including ones you made or cloned) and your Voicekiller voices in the Voice list. Pick one and press Update video: a window shows the words and the price first.
+- ElevenLabs bills characters against your plan; QuickPath shows an estimate (about $0.15 per 1,000 characters if you go past your plan) and counts it. Voicekiller bills through your plan and QuickPath cannot see the price, so it adds nothing to its own spending total.
+- Use Check it works on each. Environment names, if you prefer: `ELEVENLABS_API_KEY`, `VOICEKILLER_API_KEY` (written `USERID:APIKEY`).
+- Not yet run against the real services: these were built from their published documentation and tested against fakes. Press Check it works after saving a key, then try a short voiceover and tell me what you see.

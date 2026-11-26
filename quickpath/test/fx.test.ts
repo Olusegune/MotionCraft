@@ -145,5 +145,9 @@ test("the page can measure sound it is allowed to read, report a believable leve
     for (const bad of [{ file: "aaaaaaaaaaaa.mp3", db: 3 }, { file: "aaaaaaaaaaaa.mp3", db: "x" }, { file: "../../plan.json", db: -20 }, { file: "bbbbbbbbbbbb.mp3", db: -20 }]) assert.equal((await call("POST", "/api/audio/level", { id, ...bad })).status, 400, JSON.stringify(bad));
     assert.equal((await call("POST", "/api/audio/level", { id: "../../x", file: "aaaaaaaaaaaa.mp3", db: -20 })).status, 400);
     assert.ok(!existsSync(join(home, "plan.json")));
+    const noProject = await call("POST", "/api/open-editor", { id });
+    assert.equal(noProject.status, 400); assert.match(noProject.json.error, /Update video first/, "nothing to open before a video is made");
+    assert.equal((await call("POST", "/api/open-editor", { id: "../../x" })).status, 400);
+    assert.equal((await call("POST", "/api/open-editor", {})).status, 400);
   } finally { server.close(); }
 });
