@@ -336,7 +336,12 @@ function drawLooks() {
   }
 }
 
-function touch() { state.dirty = true; $("update").classList.add("primary"); say("You changed something. Press Update video to see it."); }
+let saveTimer = 0;
+function autosave() {                                           // edits are kept on disk a moment after the last change, so a closed or crashed page loses nothing
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { if (state.plan && state.id) api("/api/plan/save", { id: state.id, plan: state.plan, shape: state.shape }).catch(() => {}); }, 1200);
+}
+function touch() { autosave(); state.dirty = true; $("update").classList.add("primary"); say("You changed something. Press Update video to see it."); }
 
 async function render(quality) {
   const label = quality === "final" ? "Saving the full-size video…" : "Making your video…";

@@ -64,3 +64,32 @@ test("a scene's own voice wins over the video's, and only real voices count", ()
   assert.equal(checked.scenes[2].card!.length, 60);
   assert.equal(checked.scenes[2].note!.length, 900);
 });
+
+test("autosave keeps a plan on disk with the same checks as a render, and refuses a made-up folder", async () => {
+  const { mkdtempSync, readFileSync: rf, existsSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { request } = await import("node:http");
+  process.env.QUICKPATH_HOME = mkdtempSync(join(tmpdir(), "qp-save-"));
+  const { start } = await import("../src/server.ts?autosave");
+  const server = start(0); await new Promise((r) => server.once("listening", r));
+  const port = (server.address() as { port: number }).port;
+  const post = (path: string, body: unknown) => new Promise<{ status: number; json: any }>((resolve) => {
+    const data = JSON.stringify(body);
+    const req = request({ host: "127.0.0.1", port, method: "POST", path, headers: { host: `127.0.0.1:${port}`, "content-type": "application/json", "content-length": String(Buffer.byteLength(data)) } }, (res) => { let t = ""; res.on("data", (d) => (t += d)); res.on("end", () => resolve({ status: res.statusCode ?? 0, json: JSON.parse(t) })); });
+    req.write(data); req.end();
+  });
+  try {
+    const made = await post("/api/script", { script: "| **00:00–00:05** | **One.** A picture. | **VO:** “Hello there.” |" });
+    const id = made.json.id as string;
+    const plan = { ...made.json, scenes: [{ ...made.json.scenes[0], note: "changed direction" }] };
+    assert.equal((await post("/api/plan/save", { id, plan, shape: "21:9" })).status, 200);
+    const saved = JSON.parse(rf(join(process.env.QUICKPATH_HOME as string, "projects", id, "plan.json"), "utf-8"));
+    assert.equal(saved.shape, "21:9");
+    assert.equal(saved.plan.scenes[0].note, "changed direction");
+    assert.equal((await post("/api/plan/save", { id: "../../x", plan, shape: "21:9" })).status, 400, "a made-up folder is refused");
+    assert.equal((await post("/api/plan/save", { id: "0".repeat(12), plan, shape: "21:9" })).status, 400, "a folder that does not exist is refused");
+    assert.equal((await post("/api/plan/save", { id, plan: { scenes: [] } })).status, 400, "a bad plan is refused");
+    assert.ok(!existsSync(join(process.env.QUICKPATH_HOME as string, "projects", "x")));
+  } finally { server.close(); }
+});

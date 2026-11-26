@@ -294,6 +294,14 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const plan = checkPlan({ title: parsed.title, look: parsed.look, scenes, voice: narrator || undefined, source: "words" });
         return send(res, 200, { ...plan, id, scriptSeconds: parsed.scriptSeconds });
       }
+      if (req.method === "POST" && url.pathname === "/api/plan/save") {      // keeps edits safe between renders: the same checks as a render, nothing is made or paid for
+        const b = await readJson(req);
+        const dir = projectDir(String(b.id ?? ""));
+        const plan = checkPlan(b.plan);
+        const shape: Shape = SHAPES.includes(b.shape) ? b.shape : "16:9";
+        writeFileSync(join(dir, "plan.json"), JSON.stringify({ plan, shape }, null, 2));
+        return send(res, 200, { saved: true });
+      }
       if (req.method === "POST" && url.pathname === "/api/render") {
         const b = await readJson(req);
         const out = await serial(() => render(b.plan, b.shape, b.quality === "final" ? "final" : "draft", b.id));
