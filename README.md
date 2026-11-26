@@ -5,7 +5,8 @@ MotionCraft is the **director layer for motion design**. It turns a brief, scrip
 before anything expensive or final. Hand-editing happens in EffectCraft; MotionCraft owns intent, style, approvals,
 provenance, QA and review.
 
-> MotionCraft is an internal codename. Status: **pre-Phase 0** (docs only, no code yet).
+> MotionCraft is an internal codename. Status: **working app for Windows** (macOS builds are made by CI and have not been run on a Mac). New here? Read the
+> **[User guide and walkthrough](docs/USER_GUIDE.md)**: it takes one brief from an empty project to a finished 4K video, with screenshots.
 
 v1 wedge: typography-led, music-synced 2D/2.5D motion (kinetic type, titles and credits, logo animation, lyric
 videos, music-driven sequences, social motion, simple 2D explainers).
@@ -14,6 +15,7 @@ videos, music-driven sequences, social motion, simple 2D explainers).
 
 | Read | Why |
 | --- | --- |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **The walkthrough with screenshots**: install, first project, every stage, spending, troubleshooting |
 | [AGENTS.md](AGENTS.md) | Rules, commands and workflow for any coding agent (Claude Code reads it through `CLAUDE.md`) |
 | [docs/PRD.md](docs/PRD.md) | What v1 is, in full |
 | [docs/REPOS.md](docs/REPOS.md) | Every repository, pinned commit, and exactly which files to reuse |

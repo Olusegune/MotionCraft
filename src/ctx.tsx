@@ -14,7 +14,8 @@ export interface AppCtx {
    * Confirming records a revision and revokes the gate and every later approval. Nothing is deleted or reverted.
    */
   unlockGate: (gate: GateId, kind: RevisionRecord["kind"]) => void;
-  approveGate: (g: GateId) => void;
+  /** Approves a gate. By default the app then moves to the page the next step is on; pass false to stay (several gates at once). */
+  approveGate: (g: GateId, advance?: boolean) => void;
   go: (s: Stage) => void;
   refreshEngine: () => void;
   openEffectCraft: () => Promise<void>;

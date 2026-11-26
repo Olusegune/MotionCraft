@@ -1,0 +1,968 @@
+{
+  "approvals": [
+    {
+      "at": "2026-11-25T19:06:42.173Z",
+      "by": "user",
+      "gate": "A",
+      "state": "approved",
+      "target": "the interpretation"
+    },
+    {
+      "at": "2026-11-25T19:06:49.879Z",
+      "by": "user",
+      "gate": "B",
+      "state": "approved",
+      "target": "one style direction"
+    },
+    {
+      "at": "2026-11-25T19:06:54.287Z",
+      "by": "user",
+      "gate": "C",
+      "state": "approved",
+      "target": "the treatment and timing map"
+    },
+    {
+      "at": "2026-11-25T19:10:41.384Z",
+      "by": "user",
+      "gate": "D",
+      "state": "approved",
+      "target": "sign-off for the final render"
+    }
+  ],
+  "assets": [
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-600597eb",
+      "kind": "image",
+      "name": "01_Opening_One_Window",
+      "path": "assets/images/imp-e235f18d-01_Opening_One_Window.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.080Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-2a856018",
+      "kind": "image",
+      "name": "02_Type_I_Planetary",
+      "path": "assets/images/imp-3bb0c078-02_Type_I_Planetary.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.084Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-c031ffa4",
+      "kind": "image",
+      "name": "03_Type_II_Stellar",
+      "path": "assets/images/imp-fd257d2c-03_Type_II_Stellar.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.090Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-892802a7",
+      "kind": "image",
+      "name": "04_Type_III_Galactic",
+      "path": "assets/images/imp-e2a94496-04_Type_III_Galactic.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.094Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-925c2651",
+      "kind": "image",
+      "name": "05_Transition_Beyond_the_Original_Scale",
+      "path": "assets/images/imp-14c81d44-05_Transition_Beyond_the_Original_Scale.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.098Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-3d0ec873",
+      "kind": "image",
+      "name": "06_Type_IV_Universal",
+      "path": "assets/images/imp-336a65a5-06_Type_IV_Universal.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.101Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-83ba7b8d",
+      "kind": "image",
+      "name": "07_Type_V_Multiversal",
+      "path": "assets/images/imp-45fca6e9-07_Type_V_Multiversal.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.105Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-0c9b9262",
+      "kind": "image",
+      "name": "08_Type_VI_Spacetime_Engineering",
+      "path": "assets/images/imp-3d9c34d3-08_Type_VI_Spacetime_Engineering.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.109Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-cb8d1c4e",
+      "kind": "image",
+      "name": "09_Type_VII_Universe_Design",
+      "path": "assets/images/imp-e3cd9a81-09_Type_VII_Universe_Design.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.113Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "check": {
+        "lettering": null
+      },
+      "id": "imp-b06ca29e",
+      "kind": "image",
+      "name": "10_Closing_Two_Places_at_the_Table",
+      "path": "assets/images/imp-b83c0cc9-10_Closing_Two_Places_at_the_Table.png",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:06:13.117Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    },
+    {
+      "id": "imp-fdac3c3e",
+      "kind": "audio",
+      "name": "Civilization-score",
+      "path": "assets/audio/imp-ec15ca38-Civilization-score.wav",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:00.026Z",
+        "costReported": false,
+        "costUnit": null,
+        "costValue": null,
+        "licence": "Made or owned by the person who imported it.",
+        "model": "file",
+        "provider": "import"
+      },
+      "rights": "mine"
+    }
+  ],
+  "brief": {
+    "audio": [],
+    "brandDocs": [],
+    "deliverables": [
+      {
+        "alpha": false,
+        "aspect": "21:9",
+        "durationSec": 90,
+        "fps": 24,
+        "height": 1080,
+        "width": 2560
+      }
+    ],
+    "references": [],
+    "storyboards": [],
+    "text": "# Civilization I–VII | What Would We Become?\n\n**MotionCraft script · 90 seconds · 21:9 · Sparse narration**\n\nKeep the original journey from a city window to the birth of a universe. At every scale, show someone doing something ordinary: coming home from work, adjusting a coat, or waiting for a friend. The technology and the way people inhabit it tell us which civilization we’re in.\n\n**Visual thread:** A gold light passes from shot to shot. It starts as a kitchen lamp, becomes a worker’s helmet light, and ends as the first light in a universe. At the end, it brings us back to a window.\n\n| Time | Shot | What we see | Voiceover |\n|---|---|---|---|\n| **00:00–00:08** | **Opening · One window** | In a Lagos apartment at dusk, a teenager comes home, drops their bag, and turns on the kitchen light. Hold inside long enough to see someone set a second place at the table. Then pull outside. Across the city, windows come on as a cyan pulse travels along the grid. | “It starts with a light coming on.” |\n| **00:08–00:18** | **Type I · Planetary** | On the coast, a technician in rain gear finishes a shift beside offshore turbines. She checks the grid before biking home. A clean graphic follows power across the night side of Earth from solar farms already in morning light. Match her bike wheel to the curve of the planet. | “At Type One, a civilization harnesses energy on the scale of a planet.” |\n| **00:18–00:28** | **Type II · Stellar** | A maintenance worker climbs in from the outside of a solar collector. In low gravity, he hooks a boot under the canteen table before opening his lunch. The camera drifts past him to reveal thousands of independent collectors turning around the star. His gold helmet lamp clicks off as their surfaces catch the light. | “At Type Two, a star becomes the power source.” |\n| **00:28–00:38** | **Type III · Galactic** | In a busy station, a tailor fits a coat on a tall, long-limbed traveler from a low-gravity habitat. They both laugh when the traveler lifts an arm and the sleeve ends at the elbow. Through the shop window, arrivals step off a shuttle in a mix of body shapes and mobility gear. Pull past the terminal and into a spiral galaxy dotted with stellar power systems. | “At Type Three, one star is a stop on the way home.” |\n| **00:38–00:43** | **Transition · Beyond the original scale** | One point in the galaxy resolves into a reflection on a human eye. The camera turns to follow the person’s gaze into deeper space. Leave a beat of silence. | “Kardashev’s original scale ends there. Beyond it, we’re imagining.” |\n| **00:43–00:53** | **Type IV · Universal** | A parent and child play in a public bath. The parent’s lower legs have articulated fins adapted for their water habitat. Outside the glass, a heat exchanger begins to glow. Follow the supply line out through the habitat until the whole facility is a point on a cosmic web of galaxies. The child’s splash carries over the cut. | — |\n| **00:53–01:03** | **Type V · Multiversal** | At a café with doors opening onto different skies, two friends meet for breakfast. One arrives in person. The other arrives as a light-based body and instinctively reaches for the hot cup. Their fingers pass through it. The barista nudges a small sensor puck across the counter. The friend presses a palm onto it and smiles at the warmth. Beyond the café windows, separate universe volumes hang in the dark. | “What if people could live across more than one universe?” |\n| **01:03–01:13** | **Type VI · Spacetime engineering** | A paramedic with a familiar human face takes a child’s hand on a gurney. A hospital corridor is visible across an impossible distance. The geometry folds until both thresholds meet. The paramedic rolls the gurney through without letting go. Keep the two hands centered while the corridor bends around them. | — |\n| **01:13–01:23** | **Type VII · Universe design** | In a quiet workshop, a universe designer appears through a warm, human-shaped light body. They turn several possible beginnings in their hands. One disperses. Another collapses. In the third, matter gathers into stars. The designer keeps still as a tiny gold point holds. | “What would you put into a universe you could make?” |\n| **01:23–01:30** | **Closing · Two places at the table** | Match that gold point to the kitchen lamp from the opening. Back inside, the teenager slides the second plate toward someone just coming in. Hold on the two hands meeting at the edge of the plate. Cut to black on the scrape of a chair. | — |\n\n### How the humans could look\n\nThe early types can still look like us. From Type III onward, show a mix of familiar people, bodies adapted to particular habitats, and people who choose to appear through technology. A Type VI paramedic can look more recognizably human than a Type V café customer. That variety makes the world feel inhabited and keeps the civilization types tied to **what societies can harness**, rather than treating them as stages of human evolution.\n\nFor the **21:9 image pass**, give each frame a person and a readable action in the foreground, with the civilization’s scale revealed behind or beside them. The tailor tugging at a short sleeve, the café guest reaching for warmth, and the paramedic holding a child’s hand are the images to build around. Keep the type labels on editable MotionCraft layers and carry a small **SPECULATIVE** marker through Types IV–VII.\n\n## On-screen text and timing\n\n| Time | On-screen text |\n|---|---|\n| 00:00 | **CIVILIZATION I–VII** / *What Would We Become?* |\n| 00:08 | **TYPE I · PLANETARY** |\n| 00:18 | **TYPE II · STELLAR** |\n| 00:28 | **TYPE III · GALACTIC** |\n| 00:38 | **BEYOND THE ORIGINAL KARDASHEV SCALE** |\n| 00:43 | **TYPE IV · UNIVERSAL** |\n| 00:53 | **TYPE V · MULTIVERSAL** |\n| 01:03 | **TYPE VI · SPACETIME ENGINEERING** |\n| 01:13 | **TYPE VII · UNIVERSE DESIGN** |\n| 01:23 | The final dinner shot plays without text. |\n\nUse a small **SPECULATIVE** tag with Types IV–VII. Keep all titles and labels on editable MotionCraft layers so the images stay clean.\n"
+  },
+  "budget": {
+    "approvalThresholdUsd": 1,
+    "capUsd": 10
+  },
+  "controlModes": {
+    "audio-sync": "assisted",
+    "build": "assisted",
+    "intent": "assisted",
+    "qa-fixes": "assisted",
+    "sound": "assisted",
+    "style": "assisted",
+    "treatment": "assisted"
+  },
+  "createdAt": "2026-11-25T19:06:07.678Z",
+  "engine": {
+    "commit": "7e2d0256209974ffb92a29d8bdb6f2a49078f51f",
+    "kind": "effectcraft",
+    "projectPath": "comp.ecproj",
+    "version": "0.24.1"
+  },
+  "id": "a32b451d5552e18bfe86447579615008",
+  "intent": {
+    "arc": [
+      {
+        "beatId": "b1",
+        "endSec": 8,
+        "energy": 3,
+        "intensity": 3,
+        "primary": "calm",
+        "startSec": 0
+      },
+      {
+        "beatId": "b2",
+        "endSec": 18,
+        "energy": 4,
+        "intensity": 4,
+        "primary": "curiosity",
+        "startSec": 8
+      },
+      {
+        "beatId": "b3",
+        "endSec": 28,
+        "energy": 5,
+        "intensity": 5,
+        "primary": "wonder",
+        "startSec": 18
+      },
+      {
+        "beatId": "b4",
+        "endSec": 38,
+        "energy": 4,
+        "intensity": 4,
+        "primary": "wonder",
+        "startSec": 28
+      },
+      {
+        "beatId": "b5",
+        "endSec": 43,
+        "energy": 3,
+        "intensity": 3,
+        "primary": "contemplation",
+        "startSec": 38
+      },
+      {
+        "beatId": "b6",
+        "endSec": 53,
+        "energy": 5,
+        "intensity": 5,
+        "primary": "awe",
+        "startSec": 43
+      },
+      {
+        "beatId": "b7",
+        "endSec": 63,
+        "energy": 4,
+        "intensity": 4,
+        "primary": "connection",
+        "startSec": 53
+      },
+      {
+        "beatId": "b8",
+        "endSec": 73,
+        "energy": 3,
+        "intensity": 3,
+        "primary": "contemplation",
+        "startSec": 63
+      },
+      {
+        "beatId": "b9",
+        "endSec": 83,
+        "energy": 4,
+        "intensity": 4,
+        "primary": "wonder",
+        "startSec": 73
+      },
+      {
+        "beatId": "b10",
+        "endSec": 90,
+        "energy": 3,
+        "intensity": 3,
+        "primary": "peace",
+        "startSec": 83
+      }
+    ],
+    "firedRules": [
+      "urgent",
+      "elegant"
+    ],
+    "purpose": "inform",
+    "source": "user",
+    "summary": "Reflect on humanity's potential and our place in the cosmos by witnessing how ordinary actions shape extraordinary civilizations.",
+    "tone": [
+      "elegant",
+      "instructional",
+      "restrained"
+    ]
+  },
+  "layerMap": [
+    {
+      "compId": "1",
+      "engineLayerId": 666,
+      "lastKnownHash": "d8f471b546d7af02d326ff708896d2798325ee826631278971e51039f360795e",
+      "lock": "none",
+      "primitiveId": "entrance.fade-in",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 608,
+      "lastKnownHash": "4f2852f58707279769022ceea23c85fd88bf56660508c58f96b7a183ac291b8f",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 569,
+      "lastKnownHash": "f58296c10e92ac56aa982570005a0736a557cbd4d8441a73421ee2eed1c0be95",
+      "lock": "none",
+      "primitiveId": "entrance.fade-in",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 511,
+      "lastKnownHash": "3df527f856eb6e2ea1d4d0a7e7958c9f93643e124ab17cb3d46113e1c7a7bde4",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 472,
+      "lastKnownHash": "fedd5d42efec834944b09748655d576afda9046b29ed7d90a58020bfa62e7387",
+      "lock": "none",
+      "primitiveId": "entrance.fade-in",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 414,
+      "lastKnownHash": "ffe0d0d84b4e64295e55fbf023de8fc7bdd9ef3f46b2fcdc9c3a89b1f4b2696b",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 375,
+      "lastKnownHash": "c88819b2ced43cc3903b30b7218e309876bd12dbf3814cbbe4d97ba84d88be82",
+      "lock": "none",
+      "primitiveId": "entrance.fade-in",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 317,
+      "lastKnownHash": "c3f9f58b4718e87907ad5cddc3ed4463e24c1bb777858c703e8f9a07d145025e",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 259,
+      "lastKnownHash": "24450595e03643164c9c6f1b4723a8e17f06abbb3d3f05172b1761a4616aa95b",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 201,
+      "lastKnownHash": "5cfa36157c05ca8296df6c158f4e6a211f9f83d17ea15b4b22414944c994fb5d",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 143,
+      "lastKnownHash": "34034b2c775d2bf64ac5f4c040361a6c179d872372af1f893cda283966ef238d",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 85,
+      "lastKnownHash": "94bc8ec2b6aaf845360d2206a64078e4359c621ed1d84a60eba204f86248f237",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 27,
+      "lastKnownHash": "eb6c602d5104df78353ecb7a7860786b25efcb7e78fb230566ac277573e09427",
+      "lock": "none",
+      "primitiveId": "exit.fade-out",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "title"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 4,
+      "lastKnownHash": "886ef3de2e820f7f26e6c9a1e8d5bf1a102f8f4e78ca7c88d3932759f8310c63",
+      "lock": "none",
+      "provenance": {
+        "actor": "agent:builder",
+        "at": "2026-11-25T19:07:40.447Z",
+        "costReported": false
+      },
+      "role": "background"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 922,
+      "lastKnownHash": "2c87a3c025b527c87e485209bc842ff8fa5666f2d87611a57b3e3e65327dfed4",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 898,
+      "lastKnownHash": "37835503c5e95d63ac63faa81d8d8c6043ac9fd70f15a7e876e326673fcd3046",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 874,
+      "lastKnownHash": "1d038d1c9d9a289b96e11d59cf840a6d3e461730d87f3ac09d901379b3b5c2fc",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 850,
+      "lastKnownHash": "32c991989d266b76efa1f9596c158d54a790e958ddab5ac4c96bfc9a44bb32d8",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 826,
+      "lastKnownHash": "b8e47c0106fa15aeb1a7c42cb974f6637c00255dbd20f6870f59e4e883278047",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 802,
+      "lastKnownHash": "943dc1d5e2cdd2c0e1d1da7ca22e7692214133740c29a647da48a901049bd78c",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 778,
+      "lastKnownHash": "2794311c7106b42b74015b0c69380473b96216582473b61ca8d1c7ff2c4ab81e",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 754,
+      "lastKnownHash": "27e18eafdf0088faa0c346b4988d35f334b37a6c1dacb05bc9107519fb4b80e4",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 730,
+      "lastKnownHash": "3730ef7815f146385f262f48508e134eb6dc04ffbccaeef56b57cb7815710866",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 706,
+      "lastKnownHash": "0a9bcbe2b9c256d04daf6a606568e76fe53b794c09066d2a4efccb9bc9ba6a13",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.125Z",
+        "costReported": false
+      },
+      "role": "other"
+    },
+    {
+      "compId": "1",
+      "engineLayerId": 946,
+      "lastKnownHash": "9fe180bd765dcb98e3fa2c950653ca21a610eda7720aaa7c6881ddee0a29d0e7",
+      "lock": "none",
+      "provenance": {
+        "actor": "user",
+        "at": "2026-11-25T19:07:42.233Z",
+        "costReported": false
+      },
+      "role": "other"
+    }
+  ],
+  "name": "Civilization I-VII",
+  "renders": [],
+  "review": {
+    "accepted": [
+      {
+        "at": "2026-11-25T19:09:48.054Z",
+        "check": "safe-title",
+        "detail": "“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position).",
+        "key": "safe-title|“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position)."
+      },
+      {
+        "at": "2026-11-25T19:09:48.054Z",
+        "check": "safe-title",
+        "detail": "“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position).",
+        "key": "safe-title|“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position)."
+      },
+      {
+        "at": "2026-11-25T19:09:48.054Z",
+        "check": "safe-title",
+        "detail": "“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position).",
+        "key": "safe-title|“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position)."
+      },
+      {
+        "at": "2026-11-25T19:09:48.054Z",
+        "check": "safe-title",
+        "detail": "“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position).",
+        "key": "safe-title|“SPECULATIVE” reaches about 2 px outside the 90% safe area (estimated from its size and position)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-e235f18d-01_Opening_One_Window.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-e235f18d-01_Opening_One_Window.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-3bb0c078-02_Type_I_Planetary.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-3bb0c078-02_Type_I_Planetary.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-fd257d2c-03_Type_II_Stellar.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-fd257d2c-03_Type_II_Stellar.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-e2a94496-04_Type_III_Galactic.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-e2a94496-04_Type_III_Galactic.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-14c81d44-05_Transition_Beyond_the_Original_Scale.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-14c81d44-05_Transition_Beyond_the_Original_Scale.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-336a65a5-06_Type_IV_Universal.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-336a65a5-06_Type_IV_Universal.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-45fca6e9-07_Type_V_Multiversal.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-45fca6e9-07_Type_V_Multiversal.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-3d9c34d3-08_Type_VI_Spacetime_Engineering.png is 1913x822 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-3d9c34d3-08_Type_VI_Spacetime_Engineering.png is 1913x822 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-e3cd9a81-09_Type_VII_Universe_Design.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-e3cd9a81-09_Type_VII_Universe_Design.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      },
+      {
+        "at": "2026-11-25T19:10:33.183Z",
+        "check": "low-resolution",
+        "detail": "imp-b83c0cc9-10_Closing_Two_Places_at_the_Table.png is 1911x819 and is shown at 134% (about 2560 px wide).",
+        "key": "low-resolution|imp-b83c0cc9-10_Closing_Two_Places_at_the_Table.png is 1911x819 and is shown at 134% (about 2560 px wide)."
+      }
+    ],
+    "comments": [
+      {
+        "at": "2026-11-25T19:06:10.688Z",
+        "atSec": 0,
+        "id": "3813ae05",
+        "text": "Sound at 0:00: “It starts with a light coming on.”"
+      },
+      {
+        "at": "2026-11-25T19:10:36.493Z",
+        "atSec": 0,
+        "id": "5b9512de",
+        "text": "Opening: the kitchen light should read warm, and the second place at the table should be easy to see."
+      },
+      {
+        "at": "2026-11-25T19:06:10.688Z",
+        "atSec": 8,
+        "id": "d157e283",
+        "text": "Sound at 0:08: “At Type One, a civilization harnesses energy on the scale of a planet.”"
+      },
+      {
+        "at": "2026-11-25T19:06:10.688Z",
+        "atSec": 18,
+        "id": "411a4667",
+        "text": "Sound at 0:18: “At Type Two, a star becomes the power source.”"
+      },
+      {
+        "at": "2026-11-25T19:06:10.688Z",
+        "atSec": 28,
+        "id": "0e4302c0",
+        "text": "Sound at 0:28: “At Type Three, one star is a stop on the way home.”"
+      },
+      {
+        "at": "2026-11-25T19:06:10.688Z",
+        "atSec": 38,
+        "id": "8ab58198",
+        "text": "Sound at 0:38: “Kardashev’s original scale ends there. Beyond it, we’re imagining.”"
+      },
+      {
+        "at": "2026-11-25T19:06:10.688Z",
+        "atSec": 53,
+        "id": "2802f036",
+        "text": "Sound at 0:53: “What if people could live across more than one universe?”"
+      },
+      {
+        "at": "2026-11-25T19:06:10.688Z",
+        "atSec": 73,
+        "id": "4dca5c75",
+        "text": "Sound at 1:13: “What would you put into a universe you could make?”"
+      }
+    ]
+  },
+  "revisions": [
+    {
+      "actor": "agent:builder",
+      "at": "2026-11-25T19:07:40.448Z",
+      "before": "365c5f3e0f07",
+      "id": "083cbaf429c1bc3e91475fe35b2f8d23",
+      "kind": "agent_edit",
+      "layers": [
+        4,
+        27,
+        85,
+        143,
+        201,
+        259,
+        317,
+        375,
+        414,
+        472,
+        511,
+        569,
+        608,
+        666
+      ],
+      "snapshot": "24d6623bf0b6",
+      "summary": "Builder made 14 layers: Background, Title, Type I, Type II, Type III, Beyond Scale, Type IV, Type IV_tag, Type V, Type V_tag, Type VI, Type VI_tag, Type VII, Type VII_tag"
+    },
+    {
+      "actor": "user",
+      "at": "2026-11-25T19:10:39.049Z",
+      "id": "d21b59ab74803ce3ceb291b03476fc9f",
+      "kind": "manual_edit",
+      "layers": [],
+      "snapshot": "e11f7ef0c4a9",
+      "summary": "Before sign-off"
+    }
+  ],
+  "schemaVersion": "1.0",
+  "style": {
+    "conflicts": [],
+    "dimensions": {
+      "camera": {
+        "familyId": "cinematic-title",
+        "intensity": "moderate"
+      },
+      "color": {
+        "familyId": "cinematic-title",
+        "intensity": "moderate"
+      },
+      "composition": {
+        "familyId": "cinematic-title",
+        "intensity": "moderate"
+      },
+      "motion": {
+        "familyId": "cinematic-title",
+        "intensity": "moderate"
+      },
+      "texture": {
+        "familyId": "cinematic-title",
+        "intensity": "moderate"
+      },
+      "transitions": {
+        "familyId": "cinematic-title",
+        "intensity": "moderate"
+      },
+      "typography": {
+        "familyId": "swiss",
+        "intensity": "moderate"
+      }
+    },
+    "moodboard": [
+      "imp-600597eb",
+      "imp-c031ffa4",
+      "imp-0c9b9262"
+    ]
+  },
+  "treatment": {
+    "b1": {
+      "frameAssetId": "imp-600597eb",
+      "motion": "a steady pace, building to intensity 3 of 5",
+      "plan": "Opening · One window. In a Lagos apartment at dusk, a teenager comes home, drops their bag, and turns on the kitchen light. Hold inside long enough to see someone set a second place at the table. Then pull outside. Across the city, windows come on as a cyan pulse travels along the grid. On screen: CIVILIZATION I–VII / What Would We Become?"
+    },
+    "b10": {
+      "frameAssetId": "imp-b06ca29e",
+      "motion": "a steady pace, building to intensity 3 of 5",
+      "plan": "Closing · Two places at the table. Match that gold point to the kitchen lamp from the opening. Back inside, the teenager slides the second plate toward someone just coming in. Hold on the two hands meeting at the edge of the plate. Cut to black on the scrape of a chair."
+    },
+    "b2": {
+      "frameAssetId": "imp-2a856018",
+      "motion": "a lively pace, building to intensity 4 of 5",
+      "plan": "Type I · Planetary. On the coast, a technician in rain gear finishes a shift beside offshore turbines. She checks the grid before biking home. A clean graphic follows power across the night side of Earth from solar farms already in morning light. Match her bike wheel to the curve of the planet. On screen: TYPE I · PLANETARY"
+    },
+    "b3": {
+      "frameAssetId": "imp-c031ffa4",
+      "motion": "a fast, driving pace, building to intensity 5 of 5",
+      "plan": "Type II · Stellar. A maintenance worker climbs in from the outside of a solar collector. In low gravity, he hooks a boot under the canteen table before opening his lunch. The camera drifts past him to reveal thousands of independent collectors turning around the star. His gold helmet lamp clicks off as their surfaces catch the light. On screen: TYPE II · STELLAR"
+    },
+    "b4": {
+      "frameAssetId": "imp-892802a7",
+      "motion": "a lively pace, building to intensity 4 of 5",
+      "plan": "Type III · Galactic. In a busy station, a tailor fits a coat on a tall, long-limbed traveler from a low-gravity habitat. They both laugh when the traveler lifts an arm and the sleeve ends at the elbow. Through the shop window, arrivals step off a shuttle in a mix of body shapes and mobility gear. Pull past the terminal and into a spiral galaxy dotted with stellar power systems. On screen: TYPE III · GALACTIC"
+    },
+    "b5": {
+      "frameAssetId": "imp-925c2651",
+      "motion": "a steady pace, building to intensity 3 of 5",
+      "plan": "Transition · Beyond the original scale. One point in the galaxy resolves into a reflection on a human eye. The camera turns to follow the person’s gaze into deeper space. Leave a beat of silence. On screen: BEYOND THE ORIGINAL KARDASHEV SCALE"
+    },
+    "b6": {
+      "frameAssetId": "imp-3d0ec873",
+      "motion": "a fast, driving pace, building to intensity 5 of 5",
+      "plan": "Type IV · Universal. A parent and child play in a public bath. The parent’s lower legs have articulated fins adapted for their water habitat. Outside the glass, a heat exchanger begins to glow. Follow the supply line out through the habitat until the whole facility is a point on a cosmic web of galaxies. The child’s splash carries over the cut. On screen: TYPE IV · UNIVERSAL"
+    },
+    "b7": {
+      "frameAssetId": "imp-83ba7b8d",
+      "motion": "a lively pace, building to intensity 4 of 5",
+      "plan": "Type V · Multiversal. At a café with doors opening onto different skies, two friends meet for breakfast. One arrives in person. The other arrives as a light-based body and instinctively reaches for the hot cup. Their fingers pass through it. The barista nudges a small sensor puck across the counter. The friend presses a palm onto it and smiles at the warmth. Beyond the café windows, separate universe volumes hang in the dark. On screen: TYPE V · MULTIVERSAL"
+    },
+    "b8": {
+      "frameAssetId": "imp-0c9b9262",
+      "motion": "a steady pace, building to intensity 3 of 5",
+      "plan": "Type VI · Spacetime engineering. A paramedic with a familiar human face takes a child’s hand on a gurney. A hospital corridor is visible across an impossible distance. The geometry folds until both thresholds meet. The paramedic rolls the gurney through without letting go. Keep the two hands centered while the corridor bends around them. On screen: TYPE VI · SPACETIME ENGINEERING"
+    },
+    "b9": {
+      "frameAssetId": "imp-cb8d1c4e",
+      "motion": "a lively pace, building to intensity 4 of 5",
+      "plan": "Type VII · Universe design. In a quiet workshop, a universe designer appears through a warm, human-shaped light body. They turn several possible beginnings in their hands. One disperses. Another collapses. In the third, matter gathers into stars. The designer keeps still as a tiny gold point holds. On screen: TYPE VII · UNIVERSE DESIGN"
+    }
+  },
+  "updatedAt": "2026-11-25T19:12:28.569Z"
+}

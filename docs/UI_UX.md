@@ -34,7 +34,7 @@ artwork always visually dominant. It follows FilmCrafter's product language, not
 - A control that cannot act is greyed with the reason beside it, never hidden.
 - Approval and execution are separate clicks and look different.
 - Status is never colour alone: icon + text always.
-- No timeline, layer-property panel, graph editor or keyframe editor. Detailed editing opens EffectCraft.
+- No timeline *editor*, layer-property panel, graph editor or keyframe editor. Detailed editing opens EffectCraft. The one timeline there is, the director's timeline on Build (ADR-0007), shows the whole piece and moves the playhead; it never edits keyframes or properties.
 - Every stage works in Manual with no AI provider configured.
 
 ## 3. Vocabulary
@@ -399,7 +399,7 @@ The first brief's ten criteria stand; 11–20 are new.
 14. Offline mode disables cloud providers with a reason and the workflow still completes (AT-17).
 15. No paid operation runs without the spend confirmation sheet showing its price.
 16. Controls on a locked layer are disabled with a reason; drift shows **Changed in EffectCraft**.
-17. The UI has no timeline, property panel, graph editor or keyframe editor.
+17. The UI has no timeline editor, property panel, graph editor or keyframe editor. The director's timeline (ADR-0007) is allowed: read-only in T1, and it never writes keyframes or properties.
 18. Seals and annotations never appear in an export (test: export frames are identical with and without them).
 19. Fonts load with the network off; every Lucide import resolves at build; axe reports no contrast failures on the built tokens.
 20. The app is usable at 1100 × 660 and at 100–250% UI scale.

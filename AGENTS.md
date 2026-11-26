@@ -1,8 +1,8 @@
 # MotionCraft: notes for coding agents
 
 MotionCraft = Tauri 2 shell (`src-tauri/`) + React/TS UI (`src/`) + Python engine (`engine/motioncraft_engine/`)
-+ EffectCraft driven through `effectcraft-cli mcp`. The repository is at **pre-Phase 0**: there is no code yet.
-Your first work is [docs/PHASE0_SPIKE.md](docs/PHASE0_SPIKE.md), then [docs/BACKLOG.md](docs/BACKLOG.md) in order.
++ EffectCraft driven through `effectcraft-cli mcp`. The app works on Windows (see [docs/HANDOVER.md](docs/HANDOVER.md) for the current state, commands and open list, and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the walkthrough).
+The phase 0 and backlog documents below are the history and the contracts; pick up open work from the handover.
 
 ## Read before writing code
 

@@ -3,7 +3,9 @@ import { Sparkles, X } from "lucide-react";
 import { useApp } from "../ctx";
 import { Sheet } from "../shell/Sheet";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
+import { capBlock, recordSpend } from "../lib/spend";
 import { getApi, type GenJob, type ModelEntry, type ModelList, type ProviderId } from "../lib/api";
+import { rankModels, rankProviders, stillAspect } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { Frame } from "../shell/Media";
 
@@ -31,14 +33,14 @@ export function GeneratePanel() {
   }, [enginePath]);
   useEffect(() => { void load(); }, [load, generative]);
 
-  const providers = useMemo(() => [...new Set(models.filter((m) => m.media === kind).map((m) => m.provider))] as ProviderId[], [models, kind]);
-  const choices = useMemo(() => models.filter((m) => m.media === kind && m.provider === provider), [models, kind, provider]);
+  const providers = useMemo(() => rankProviders(models.filter((m) => m.media === kind), keys), [models, kind, keys]);
+  const choices = useMemo(() => rankModels(models.filter((m) => m.media === kind && m.provider === provider)), [models, kind, provider]);
   useEffect(() => { if (!providers.includes(provider as ProviderId)) setProvider(providers[0] ?? ""); }, [providers, provider]);
   useEffect(() => { if (!choices.some((m) => m.model === model)) setModel(choices[0]?.model ?? ""); }, [choices, model]);
   const picked = choices.find((m) => m.model === model);
 
   const reason = !generative ? "Generative models are off. Turn them on in Settings." : offline ? "Offline mode is on." : !provider ? "No model available."
-    : !keys[provider] ? `Add your ${PROVIDER_LABEL[provider]} key in Settings.` : !prompt.trim() ? "Describe what to make." : job && (job.state === "running" || job.state === "queued") ? "A generation is running." : undefined;
+    : !keys[provider] ? `Add your ${PROVIDER_LABEL[provider]} key in Settings.` : !prompt.trim() ? "Describe what to make." : capBlock(project, picked?.price.known ? picked.price.value : null) ? capBlock(project, picked?.price.known ? picked.price.value : null) : job && (job.state === "running" || job.state === "queued") ? "A generation is running." : undefined;
 
   // Poll the running job; when it finishes, record the asset with its provenance.
   useEffect(() => {
@@ -62,7 +64,8 @@ export function GeneratePanel() {
     try {
       const api = await getApi();
       const token = await api.confirmSpend(provider, picked.model);     // only reachable from the confirm click below
-      setJob(await api.engine<GenJob>("generate_start", { provider, model: picked.model, prompt: prompt.trim(), params: {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
+      setJob(await api.engine<GenJob>("generate_start", { provider, model: picked.model, prompt: prompt.trim(), params: kind === "image" ? { aspect_ratio: stillAspect(project.brief.deliverables[0].aspect) } : {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath));
+      update((p) => recordSpend(p, { provider, model: picked.model, what: kind, usd: picked.price.known ? picked.price.value : null }));
       setConfirming(false);
     } catch (e) { setConfirming(false); setErr(String(e instanceof Error ? e.message : e)); }
   };

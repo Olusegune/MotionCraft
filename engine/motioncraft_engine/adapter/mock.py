@@ -21,10 +21,11 @@ from .models import (CompInfo, CompSettings, DocSnapshot, ExportResult, FinalRen
 
 ACCEPT: dict[str, set[str]] = {
     "file.newProject": set(), "file.open": {"path"}, "file.save": {"path"}, "file.saveCopy": {"path"}, "file.close": set(),
+    "file.exportAep": {"path", "allowLosses", "dryRun"}, "file.exportTimeline": {"comp", "path", "format", "prerender", "precomps"},
     "file.checkOutput": {"path"}, "file.exportLottie": {"comp", "path", "includeExpressions", "textAsShapes"},
     "comp.new": {"name", "width", "height", "frameRate", "duration"}, "comp.open": {"comp"}, "comp.info": {"comp"},
     "comp.addMarker": {"time", "comment"}, "comp.deleteAllMarkers": {"comp"},
-    "layer.newText": {"text", "name", "size", "position", "font", "direction"}, "layer.newShape": {"kind", "name", "size", "fill"},
+    "layer.newText": {"text", "name", "size", "position", "font", "direction"}, "layer.newShape": {"kind", "name", "size", "fill", "fillType", "fillBlend", "fillOpacity", "stroke", "strokeType", "strokeBlend", "strokeOpacity", "strokeWidth", "position"},
     "layer.newSolid": {"name", "color", "size"}, "layer.newNull": {"name"}, "layer.newCamera": {"name"},
     "layer.tree": {"layer", "comp", "depth", "time"}, "prop.get": {"layer", "path", "comp", "time"},
     "prop.set": {"layer", "path", "value", "time", "timeBase"}, "prop.addKey": {"layer", "path", "time", "value", "timeBase"},
@@ -36,6 +37,9 @@ ACCEPT: dict[str, set[str]] = {
     "renderQueue.add": {"comp", "format", "output", "proresProfile", "channels"}, "renderQueue.render": {"wait"},
     "text.fonts": {"query"}, "text.fontFeatures": {"font"},
     "file.import": {"paths", "sequence", "alphabetical", "frameRate"},
+    "footage.missing": set(), "file.relinkFootage": {"folder", "dryRun", "wait"},
+    "layer.timing": {"layers", "in", "out", "delta", "start", "inDelta", "outDelta", "op", "merge"},
+    "comp.settings": {"comp", "name", "width", "height", "anchor", "frameRate", "duration", "startTime"},
     "layer.addItem": {"item", "time", "index", "position", "duration", "in", "out", "anchor"},
 }
 
@@ -206,6 +210,10 @@ class MockAdapter(BaseAdapter):
             kind = {"layer.newText": "Text", "layer.newShape": "Shape", "layer.newSolid": "Solid", "layer.newNull": "Null", "layer.newCamera": "Camera"}[cid]
             props = {"text/sourceText": {"value": p.get("text", ""), "keys": []}} if kind == "Text" else {}
             return {"layer": self._add_layer(kind, p.get("name") or p.get("text") or f"{kind} Layer", props)}
+        if cid == "footage.missing":
+            return {"missing": []}
+        if cid == "file.relinkFootage":
+            return {"relinked": 0}
         if cid == "file.import":
             ids = []
             for src in p["paths"]:
@@ -241,6 +249,12 @@ class MockAdapter(BaseAdapter):
                 if k in p:
                     l["props"].setdefault(f"text/style/{k}", {"value": None, "keys": []})["value"] = p[k]
             self._dirty = True; return None
+        if cid == "comp.settings":
+            if "width" in p: c["w"] = int(p["width"])
+            if "height" in p: c["h"] = int(p["height"])
+            if "frameRate" in p: c["fps"] = float(p["frameRate"])
+            if "duration" in p: c["dur"] = float(p["duration"])
+            self._dirty = True; return None
         if cid == "layer.rename":
             self._layer(c, int(p["layer"]))["name"] = p["name"]; self._dirty = True; return None
         # commands taking `layers`
@@ -269,6 +283,18 @@ class MockAdapter(BaseAdapter):
                 for l in ls: l["comment"] = p["comment"]
             elif cid == "layer.addMarker":
                 for l in ls: c["markers"].append({"time": float(p.get("time", 0)), "comment": p.get("comment", ""), "layer": l["id"]})
+            elif cid == "layer.timing":
+                # As measured on EffectCraft 0.24.1 (spike/results/t3_layer_timing.txt): absolute in/out only trim; `delta` slides in, out and
+                # start together; keyframes never move; nothing is clamped to the composition; an in point past the out is held one frame short of it.
+                frame = 1.0 / c["fps"]
+                for l in ls:
+                    i0, o0, s0 = float(l.get("in", 0.0)), float(l.get("out", c["dur"])), float(l.get("start", 0.0))
+                    if "delta" in p:
+                        d = float(p["delta"]); i0, o0, s0 = i0 + d, o0 + d, s0 + d
+                    if "in" in p: i0 = float(p["in"])
+                    if "out" in p: o0 = float(p["out"])
+                    if i0 > o0: i0 = o0 - frame
+                    l["in"], l["out"], l["start"] = i0, o0, s0
             elif cid == "layer.arrange":
                 for l in ls:
                     c["layers"].remove(l); c["layers"].insert(0 if p["to"] == "front" else len(c["layers"]), l)
@@ -283,6 +309,16 @@ class MockAdapter(BaseAdapter):
             elif cid == "layer.style.dropShadow":
                 for l in ls: l["props"]["style/dropShadow"] = {"value": True, "keys": []}
             self._dirty = True; return None
+        if cid == "file.exportAep":
+            lost = [{"category": "effects", "count": 1, "details": ["a layer has an effect"]}] if any(l["props"].get("effects") for l in c["layers"]) else []
+            if p.get("dryRun"):
+                return {"dryRun": True, "report": {"exported": {"layers": len(c["layers"])}, "limitations": [], "losses": lost}}
+            if lost and not p.get("allowLosses"):
+                raise AdapterContractError("exporting would lose effects: 1; allow losses to export anyway (nothing was written)")
+            Path(p["path"]).write_bytes(b"MOCKAEP"); return {"path": p["path"], "bytes": 7}
+        if cid == "file.exportTimeline":
+            Path(p["path"]).write_text("MOCK " + str(p.get("format", "xml")), encoding="utf-8")
+            return {"path": p["path"], "format": p.get("format", "xml"), "clips": len(c["layers"]), "bytes": 8, "prerendered": [], "warnings": []}
         if cid == "file.exportLottie":
             Path(p["path"]).write_text(json.dumps({"v": "5.12.0", "layers": len(c["layers"])}), encoding="utf-8")
             warns = ["Camera: cameras and lights are not exported"] if any(l["kind"] == "Camera" for l in c["layers"]) else []
@@ -294,7 +330,13 @@ class MockAdapter(BaseAdapter):
             for q in self._queue:
                 Path(q["output"]).write_bytes(b"MOCKRENDER" + str(len(c["layers"])).encode()); n += 1
             self._queue = []; return {"failed": 0, "items": n}
-        if cid in ("text.fonts", "text.fontFeatures"):
+        if cid == "text.fonts":
+            fams = [{"family": "Inter", "styles": ["Regular", "Bold"], "origin": "bundled", "variable": True}, {"family": "JetBrains Mono", "styles": ["Regular"], "origin": "bundled", "variable": True},
+                    {"family": "Noto Serif", "styles": ["Regular"], "origin": "bundled", "variable": False}, {"family": "Bahnschrift", "styles": ["Regular"], "origin": "system", "variable": True},
+                    {"family": "Orbitron", "styles": ["Regular", "Bold"], "origin": "system", "variable": True}]
+            q = str(p.get("query") or "").lower()
+            return {"count": len(fams), "families": [f for f in fams if q in f["family"].lower()]}
+        if cid == "text.fontFeatures":
             return {"families": []}
         raise AdapterContractError(f"mock does not implement {cid}")
 
@@ -314,9 +356,23 @@ class MockAdapter(BaseAdapter):
 
     def _render(self, job: FinalRenderJob) -> RenderResult:
         c = self._comp(job.comp)
+        if self._aborted:
+            raise RuntimeError("the engine was stopped")
+        if self.render_hook is not None:
+            self.render_hook(job)                      # tests: block, fail, or note which part is being rendered
+        if self._aborted:
+            raise RuntimeError("the engine was stopped")
+        span = (job.end - job.start) if job.start is not None and job.end is not None else c["dur"]
         job.output.parent.mkdir(parents=True, exist_ok=True)
-        job.output.write_bytes(b"MOCKRENDER" + str(len(c["layers"])).encode())
-        return RenderResult(output=job.output, frames=int(round(c["dur"] * c["fps"])), bytes=job.output.stat().st_size)
+        job.output.write_bytes(f"MOCKRENDER|{job.preset}|{job.start}|{job.end}|{len(c['layers'])}".encode() + bytes([10]))
+        return RenderResult(output=job.output, frames=int(round(span * c["fps"])), bytes=job.output.stat().st_size)
+
+    def layer_spans(self, comp: int | str) -> dict[int, dict]:
+        c = self._comp(comp)
+        return {l["id"]: {"in": float(l.get("in", 0.0)), "out": float(l.get("out", c["dur"])), "start": float(l.get("start", 0.0))} for l in c["layers"]}
+
+    def abort(self) -> None:
+        self._aborted = True
 
     def export(self, kind: str, comp: int | str, path: Path) -> ExportResult:
         if kind == "ecproj_copy":
@@ -330,6 +386,9 @@ class MockAdapter(BaseAdapter):
     def _gui_has_unsaved(self) -> bool: return False
 
     # ------------------------------------------------------------- test hooks
+    render_hook = None      # called with the FinalRenderJob before each final render or part
+    _aborted = False
+
     def simulate_user_edit(self, comp: int | str, layer_id: int, path: str, value: Any) -> None:
         """A hand edit in the EffectCraft GUI: changes the layer without going through execute() or the lock check."""
         l = self._layer(self._comp(comp), layer_id)

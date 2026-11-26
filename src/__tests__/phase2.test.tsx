@@ -69,7 +69,7 @@ describe("motion, audio, review and render", () => {
     render(<App />);
     await openProject(user, "Demo");
     await go(user, "Build");
-    await user.click(await screen.findByRole("button", { name: /Title/ }));
+    await user.click(await waitFor(() => within(document.querySelector("ul.layers") as HTMLElement).getByRole("button", { name: /Title/ })));   // the Layers list: the timeline shows the same name as a bar
     await user.click(fold(/^Motion/));
     const apply = await screen.findByRole("button", { name: "Apply to selected layer" });
     await waitFor(() => expect(apply).toBeEnabled());
@@ -86,7 +86,7 @@ describe("motion, audio, review and render", () => {
     render(<App />);
     await openProject(user, "Demo");
     await go(user, "Build");
-    await user.click(await screen.findByRole("button", { name: /Title/ }));
+    await user.click(await waitFor(() => within(document.querySelector("ul.layers") as HTMLElement).getByRole("button", { name: /Title/ })));   // the Layers list: the timeline shows the same name as a bar
     await user.click(fold(/^Motion/));
     await user.selectOptions(await screen.findByLabelText("Motion"), "text.reveal-per-char");
     expect(screen.getByRole("button", { name: "Apply to selected layer" })).toBeEnabled();   // Title is a Text layer

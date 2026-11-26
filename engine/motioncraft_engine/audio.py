@@ -15,6 +15,9 @@ import tempfile
 import wave
 from pathlib import Path
 
+from . import songmap
+from .proc import NO_WINDOW
+
 
 class AudioError(Exception):
     pass
@@ -61,7 +64,7 @@ def to_wav(path: Path) -> tuple[Path, bool]:
         raise AudioError("This audio is not a WAV file and ffmpeg is not installed. Convert it to WAV, or install ffmpeg.")
     out = Path(tempfile.mkstemp(suffix=".wav")[1])
     r = subprocess.run([ff, "-v", "error", "-y", "-i", str(path), "-ac", "1", "-ar", "22050", "-t", str(MAX_SECONDS), str(out)],
-                       capture_output=True, timeout=300, shell=False)
+                       capture_output=True, timeout=300, shell=False, **NO_WINDOW)
     if r.returncode != 0:
         out.unlink(missing_ok=True)
         raise AudioError("ffmpeg could not read that audio file.")
@@ -83,18 +86,23 @@ def analyze(path: Path, *, bins: int = 600) -> dict:
     peaks = [round(max(abs(x) for x in data[i:i + step]), 4) for i in range(0, len(data), step)][:bins]
     # loudness envelope at 100 Hz (10 ms RMS frames)
     hop = max(1, rate // 100)
-    env = []
+    env, bright = [], []
     for i in range(0, len(data) - hop + 1, hop):
         seg = data[i:i + hop]
         env.append(math.sqrt(sum(x * x for x in seg) / hop))
+        bright.append(math.sqrt(sum((a - b) ** 2 for a, b in zip(seg[1:], seg)) / hop))     # how much high-frequency content: the first difference
     fps_env = rate / hop
     # onset strength: positive change of the envelope, lightly smoothed
     onset = [max(0.0, env[i] - env[i - 1]) for i in range(1, len(env))]
     onset = [(onset[i - 1] + onset[i] + (onset[i + 1] if i + 1 < len(onset) else 0)) / 3 if i else onset[0] for i in range(len(onset))]
     bpm, beats = _tempo(onset, fps_env, duration)
     silences = _silences(env, fps_env)
+    phase = songmap.downbeat_phase(beats, onset, fps_env)
     return {"duration": round(duration, 3), "sampleRate": rate, "peaks": peaks, "bpm": bpm, "beats": beats, "silences": silences,
-            "downbeats": beats[::4], "estimate": True}
+            "downbeats": beats[phase::4], "estimate": True,
+            # P3-01: structure and attacks, estimated from the audio itself (see songmap.py); [] when there is no steady beat to build bars from
+            "sections": songmap.estimate_sections(env, onset, fps_env, beats, duration, bright) if bpm else [],
+            "transients": songmap.find_transients(onset, fps_env, duration), "energyCurve": songmap.energy_curve(env, fps_env)}
 
 
 def _tempo(onset: list[float], fps: float, duration: float) -> tuple[float | None, list[float]]:

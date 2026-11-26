@@ -19,6 +19,14 @@ export function ModelsSheet({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState("");
   const [media, setMedia] = useState<"all" | "image" | "video">("all");
   const [busy, setBusy] = useState(false);
+  const [add, setAdd] = useState({ provider: "kie", model: "", name: "", media: "video" });
+  const addModel = async () => {
+    setErr(null); setNote(null);
+    try {
+      const r = await (await getApi()).engine<ModelList & { added: ModelEntry }>("models_add", { ...add }, "", enginePath);
+      setList(r); setNote(`Added ${r.added.name}. It is in the list above and in the model choices.`); setAdd({ ...add, model: "", name: "" });
+    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+  };
 
   const load = useCallback(async () => {
     try { const r = await (await getApi()).engine<ModelList>("models", {}, "", enginePath); setList(Array.isArray(r?.models) ? r : null); setErr(null); }
@@ -66,6 +74,19 @@ export function ModelsSheet({ onClose }: { onClose: () => void }) {
         ))}
       </ul>
       {rows.length > 400 && <p className="muted">Showing the first 400. Narrow the search to see the rest.</p>}
+      <details className="more">
+        <summary>A model that is not listed? Add it by its id</summary>
+        <p className="muted">The newest models are often not in a provider's list yet. Type the model's id exactly as the provider writes it (for Kie.ai, the path after /market/ in its docs; for fal, the endpoint id; for BytePlus, the model name). It is used like any listed model and asks for a spend confirmation the first time.</p>
+        <div className="row-actions">
+          <label className="field"><span className="field-label">Provider</span>
+            <select value={add.provider} onChange={(e) => setAdd({ ...add, provider: e.target.value })}>{Object.entries(PROVIDER_LABEL).map(([p, l]) => <option key={p} value={p}>{l}</option>)}</select></label>
+          <label className="field"><span className="field-label">Model id</span><input value={add.model} placeholder="seedream-5-5-pro-260801" onChange={(e) => setAdd({ ...add, model: e.target.value })} /></label>
+          <label className="field"><span className="field-label">Name (optional)</span><input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} /></label>
+          <label className="field"><span className="field-label">Makes</span>
+            <select value={add.media} onChange={(e) => setAdd({ ...add, media: e.target.value })}><option value="video">Video</option><option value="image">Pictures</option></select></label>
+          <button className="btn" disabled={!add.model.trim()} onClick={() => void addModel()}>Add model</button>
+        </div>
+      </details>
     </Sheet>
   );
 }

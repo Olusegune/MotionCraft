@@ -16,7 +16,7 @@ from motioncraft_engine.adapter import MockAdapter
 from motioncraft_engine.adapter.errors import AdapterError, LockedLayerError
 from motioncraft_engine.adapter.real import EffectCraftAdapter
 from motioncraft_engine.primitives import library as prim
-from motioncraft_engine.renderjobs import RenderRefused
+from motioncraft_engine.renderjobs import RenderJobs, RenderRefused
 from motioncraft_engine.sidecar import Service
 
 CLI = os.environ.get("EFFECTCRAFT_CLI", "")
@@ -98,7 +98,8 @@ def test_silence_noise_and_bad_files_are_handled(tmp_path):
 # ------------------------------------------------------------------ service on the mock
 @pytest.fixture
 def svc(tmp_path):
-    s = Service(lambda pkg: MockAdapter(), data_dir=tmp_path / "data")
+    factory = lambda pkg: MockAdapter()  # noqa: E731
+    s = Service(factory, data_dir=tmp_path / "data", renders=RenderJobs(factory, ffmpeg=None))   # no ffmpeg: renders in one piece, whatever is installed here
     pkg = tmp_path / "P.motioncraft"
     (pkg / "assets" / "images").mkdir(parents=True)
     (pkg / "assets" / "audio").mkdir(parents=True)

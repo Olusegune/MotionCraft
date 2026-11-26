@@ -1,20 +1,68 @@
 /* Design tokens from docs/UI_UX.md section 10. No raw hex outside this file. */
 :root {
-  --mc-bg-app: #181A1C;      --mc-bg-panel: #222426;
-  --mc-bg-raised: #2B2E30;   --mc-bg-viewer: #303030;
-  --mc-divider: #3A3D40;           /* decorative only */
+  --mc-bg-app: #12151A;      --mc-bg-panel: #181C21;
+  --mc-bg-raised: #20252B;   --mc-bg-viewer: #12151A;
+  --mc-divider: #2C333A;           /* decorative only */
   --mc-control-border: #7A8086;    /* inputs, segmented controls, gate outlines */
   --mc-text: #F2F3F4;  --mc-text-2: #B8BDC2;  --mc-text-3: #92999F;
   --mc-brand-gold: #E3C48F;   /* brand mark only; never a UI state colour */
-  --mc-accent: #48DCE5;  --mc-on-accent: #181A1C;
+  --mc-accent: #F6C945;  --mc-on-accent: #181A1C;
   --mc-success: #83C5A0; --mc-warning: #E5BB72; --mc-error: #E68C88;
-  --mc-r-ctl: 6px; --mc-r-panel: 8px; --mc-r-card: 10px;
-  --mc-ctl-h: 36px;
+  --mc-glow-cyan: rgba(246, 201, 69, 0.14); --mc-glow-cyan-strong: rgba(246, 201, 69, 0.42); --mc-glow-indigo: rgba(92, 84, 214, 0.20);
+  --mc-glass: rgba(24, 28, 33, 0.72); --mc-glass-edge: rgba(242, 243, 244, 0.07);
+  /* one soft colour for each tool's icon, so the places read apart at a glance (never used for states: success, warning and error keep their own) */
+  --mc-tool-project: #7FB2FF; --mc-tool-media: #FF8FB8; --mc-tool-direction: #B79CFF; --mc-tool-versions: #5FD6C4; --mc-tool-settings: #A9B4C2;
+  --mc-tool-brief: #7FB2FF; --mc-tool-intent: #FFA66B; --mc-tool-direction-stage: #B79CFF; --mc-tool-treatment: #FF8FB8; --mc-tool-build: #6FD39A; --mc-tool-review: #5FD6C4; --mc-tool-deliver: #F6C945;
+  --mc-r-ctl: 10px; --mc-r-panel: 16px; --mc-r-card: 14px;
+  --mc-ctl-h: 40px;
   --mc-focus: 0 0 0 2px var(--mc-bg-app), 0 0 0 4px var(--mc-accent);
   --mc-t-panel: 180ms;
   --mc-font-ui: "Inter", system-ui, "Segoe UI", sans-serif;
   --mc-font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
   --mc-font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   --mc-scale: 1;
+  /* colours of the drawn style pictures (shell/StyleArt.tsx): illustrations of each family's idea, not UI colours */
+  --mc-art-swiss-bg: #F4F1EA; --mc-art-swiss-a: #D6262C; --mc-art-swiss-b: #151515;
+  --mc-art-editorial-minimal-bg: #EFE9DD; --mc-art-editorial-minimal-a: #2A2A2A; --mc-art-editorial-minimal-b: #B49A6E;
+  --mc-art-bauhaus-bg: #EFE6D2; --mc-art-bauhaus-a: #E8B923; --mc-art-bauhaus-b: #1F4E9C; --mc-art-bauhaus-c: #D1352B;
+  --mc-art-brutalist-bg: #BDBDBD; --mc-art-brutalist-a: #111111; --mc-art-brutalist-b: #F2F2F2;
+  --mc-art-bold-kinetic-bg: #0E0E10; --mc-art-bold-kinetic-a: #C6FF3D; --mc-art-bold-kinetic-b: #FF3D8B;
+  --mc-art-cinematic-title-bg: #0C1E24; --mc-art-cinematic-title-a: #2F6B73; --mc-art-cinematic-title-b: #E8D9B5;
+  --mc-art-clean-broadcast-bg: #0B3A78; --mc-art-clean-broadcast-a: #1E7BDC; --mc-art-clean-broadcast-b: #FFFFFF;
+  --mc-art-cut-paper-bg: #F1E7D3; --mc-art-cut-paper-a: #1F8A8A; --mc-art-cut-paper-b: #F08A3C; --mc-art-cut-paper-c: #D9503F;
+  --mc-art-risograph-bg: #F3EEE4; --mc-art-risograph-a: #FF5C8A; --mc-art-risograph-b: #2D6BFF;
+  --mc-art-retro-futurist-bg: #2B1055; --mc-art-retro-futurist-a: #FF7A59; --mc-art-retro-futurist-b: #FFC857;
+  --mc-art-neon-light-bg: #07070D; --mc-art-neon-light-a: #FF2BD6; --mc-art-neon-light-b: #25F4EE;
+  --mc-art-collage-bg: #E9DFC9; --mc-art-collage-a: #3D5A80; --mc-art-collage-b: #EE6C4D; --mc-art-collage-c: #98C1D9;
+  --mc-art-flat-2d-bg: #FFE9D6; --mc-art-flat-2d-a: #FF6B5B; --mc-art-flat-2d-b: #2EC4B6; --mc-art-flat-2d-c: #3D405B;
+  --mc-art-vector-illustration-bg: #E8F1FF; --mc-art-vector-illustration-a: #5B7CFA; --mc-art-vector-illustration-b: #FF9F43; --mc-art-vector-illustration-c: #2D3A5A;
+  --mc-art-isometric-bg: #F2F4F8; --mc-art-isometric-a: #7C9CFF; --mc-art-isometric-b: #4A67D6; --mc-art-isometric-c: #2B3F94;
+  --mc-art-3d-render-bg: #0E1220; --mc-art-3d-render-a: #7DB8FF; --mc-art-3d-render-b: #1B2A55;
+  --mc-art-claymation-bg: #F6E3C8; --mc-art-claymation-a: #E4572E; --mc-art-claymation-b: #17BEBB; --mc-art-claymation-c: #FFC914;
+  --mc-art-low-poly-bg: #1B2B4B; --mc-art-low-poly-a: #3A86FF; --mc-art-low-poly-b: #8338EC; --mc-art-low-poly-c: #FF006E;
+  --mc-art-glassmorphism-bg: #4B2E83; --mc-art-glassmorphism-a: #FF7EB3; --mc-art-glassmorphism-b: #6A82FB;
+  --mc-art-hand-drawn-bg: #FBF7EE; --mc-art-hand-drawn-a: #2B2B2B; --mc-art-hand-drawn-b: #FF5A5F;
+  --mc-art-line-art-bg: #101820; --mc-art-line-art-a: #F2F2F2; --mc-art-line-art-b: #FFC857;
+  --mc-art-pixel-art-bg: #1A1C2C; --mc-art-pixel-art-a: #5D275D; --mc-art-pixel-art-b: #29366F; --mc-art-pixel-art-c: #38B764;
+  --mc-art-watercolour-bg: #FAF6EE; --mc-art-watercolour-a: #5FA8D3; --mc-art-watercolour-b: #F4A261; --mc-art-watercolour-c: #E76F51;
+  --mc-art-cel-animation-bg: #7EC8F2; --mc-art-cel-animation-a: #FFFFFF; --mc-art-cel-animation-b: #5CB85C; --mc-art-cel-animation-c: #F2C94C;
+  --mc-art-art-deco-bg: #0F1B2D; --mc-art-art-deco-a: #D4AF37; --mc-art-art-deco-b: #F5E6B3;
+  --mc-art-memphis-bg: #FFF3C4; --mc-art-memphis-a: #FF4D8D; --mc-art-memphis-b: #2EC4B6; --mc-art-memphis-c: #3A0CA3;
+  --mc-art-mid-century-bg: #EADBC0; --mc-art-mid-century-a: #E07A2F; --mc-art-mid-century-b: #2A9D8F; --mc-art-mid-century-c: #E9C46A;
+  --mc-art-pop-art-bg: #FFE066; --mc-art-pop-art-a: #E63946; --mc-art-pop-art-b: #1D4ED8;
+  --mc-art-psychedelic-bg: #2A0A4A; --mc-art-psychedelic-a: #FF5E00; --mc-art-psychedelic-b: #FFD500; --mc-art-psychedelic-c: #00C2A8;
+  --mc-art-vaporwave-bg: #2B0B4F; --mc-art-vaporwave-a: #FF71CE; --mc-art-vaporwave-b: #01CDFE; --mc-art-vaporwave-c: #B967FF;
+  --mc-art-y2k-chrome-bg: #CFD8E8; --mc-art-y2k-chrome-a: #3A6FF7; --mc-art-y2k-chrome-b: #FFFFFF;
+  --mc-art-art-nouveau-bg: #E6E0C8; --mc-art-art-nouveau-a: #4F772D; --mc-art-art-nouveau-b: #C8963E; --mc-art-art-nouveau-c: #7B2D26;
+  --mc-art-title-sequence-60s-bg: #E4572E; --mc-art-title-sequence-60s-a: #111111; --mc-art-title-sequence-60s-b: #F5F0E1;
+  --mc-art-abstract-film-bg: #0B0B0F; --mc-art-abstract-film-a: #FF4D6D; --mc-art-abstract-film-b: #4CC9F0; --mc-art-abstract-film-c: #F9C74F;
+  --mc-art-glitch-bg: #0A0A0A; --mc-art-glitch-a: #00FFD1; --mc-art-glitch-b: #FF2E63;
+  --mc-art-vhs-analog-bg: #1B1B2F; --mc-art-vhs-analog-a: #E94560; --mc-art-vhs-analog-b: #53BF9D;
+  --mc-art-blueprint-bg: #0B3D91; --mc-art-blueprint-a: #FFFFFF; --mc-art-blueprint-b: #9CC9FF;
+  --mc-art-duotone-bg: #F72585; --mc-art-duotone-a: #3A0CA3; --mc-art-duotone-b: #FFD6E8;
+  --mc-art-liquid-gradient-bg: #1D1135; --mc-art-liquid-gradient-a: #FF6B9D; --mc-art-liquid-gradient-b: #6C63FF; --mc-art-liquid-gradient-c: #00D2FF;
+  --mc-art-data-viz-bg: #0E1621; --mc-art-data-viz-a: #4CC9F0; --mc-art-data-viz-b: #F9C74F; --mc-art-data-viz-c: #90BE6D;
+  --mc-art-film-noir-bg: #0A0A0A; --mc-art-film-noir-a: #D9D9D9; --mc-art-film-noir-b: #7A7A7A;
+  --mc-art-cyberpunk-bg: #0B0F1A; --mc-art-cyberpunk-a: #FF2A6D; --mc-art-cyberpunk-b: #05D9E8; --mc-art-cyberpunk-c: #D1F7FF;
 }
 @media (prefers-reduced-motion: reduce) { :root { --mc-t-panel: 0ms; } }

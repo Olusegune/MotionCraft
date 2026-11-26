@@ -32,7 +32,7 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
         <>
           <span className="sep" aria-hidden="true" />
           <span className="proj-name" title={project.name}>{project.name}</span>
-          <span className={`status save-${save.kind}`} role="status">
+          <span className={`status save-${save.kind}`} role="status" title={saveText(save, now)}>
             {save.kind === "saving" ? <Loader2 size={16} className="spin" aria-hidden="true" /> : save.kind === "error" ? <TriangleAlert size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}
             {saveText(save, now)}
           </span>
@@ -40,9 +40,9 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
       )}
       <span className="grow" />
       {project && (
-        <button className="chip" onClick={onManual} aria-label="Working mode: Manual. Everything works without AI. Open help"
+        <button className="chip mode-chip" onClick={onManual} aria-label="Working mode: Manual. Everything works without AI. Open help"
           title="You are working manually. Every page works without an AI provider.">
-          <Bot size={16} aria-hidden="true" />{hasAnyProvider() ? "Mixed mode" : "Working mode: Manual"}
+          <Bot size={16} aria-hidden="true" /><span className="visually-hidden">{hasAnyProvider() ? "Mixed mode" : "Working mode: Manual"}</span>
         </button>
       )}
       {project && key && (
@@ -50,15 +50,17 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
           <Bot size={16} aria-hidden="true" />
           <Segmented label="Stage mode" value={effectiveMode(project, key)} onChange={onSetMode}
             options={[
-              { value: "manual", label: "Manual" },
-              { value: "assisted", label: "Assisted", disabled: !hasAnyProvider(), why },
-              { value: "agent-led", label: "Agent-led", disabled: !hasAnyProvider(), why },
+              { value: "manual", label: "You do it" },
+              { value: "assisted", label: "Together", disabled: !hasAnyProvider(), why },
+              { value: "agent-led", label: "It does it", disabled: !hasAnyProvider(), why },
             ]} />
         </div>
       )}
+      <span className="grow" />
       {project && <EngineChip engine={engine} onClick={onEngine} />}
-      <button className="btn quiet" onClick={onPalette} aria-label="Command search"><Search size={18} strokeWidth={1.75} /><span className="kbd"><Command size={12} aria-hidden="true" />K</span></button>
-      <button className="btn" onClick={onSettings} aria-label="Settings"><Settings2 size={18} strokeWidth={1.75} aria-hidden="true" />Settings</button>
+      <button className="search-btn" onClick={onPalette} aria-label="Command search"><Search size={18} strokeWidth={1.75} aria-hidden="true" /><span className="search-label">Search commands…</span><span className="kbd"><Command size={12} aria-hidden="true" />K</span></button>
+      {project && <span id="header-actions" className="header-actions" />}
+      {!project && <button className="btn" onClick={onSettings} aria-label="Settings"><Settings2 size={18} strokeWidth={1.75} aria-hidden="true" />Settings</button>}
     </header>
   );
 }
@@ -68,8 +70,8 @@ export function EngineChip({ engine, onClick }: { engine: EngineStatus | null; o
     engine.state === "version-mismatch" ? `EffectCraft ${engine.version} (pin ${engine.pinned})` : "EffectCraft not found";
   const bad = engine && engine.state !== "connected";
   return (
-    <button className={`chip${bad ? " warn" : ""}`} onClick={onClick} aria-label={`Engine status: ${text}`}>
-      {bad ? <TriangleAlert size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{text}
+    <button className={`chip engine-chip${bad ? " warn" : ""}`} onClick={onClick} aria-label={`Engine status: ${text}`} title={text}>
+      {bad ? <TriangleAlert size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}<span className="chip-text">{text}</span>
     </button>
   );
 }

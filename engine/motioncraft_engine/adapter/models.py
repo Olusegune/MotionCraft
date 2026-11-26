@@ -130,6 +130,9 @@ class FinalRenderJob(_M):
     preset: Literal["h264", "prores4444"]
     output: Path
     estimated_cost_usd: float | None = None
+    # A part of the timeline, in seconds: [start, end), end exclusive (measured on EffectCraft 0.24.1: 0 to 2 s at 30 fps is 60 frames). None = all of it.
+    start: float | None = None
+    end: float | None = None
 
 
 class RenderResult(_M):

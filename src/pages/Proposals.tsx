@@ -4,17 +4,21 @@ import { useApp } from "../ctx";
 import { Sheet } from "../shell/Sheet";
 import { Frame } from "../shell/Media";
 import { PROVIDER_LABEL, priceText } from "../shell/ModelsSheet";
-import { getApi, type GenJob, type ModelEntry, type ModelList } from "../lib/api";
+import { getApi, type GenJob, type ModelEntry, type ModelList, type ProviderId } from "../lib/api";
+import { rankModels, rankProviders, stillAspect } from "../lib/models";
 import { useSettings } from "../lib/settings";
 import { FAMILIES } from "../lib/styles";
 import { nowIso } from "../lib/project";
+import { capBlock, recordSpend } from "../lib/spend";
 import type { AssetReference, Dimension, Intensity } from "../types";
 
 /** Three deliberately different starting points. They are prompts you can edit, not a house style. */
+/** First in every prompt: image models draw words they are given, and the words go on the layers, never in the picture. */
+export const NO_LETTERING = "A purely visual still image with no lettering, words, numbers, symbols, logos or watermarks anywhere in it.";
 const STARTS: { family: string; title: string; look: string }[] = [
-  { family: "editorial-minimal", title: "Quiet and editorial", look: "restrained editorial style frame, generous negative space, refined serif type feeling, muted palette, calm and precise" },
-  { family: "bold-kinetic", title: "Bold and kinetic", look: "bold kinetic typography style frame, heavy contrasty shapes, dense layout, saturated colour, energy and motion blur" },
-  { family: "cinematic-title", title: "Cinematic", look: "cinematic title sequence style frame, shallow depth of field, dramatic light and shadow, slow and atmospheric" },
+  { family: "editorial-minimal", title: "Quiet and editorial", look: "restrained editorial composition, generous negative space, muted palette, calm and precise" },
+  { family: "bold-kinetic", title: "Bold and kinetic", look: "bold dynamic composition, heavy contrasty shapes, dense layout, saturated colour, energy and motion blur" },
+  { family: "cinematic-title", title: "Cinematic", look: "cinematic still, shallow depth of field, dramatic light and shadow, slow and atmospheric" },
 ];
 const DIMS: Dimension[] = ["typography", "motion", "composition"];
 
@@ -27,13 +31,14 @@ export function Proposals() {
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [keys, setKeys] = useState<Record<string, boolean>>({});
   const [model, setModel] = useState("");
+  const [provider, setProvider] = useState<ProviderId | "">("");
   const [cards, setCards] = useState<Card[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const base = (project.intent.summary || project.brief.text).trim().slice(0, 300);
   useEffect(() => {
-    setCards((cur) => STARTS.map((s) => cur.find((c) => c.family === s.family) ?? { key: s.family, family: s.family, title: s.title, prompt: `${base || "A motion graphics piece"}. ${s.look}. No text, no watermark.`, job: null, error: null }));
+    setCards((cur) => STARTS.map((s) => cur.find((c) => c.family === s.family) ?? { key: s.family, family: s.family, title: s.title, prompt: `${NO_LETTERING} ${s.look}. Mood and subject: ${base || "an abstract motion graphics piece"}.`, job: null, error: null }));
   }, [base]);
 
   const load = useCallback(async () => {
@@ -43,11 +48,15 @@ export function Proposals() {
   useEffect(() => { void load(); }, [load, generative]);
 
   const usable = useMemo(() => models.filter((m) => m.media === "image" && keys[m.provider]), [models, keys]);
-  useEffect(() => { if (!usable.some((m) => m.model === model)) setModel(usable[0]?.model ?? ""); }, [usable, model]);
-  const picked = usable.find((m) => m.model === model);
+  const providers = useMemo(() => rankProviders(usable, keys), [usable, keys]);
+  const choices = useMemo(() => rankModels(usable.filter((m) => m.provider === provider)), [usable, provider]);
+  useEffect(() => { if (!providers.includes(provider as ProviderId)) setProvider(providers[0] ?? ""); }, [providers, provider]);
+  useEffect(() => { if (!choices.some((m) => m.model === model)) setModel(choices[0]?.model ?? ""); }, [choices, model]);
+  const picked = choices.find((m) => m.model === model);
   const running = cards.some((c) => c.job && (c.job.state === "running" || c.job.state === "queued"));
   const reason = !generative ? "Generative models are off. Turn them on in Settings." : offline ? "Offline mode is on." : !picked ? "Add an image provider key in Settings." : running ? "Stills are being made." : undefined;
   const each = picked?.price.known ? picked.price.value : null;
+  const capped = capBlock(project, each, 3);
 
   // poll running jobs
   useEffect(() => {
@@ -83,11 +92,13 @@ export function Proposals() {
     const started = await Promise.all(cards.map(async (c) => {
       try {
         const token = await api.confirmSpend(picked.provider, picked.model);     // one per still, all from the same confirmation click
-        const job = await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt: c.prompt, params: {}, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath);
+        const job = await api.engine<GenJob>("generate_start", { provider: picked.provider, model: picked.model, prompt: c.prompt, params: { aspect_ratio: stillAspect(project.brief.deliverables[0].aspect) }, spend_token: token, generative_enabled: generative, offline }, projectPath, enginePath);
         return { ...c, job, error: null, asset: undefined };
       } catch (e) { return { ...c, job: null, error: String(e instanceof Error ? e.message : e) }; }
     }));
     setCards(started);
+    const made = started.filter((c) => c.job).length;
+    if (made) update((p) => { let q = p; for (let i = 0; i < made; i++) q = recordSpend(q, { provider: picked.provider, model: picked.model, what: "still", usd: each }); return q; });
   };
 
   const use = (c: Card) => update((p) => {
@@ -103,12 +114,15 @@ export function Proposals() {
       <h2 id="prop-h">Direction proposals</h2>
       <p className="muted">Three contrasting starting points, each with a still from your image provider. Edit a prompt, make the stills, then use the one that is closest. This is optional: you can build a direction yourself below.</p>
       <div className="row end">
+        <label className="field"><span className="field-label">Provider</span>
+          <select value={provider} disabled={!providers.length} onChange={(e) => setProvider(e.target.value as ProviderId)}>
+            {providers.length === 0 ? <option value="">No provider key yet</option> : providers.map((p) => <option key={p} value={p}>{PROVIDER_LABEL[p]}</option>)}</select></label>
         <label className="field"><span className="field-label">Image model</span>
-          <select value={model} disabled={!usable.length} onChange={(e) => setModel(e.target.value)}>
-            {usable.length === 0 ? <option value="">No provider key yet</option> : usable.map((m) => <option key={`${m.provider}/${m.model}`} value={m.model}>{m.name} ({PROVIDER_LABEL[m.provider]})</option>)}</select></label>
-        <button className="btn" disabled={!!reason} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />Make 3 stills…</button>
+          <select value={model} disabled={!choices.length} onChange={(e) => setModel(e.target.value)}>
+            {choices.length === 0 ? <option value="">No provider key yet</option> : choices.map((m) => <option key={`${m.provider}/${m.model}`} value={m.model}>{m.name}</option>)}</select></label>
+        <button className="btn" disabled={!!reason || !!capped} onClick={() => setConfirming(true)}><Sparkles size={16} aria-hidden="true" />Make 3 stills…</button>
       </div>
-      {reason && <p className="why">{reason}</p>}
+      {(reason || capped) && <p className="why">{reason ?? capped}</p>}
       {err && <p className="error-text" role="alert">{err}</p>}
       <ul className="proposal-cards">
         {cards.map((c) => (

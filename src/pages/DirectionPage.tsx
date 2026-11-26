@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import type { Dimension, Intensity } from "../types";
 import { useApp } from "../ctx";
 import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Segmented } from "../shell/Segmented";
-import { DIMENSIONS, detectConflicts, FAMILIES, familyLabel } from "../lib/styles";
+import { applyLook, CATEGORY_LABEL, currentLook, DIMENSIONS, detectConflicts, FAMILIES, familyLabel, samePair, type FamilyCategory } from "../lib/styles";
+import { StyleCard } from "../shell/StyleArt";
+import { FontPicker } from "./FontPicker";
 import { gateState } from "../lib/project";
 import { LockBar, useLocked, type FrameProps } from "./common";
 import { MediaWall, useImportMedia } from "../shell/Media";
@@ -25,6 +28,8 @@ export function DirectionPage(f: FrameProps) {
   const open = conflicts.filter((c) => !c.overridden);
   const chosen = Object.keys(project.style.dimensions).length;
   const state = gateState(project, "B");
+  const [cat, setCat] = useState<FamilyCategory | "all">("all");
+  const shown = cat === "all" ? FAMILIES : FAMILIES.filter((f) => f.category === cat);
 
   const setDim = (d: Dimension, v: { familyId: string; intensity: Intensity } | null) =>
     update((p) => {
@@ -33,7 +38,7 @@ export function DirectionPage(f: FrameProps) {
       return { ...p, style: { ...p.style, dimensions: dims }, updatedAt: new Date().toISOString() };
     });
   const override = (a: string, b: string, reason: string, on: boolean) =>
-    update((p) => ({ ...p, style: { ...p.style, conflicts: [...p.style.conflicts.filter((c) => !(c.a === a && c.b === b)), { a, b, reason, overridden: on }] } }));
+    update((p) => ({ ...p, style: { ...p.style, conflicts: [...p.style.conflicts.filter((c) => !samePair(c, a, b)), { a, b, reason, overridden: on }] } }));
 
   const main = (
     <div className="stack">
@@ -45,6 +50,19 @@ export function DirectionPage(f: FrameProps) {
         {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
       </section>
       <Proposals />
+      <section aria-labelledby="looks-h">
+        <h2 id="looks-h">Style presets</h2>
+        <p className="muted">Pick one to use that family for everything, then fine-tune any dimension below. Nothing is chosen until you click one.</p>
+        <div className="chips" role="group" aria-label="Filter presets">
+          {(["all", "core", "medium", "movement", "technique"] as const).map((k) => (
+            <button key={k} type="button" className={`chip${cat === k ? " on" : ""}`} aria-pressed={cat === k} onClick={() => setCat(k)}>
+              {k === "all" ? `All (${FAMILIES.length})` : `${CATEGORY_LABEL[k]} (${FAMILIES.filter((f) => f.category === k).length})`}</button>))}
+        </div>
+        <div className="style-grid" role="group" aria-labelledby="looks-h">
+          {shown.map((fam) => <StyleCard key={fam.id} id={fam.id} on={currentLook(project) === fam.id} disabled={locked} onPick={() => update((p) => applyLook(p, fam.id))} />)}
+        </div>
+      </section>
+      <FontPicker locked={locked} />
       <fieldset className="grp" disabled={locked}>
         <legend className="visually-hidden">Style system</legend>
         <h2>Style system</h2>
@@ -56,7 +74,7 @@ export function DirectionPage(f: FrameProps) {
                 <label className="dim-label" htmlFor={`dim-${d.id}`}>{d.label}</label>
                 <select id={`dim-${d.id}`} value={v?.familyId ?? ""} onChange={(e) => setDim(d.id, e.target.value ? { familyId: e.target.value, intensity: v?.intensity ?? "moderate" } : null)}>
                   <option value="">Not set</option>
-                  {FAMILIES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                  {(Object.keys(CATEGORY_LABEL) as FamilyCategory[]).map((k) => <optgroup key={k} label={CATEGORY_LABEL[k]}>{FAMILIES.filter((x) => x.category === k).map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</optgroup>)}
                 </select>
                 <Segmented<Intensity> label={`${d.label} intensity`} value={v?.intensity ?? "moderate"} onChange={(i) => v && setDim(d.id, { ...v, intensity: i })}
                   options={INTENSITIES.map((i) => ({ value: i, label: cap(i), disabled: !v, why: "Pick a family first." }))} />

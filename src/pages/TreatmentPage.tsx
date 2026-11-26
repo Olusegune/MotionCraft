@@ -5,6 +5,10 @@ import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { Frame, assetLabel, useImportMedia } from "../shell/Media";
 import { gateState } from "../lib/project";
+import { fillFrames } from "../lib/makeIt";
+import { MakePicture } from "./SceneMaker";
+import { AnimateScene } from "./AnimateScene";
+import { VoiceOver } from "./VoiceOver";
 import { timecode } from "../lib/time";
 import { LockBar, useLocked, type FrameProps } from "./common";
 
@@ -20,10 +24,10 @@ export function TreatmentPage(f: FrameProps) {
   const d = project.brief.deliverables[0];
   const ratio = `${d.width} / ${d.height}`;
   const state = gateState(project, "C");
-  const images = (project.assets ?? []).filter((a) => a.kind === "image");
+  const images = (project.assets ?? []).filter((a) => a.kind === "image" || a.kind === "video");   // a scene's frame can be a picture or a clip
   const frameOf = (beatId: string) => images.find((a) => a.id === project.treatment[beatId]?.frameAssetId);
   const missing = beats.filter((b) => !(project.treatment[b.beatId]?.plan ?? "").trim());
-  const setT = (id: string, patch: Partial<{ plan: string; motion: string; frameAssetId?: string }>) =>
+  const setT = (id: string, patch: Partial<{ plan: string; motion: string; frameAssetId?: string; frameLoop?: boolean }>) =>
     update((p) => ({ ...p, treatment: { ...p.treatment, [id]: { ...(p.treatment[id] ?? { plan: "", motion: "" }), ...patch } }, updatedAt: new Date().toISOString() }));
 
   const main = beats.length === 0 ? (
@@ -34,10 +38,6 @@ export function TreatmentPage(f: FrameProps) {
     </div>
   ) : (
     <div className="stack">
-      <div className="viewer-surround" aria-label="Selected storyboard frame">
-        <Frame asset={current ? frameOf(current.beatId) : undefined} projectPath={projectPath} ratio={ratio} className="big" />
-        <p className="viewer-meta">{current ? <><span className="mono">{timecode(current.startSec, fps)}</span> {current.primary || "Untitled beat"}</> : null}</p>
-      </div>
       <LockBar gate="C" kind="manual_edit" />
       <fieldset className="grp" disabled={locked}>
         <legend className="visually-hidden">Storyboard</legend>
@@ -48,17 +48,33 @@ export function TreatmentPage(f: FrameProps) {
                 <Frame asset={frameOf(b.beatId)} projectPath={projectPath} ratio={ratio} />
               </button>
               <div className="board-body">
-                <div className="beat-top"><span className="beat-n">Beat {n + 1}</span><span className="mono">{timecode(b.startSec, fps)} to {timecode(b.endSec, fps)}</span>
-                  <span className="muted">{b.primary || "Untitled"} · intensity {b.intensity} · energy {b.energy}</span></div>
-                <label className="field"><span className="field-label">Frame for beat {n + 1}</span>
-                  <select value={project.treatment[b.beatId]?.frameAssetId ?? ""} onChange={(e) => setT(b.beatId, { frameAssetId: e.target.value || undefined })}>
-                    <option value="">No frame</option>
-                    {images.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}</option>)}
-                  </select></label>
-                <label className="field"><span className="field-label">Sequence plan</span>
-                  <textarea rows={2} value={project.treatment[b.beatId]?.plan ?? ""} placeholder="What happens on screen in this beat?" onChange={(e) => setT(b.beatId, { plan: e.target.value })} /></label>
-                <label className="field"><span className="field-label">Motion language</span>
-                  <textarea rows={2} value={project.treatment[b.beatId]?.motion ?? ""} placeholder="How does it move? Easing, pace, transitions." onChange={(e) => setT(b.beatId, { motion: e.target.value })} /></label>
+                <div className="tile-head"><span className="strong">{b.primary || `Scene ${n + 1}`}</span><span className="time-chip mono">{timecode(b.startSec, fps)} to {timecode(b.endSec, fps)}</span></div>
+                <label className="field"><span className="visually-hidden">Sequence plan</span>
+                  <textarea rows={2} value={project.treatment[b.beatId]?.plan ?? ""} placeholder="What happens on screen in this scene?" onChange={(e) => setT(b.beatId, { plan: e.target.value })} /></label>
+                <MakePicture beat={b} disabled={locked} again={!!frameOf(b.beatId)} />
+                {frameOf(b.beatId) && <AnimateScene beat={b} disabled={locked} />}
+                <VoiceOver beat={b} disabled={locked} />
+                <details className="more">
+                  <summary>Picture and motion</summary>
+                  <label className="field"><span className="field-label">Frame for beat {n + 1}</span>
+                    <select value={project.treatment[b.beatId]?.frameAssetId ?? ""} onChange={(e) => setT(b.beatId, { frameAssetId: e.target.value || undefined })}>
+                      <option value="">No frame</option>
+                      {images.map((a) => <option key={a.id} value={a.id}>{assetLabel(a)}{a.kind === "video" ? " (video)" : ""}</option>)}
+                    </select></label>
+                  {frameOf(b.beatId)?.kind === "video" && (
+                    <label className="field"><span className="field-label">When the clip is shorter than the scene</span>
+                      <select value={project.treatment[b.beatId]?.frameLoop ? "loop" : "hold"} onChange={(e) => setT(b.beatId, { frameLoop: e.target.value === "loop" })}>
+                        <option value="hold">Play once, then hold the last frame</option>
+                        <option value="loop">Loop the clip</option>
+                      </select></label>
+                  )}
+                  <div className="row-actions">
+                    <button type="button" className="btn" disabled={locked || imp.busy} onClick={() => void imp.run().then((added) => { const first = added.find((x) => x.kind === "image" || x.kind === "video"); if (first) setT(b.beatId, { frameAssetId: first.id }); })}>Use my own picture or video…</button>
+                    <span className="muted">Or drag files onto the window to add them, then choose one here.</span></div>
+                  {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
+                  <label className="field"><span className="field-label">Motion language</span>
+                    <textarea rows={2} value={project.treatment[b.beatId]?.motion ?? ""} placeholder="How does it move? Easing, pace, transitions." onChange={(e) => setT(b.beatId, { motion: e.target.value })} /></label>
+                </details>
               </div>
             </li>
           ))}
@@ -70,16 +86,17 @@ export function TreatmentPage(f: FrameProps) {
     <PageFrame {...f} title="Treatment" intro="A storyboard: one frame and one plan per beat." strip main={main}
       inspector={<>
         <Fold title="Frames" defaultOpen meta={<span className="count">{images.length}</span>}>
-          <p className="muted">Frames come from your media wall. Add pictures here or in the Brief, or generate them in Settings, Image and video providers.</p>
+          <p className="muted">Each scene shows one picture from your media wall. Add some here or on the Brief page, or make them in Direction.</p>
           <button className="btn" disabled={imp.busy} onClick={() => void imp.run()}><ImagePlus size={16} aria-hidden="true" />Add pictures…</button>
+          <button className="btn" disabled={locked || fillFrames(project) === project} onClick={() => update((p) => fillFrames(p))}>Fill empty scenes with my pictures</button>
           {imp.error && <p className="error-text" role="alert">{imp.error}</p>}
         </Fold>
-        <Fold title="Animatic"><p className="muted">The animatic plays frames over the audio. It is not an engine render. Audio arrives in Phase 3.</p></Fold>
+        
       </>}
       action={{
         label: state === "approved" ? "Treatment approved" : "Approve treatment", onClick: () => approveGate("C"),
         disabledReason: state === "approved" ? "Already approved. Unlock to change it." : beats.length === 0 ? "Add beats on the Intent page first." : missing.length ? `Write a plan for ${missing.length} more beat${missing.length === 1 ? "" : "s"}.` : undefined,
-        secondary: { label: "Preview animatic", onClick: () => undefined, disabledReason: "Needs audio (Phase 3)." },
+        secondary: { label: "Preview animatic", onClick: () => undefined, disabledReason: "Needs audio. Add some on the Brief page." },
       }} />
   );
 }

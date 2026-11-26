@@ -1,7 +1,7 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Beat, Purpose, Scale5, Tone } from "../types";
 import { useApp } from "../ctx";
-import { PageFrame, Viewer } from "../shell/PageFrame";
+import { PageFrame } from "../shell/PageFrame";
 import { Fold } from "../shell/Fold";
 import { ENERGY_ANCHORS, INTENSITY_ANCHORS } from "../lib/anchors";
 import { firedRules } from "../lib/rules";
@@ -9,6 +9,11 @@ import { gateState, newId, stageComplete } from "../lib/project";
 import { parseSeconds, timecode } from "../lib/time";
 import { Field, LockBar, useLocked, type FrameProps } from "./common";
 import { useState } from "react";
+import { getApi } from "../lib/api";
+import { useSettings } from "../lib/settings";
+import { Sheet } from "../shell/Sheet";
+import { RuleEditor } from "./RuleEditor";
+import type { RuleSpec } from "../types";
 
 const PURPOSES: Purpose[] = ["inform", "teach", "persuade", "sell", "announce", "celebrate", "entertain", "memorialize"];
 const TONES: Tone[] = ["authoritative", "trustworthy", "playful", "elegant", "instructional", "provocative", "restrained"];
@@ -27,7 +32,9 @@ function TimeInput({ value, onChange, label, disabled, fps }: { value: number; o
 }
 
 export function IntentPage(f: FrameProps) {
-  const { project, update, approveGate } = useApp();
+  const { project, update, approveGate, projectPath } = useApp();
+  const { offline, enginePath } = useSettings();
+  const [dir, setDir] = useState<{ busy: boolean; error?: string; notes: string[]; ask?: { provider: string; model: string; label: string } }>({ busy: false, notes: [] });
   const locked = useLocked("A");
   const fps = project.brief.deliverables[0]?.fps ?? 30;
   const set = (fn: (i: typeof project.intent) => typeof project.intent) =>
@@ -39,6 +46,29 @@ export function IntentPage(f: FrameProps) {
     const start = last ? last.endSec : 0;
     return { ...i, arc: [...i.arc, { beatId: newId().slice(0, 8), startSec: start, endSec: start + 5, primary: "", intensity: 3, energy: 3 }] };
   });
+  /** The Director drafts the intent. It only proposes: the draft fills the card, you edit it, and Gate A stays yours. */
+  const draft = async (confirmed: boolean) => {
+    setDir((d) => ({ ...d, busy: true, error: undefined, notes: [], ask: undefined }));
+    try {
+      const api = await getApi();
+      const st = await api.engine<{ ready: boolean; reason: string; config: { provider: string | null; model: string }; providers: { id: string; label: string; local: boolean }[] }>("llm_status", { offline }, "", enginePath);
+      const { provider, model } = st.config;
+      const info = st.providers.find((p) => p.id === provider);
+      if (!st.ready || !provider || !info) { setDir({ busy: false, notes: [], error: st.reason || "Choose a language model in Settings first. You can write the intent yourself instead." }); return; }
+      if (!info.local && !confirmed) { setDir({ busy: false, notes: [], ask: { provider, model, label: info.label } }); return; }
+      const params: Record<string, unknown> = { provider, model, brief: project.brief.text, script: project.brief.script ?? "", duration_sec: project.brief.deliverables[0]?.durationSec ?? 15, offline };
+      if (!info.local) params.spend_token = await api.confirmSpend(provider, model);   // only reachable from the confirm click
+      const r = await api.engine<{ intent: typeof project.intent; warnings: string[] }>("director_intent", params, projectPath, enginePath);
+      update((p) => { const next = { ...p, intent: r.intent, updatedAt: new Date().toISOString() };
+        return { ...next, intent: { ...r.intent, firedRules: firedRules(next).map((x) => x.id) } }; });
+      setDir({ busy: false, notes: r.warnings });
+    } catch (e) { setDir({ busy: false, notes: [], error: String(e instanceof Error ? e.message : e) }); }
+  };
+  const setRules = (rules: RuleSpec[] | undefined) => update((p) => {
+    const next = { ...p, rules, updatedAt: new Date().toISOString() };
+    if (rules === undefined) delete next.rules;
+    return { ...next, intent: { ...next.intent, firedRules: firedRules(next).map((r) => r.id) } };
+  });
   const fired = firedRules(project);
   const complete = stageComplete(project, "A");
   const state = gateState(project, "A");
@@ -47,6 +77,21 @@ export function IntentPage(f: FrameProps) {
   const main = (
     <div className="stack">
       <LockBar gate="A" kind="intent_change" />
+      {!locked && (
+        <div className="row-actions">
+          <button className="btn" disabled={dir.busy || !project.brief.text.trim()} onClick={() => void draft(false)}><Sparkles size={16} aria-hidden="true" />{dir.busy ? "Drafting…" : "Draft with Director"}</button>
+          <span className="muted">{project.brief.text.trim() ? "Replaces this card with a draft you can edit." : "Write a brief first."}</span>
+        </div>
+      )}
+      {dir.error && <p className="error-text" role="alert">{dir.error}</p>}
+      {dir.notes.length > 0 && <ul className="plain" role="status">{dir.notes.map((n, i) => <li key={i} className="why">{n}</li>)}</ul>}
+      {dir.ask && (
+        <Sheet title="Confirm spending" onClose={() => setDir((d) => ({ ...d, ask: undefined }))}
+          footer={<><button className="btn" onClick={() => setDir((d) => ({ ...d, ask: undefined }))}>Cancel</button><button className="btn primary" onClick={() => void draft(true)}>Confirm and draft</button></>}>
+          <dl className="facts"><dt>Model</dt><dd>{dir.ask.model}</dd><dt>Provider</dt><dd>{dir.ask.label} (cloud)</dd><dt>Price</dt><dd>Unknown. It depends on the model and the length of your brief.</dd><dt>Charged to</dt><dd>Your {dir.ask.label} account</dd></dl>
+          <p className="muted">Your brief and script are sent to {dir.ask.label}. Nothing is sent until you confirm. This confirmation works once.</p>
+        </Sheet>
+      )}
       <fieldset className="grp" disabled={locked}>
         <legend className="visually-hidden">Intent</legend>
         <Field label="Summary" hint="One plain-language sentence. This is the card you approve.">
@@ -101,18 +146,13 @@ export function IntentPage(f: FrameProps) {
           : <p className="muted">The brief is empty. Evidence from it will be quoted here.</p>}
       </Fold>
       <Fold title="Rule table" defaultOpen meta={<span className="count">{fired.length} fired</span>}>
-        {fired.length === 0 ? <p className="muted">No rules fired yet. Rules fire from tone and beat energy.</p> : (
-          <ul className="rules">{fired.map((r) => (
-            <li key={r.id}><strong>{r.label}</strong>
-              <dl><dt>Timing</dt><dd>{r.timing}</dd><dt>Easing</dt><dd>{r.easing}</dd><dt>Typography</dt><dd>{r.typography}</dd><dt>Layout</dt><dd>{r.layout}</dd><dt>Transitions</dt><dd>{r.transitions}</dd></dl></li>))}</ul>
-        )}
-        <p className="hint">Default rules from the PRD. Editing the table arrives in ticket P1-09.</p>
+        <RuleEditor project={project} locked={locked} onChange={setRules} />
       </Fold>
     </>
   );
   return (
     <PageFrame {...f} title="Intent" intro="The interpretation everything else follows. Edit it until it is right, then approve it." strip
-      main={<div className="split-main"><Viewer />{main}</div>} inspector={inspector}
+      main={<div className="split-main">{main}</div>} inspector={inspector}
       action={{ label: state === "approved" ? "Intent approved" : "Approve intent", onClick: () => approveGate("A"), disabledReason: state === "approved" ? "Already approved. Unlock to change it." : reason ?? (complete ? undefined : "Complete the card first.") }} />
   );
 }

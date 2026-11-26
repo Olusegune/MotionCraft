@@ -5,6 +5,7 @@ import { Segmented } from "./Segmented";
 import { updateSettings, useSettings } from "../lib/settings";
 import { approvedGatesAffectedBy, GATE_NAME, gateLabel, gateState, stageComplete } from "../lib/project";
 import { ProvidersSection } from "./ProvidersSection";
+import { LlmSection } from "./LlmSection";
 import { SHORTCUTS } from "../lib/shortcuts";
 import { getApi, type EngineStatus } from "../lib/api";
 
@@ -51,9 +52,9 @@ export function SaveCopySheet({ defaultName, onClose, onSave }: { defaultName: s
 export function ManualSheet({ onClose, onSettings }: { onClose: () => void; onSettings: () => void }) {
   return (
     <Sheet title="Working manually" onClose={onClose} footer={<><button className="btn" onClick={onSettings}>Open Settings</button><button className="btn primary" onClick={onClose}>Got it</button></>}>
-      <p><strong>You are in Manual mode.</strong> Every page works without an AI account: write the brief, set the intent, choose the style, plan each beat, build in the Build page and EffectCraft, review and deliver. Nothing is sent anywhere.</p>
+      <p><strong>You are doing it yourself.</strong> Every page works without an AI account: write the brief, set the intent, choose the style, plan each beat, build in the Build page and EffectCraft, review and deliver. Nothing is sent anywhere.</p>
       <ul className="plain">
-        <li><strong>Assisted</strong> and <strong>Agent-led</strong> need an AI language-model provider. They are not available yet; the buttons are greyed with the reason.</li>
+        <li><strong>Together</strong> and <strong>It does it</strong> need an AI language-model provider. They stay greyed, with the reason, until you add one in Settings.</li>
         <li><strong>Image and video generation</strong> is separate and optional: Settings, Image and video providers. It is off until you turn it on.</li>
         <li>Approvals (gates A to D) are always your click, in every mode.</li>
       </ul>
@@ -70,20 +71,26 @@ export function AboutSheet({ engine, onClose }: { engine: EngineStatus | null; o
   );
 }
 
-export function SettingsSheet({ engine, onClose, onRecheck, onModels }: { engine: EngineStatus | null; onClose: () => void; onRecheck: () => void; onModels: () => void }) {
+export function SettingsSheet({ engine, onClose, onRecheck, onModels, onCheckUpdates }: { engine: EngineStatus | null; onCheckUpdates?: () => Promise<string>; onClose: () => void; onRecheck: () => void; onModels: () => void }) {
   const s = useSettings();
   const [path, setPath] = useState(s.enginePath);
+  const [upMsg, setUpMsg] = useState<string | null>(null);
   return (
     <Sheet title="Settings" onClose={onClose} wide footer={<button className="btn primary" onClick={onClose}>Done</button>}>
       <div className="stack">
         <section><h3>Working mode</h3>
-          <p><strong>Manual.</strong> Everything works without an AI account. Assisted and Agent-led need a language-model provider, which is not available yet.</p></section>
+          <p><strong>You do it.</strong> Everything works without an AI account. Together and It does it need a language-model provider (Settings, Language model).</p></section>
         <section><h3>Appearance</h3>
           <label className="field"><span className="field-label">UI scale ({s.uiScale}%)</span>
             <input type="range" min={90} max={250} step={5} value={s.uiScale} onChange={(e) => updateSettings({ uiScale: Number(e.target.value) })} /></label></section>
         <section><h3>Offline mode</h3>
           <Segmented label="Offline mode" value={s.offline ? "on" : "off"} onChange={(v) => updateSettings({ offline: v === "on" })} options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} />
           <p className="muted">When on, cloud providers are disabled: no model lists are refreshed and nothing is generated.</p></section>
+        <section><h3>Updates</h3>
+          <Segmented label="Check for updates at start" value={s.autoUpdate ? "on" : "off"} onChange={(v) => updateSettings({ autoUpdate: v === "on" })} options={[{ value: "on", label: "Check at start" }, { value: "off", label: "Off" }]} />
+          <div className="row-actions"><button className="btn" onClick={async () => { setUpMsg("Checking…"); setUpMsg(onCheckUpdates ? await onCheckUpdates() : "Updates need the desktop app."); }}>Check now</button></div>
+          {upMsg && <p role="status">{upMsg}</p>}
+          <p className="muted">Updates are signed and checked before they install, and nothing installs without your click. Offline mode never checks.</p></section>
         <section><h3>Engine</h3>
           <p>{engine ? engine.detail : "Checking…"}</p>
           <label className="field"><span className="field-label">Path to effectcraft-cli (optional)</span><input value={path} onChange={(e) => setPath(e.target.value)} placeholder="Leave empty to search the usual install folders" /></label>
@@ -93,6 +100,7 @@ export function SettingsSheet({ engine, onClose, onRecheck, onModels }: { engine
             <button className="btn quiet" onClick={() => { setPath(""); updateSettings({ enginePath: "" }); onRecheck(); }}>Find automatically</button></div>
           <p className="muted">Pinned: EffectCraft 0.24.1, commit 7e2d025.</p></section>
         <ProvidersSection onModels={onModels} />
+        <LlmSection />
         <section><h3>Shortcuts</h3><ul className="plain">{SHORTCUTS.map((x) => <li key={x.id}><span className="kbd">{x.keys}</span> {x.label}</li>)}</ul></section>
       </div>
     </Sheet>

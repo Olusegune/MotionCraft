@@ -36,15 +36,15 @@ describe("shell", () => {
     expect(gates[0]).toHaveAccessibleName("Gate A, Intent: not reached");
   });
 
-  it("disables Assisted and Agent-led with a reason when no provider exists", async () => {
+  it("disables Together and It does it with a reason when no provider exists", async () => {
     const user = userEvent.setup();
     render(<App />);
     await newProject(user);
     await user.click(nav("Intent"));
-    const assisted = await screen.findByRole("radio", { name: "Assisted" });
+    const assisted = await screen.findByRole("radio", { name: "Together" });
     expect(assisted).toBeDisabled();
     expect(assisted).toHaveAttribute("title", expect.stringContaining("AI provider"));
-    expect(screen.getByRole("radio", { name: "Manual" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "You do it" })).toBeChecked();
   });
 
   it("completes gate A manually, locks the card, and unlocking needs confirmation", async () => {
@@ -59,6 +59,10 @@ describe("shell", () => {
     await user.type(screen.getByLabelText("Primary emotion"), "calm");
     await waitFor(() => expect(screen.getByRole("button", { name: "Approve intent" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Approve intent" }));
+    // Golden path: approving takes you to the page the next step is on and says what to do there. This project has no brief yet, so that is the Brief.
+    await waitFor(() => expect(screen.getAllByText(/Approved\. Next: Write or paste your brief/).length).toBeGreaterThan(0));
+    expect(await screen.findByRole("heading", { name: "Brief" })).toBeInTheDocument();
+    await user.click(nav("Intent"));
     expect(await screen.findByText(/Approved at Gate A/)).toBeInTheDocument();
     expect(screen.getByLabelText("Summary")).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Unlock to edit" }));

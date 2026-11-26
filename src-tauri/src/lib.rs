@@ -95,6 +95,12 @@ pub fn check_package(root: &Path, path: &str) -> Result<PathBuf, String> {
 
 /// Write temp, fsync, rename (PROJECT_SCHEMA.md storage rule).
 pub fn atomic_write(dest: &Path, bytes: &[u8]) -> Result<(), String> {
+    // Keep the previous good file as `*.bak` first: if a crash or a full disk ever damages project.json, the last good copy is there.
+    if let Ok(old) = fs::read(dest) {
+        if serde_json::from_slice::<Value>(&old).is_ok() {
+            let _ = fs::write(dest.with_extension("json.bak"), &old);
+        }
+    }
     let tmp = dest.with_extension("json.tmp");
     let mut f = fs::File::create(&tmp).map_err(|e| format!("Could not write {}: {e}", tmp.display()))?;
     f.write_all(bytes).map_err(|e| e.to_string())?;
@@ -179,6 +185,106 @@ fn save_project(app: tauri::AppHandle, path: String, project: Value) -> Result<(
     atomic_write(&dir.join("project.json"), &serialise(&project)?)
 }
 
+// ---------------------------------------------------------------- crash recovery (P1-06, P1-13)
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectHealth {
+    /// ok | damaged | missing
+    state: &'static str,
+    has_backup: bool,
+    backup_updated_at: Option<String>,
+}
+
+fn read_valid(path: &Path) -> Option<Value> {
+    let v: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    (v.get("schemaVersion").and_then(Value::as_str) == Some("1.0")).then_some(v)
+}
+
+fn health_of(dir: &Path) -> ProjectHealth {
+    let main = dir.join("project.json");
+    let bak = read_valid(&dir.join("project.json.bak"));
+    let state = if !main.exists() { "missing" } else if read_valid(&main).is_some() { "ok" } else { "damaged" };
+    ProjectHealth {
+        state,
+        has_backup: bak.is_some(),
+        backup_updated_at: bak.as_ref().and_then(|v| v.get("updatedAt")).and_then(Value::as_str).map(str::to_string),
+    }
+}
+
+/// Puts the last good copy back. The damaged file is kept beside it as project.damaged.json, never deleted.
+fn restore_backup_in(dir: &Path) -> Result<(), String> {
+    let bak = read_valid(&dir.join("project.json.bak")).ok_or("There is no usable backup of this project.")?;
+    let main = dir.join("project.json");
+    if main.exists() {
+        let _ = fs::rename(&main, dir.join("project.damaged.json"));
+    }
+    atomic_write(&main, &serialise(&bak)?)
+}
+
+#[tauri::command(async)]
+fn project_health(app: tauri::AppHandle, path: String) -> Result<ProjectHealth, String> {
+    Ok(health_of(&check_package(&projects_root(&app)?, &path)?))
+}
+
+#[tauri::command(async)]
+fn restore_backup(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    restore_backup_in(&check_package(&projects_root(&app)?, &path)?)
+}
+
+/// A marker file says "a project is open". It is removed on a normal exit or when the project is closed, so finding it at launch
+/// means MotionCraft did not close properly (crash, kill, power loss).
+fn marker_file(base: &Path) -> PathBuf {
+    base.join("session.json")
+}
+fn write_marker(base: &Path, package: &str) -> Result<(), String> {
+    fs::create_dir_all(base).map_err(|e| e.to_string())?;
+    atomic_write(&marker_file(base), serde_json::json!({ "package": package }).to_string().as_bytes())
+}
+fn read_marker(base: &Path) -> Option<String> {
+    let v: Value = serde_json::from_slice(&fs::read(marker_file(base)).ok()?).ok()?;
+    v.get("package").and_then(Value::as_str).map(str::to_string)
+}
+fn clear_marker(base: &Path) {
+    let _ = fs::remove_file(marker_file(base));
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Unclean {
+    path: String,
+    name: String,
+    updated_at: String,
+    health: ProjectHealth,
+}
+
+/// Called once at launch, before the new session starts. Clears the marker either way so the prompt shows once.
+#[tauri::command(async)]
+fn unclean_session(app: tauri::AppHandle) -> Option<Unclean> {
+    let base = app.path().app_data_dir().ok()?;
+    let pkg = read_marker(&base)?;
+    clear_marker(&base);
+    let dir = check_package(&projects_root(&app).ok()?, &pkg).ok()?;
+    let health = health_of(&dir);
+    let v = read_valid(&dir.join("project.json")).or_else(|| read_valid(&dir.join("project.json.bak")))?;
+    let s = summary(&dir, &v);
+    Some(Unclean { path: s.path, name: s.name, updated_at: s.updated_at, health })
+}
+
+#[tauri::command(async)]
+fn session_begin(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let dir = check_package(&projects_root(&app)?, &path)?;
+    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    write_marker(&base, &dir.to_string_lossy())
+}
+
+#[tauri::command(async)]
+fn session_end(app: tauri::AppHandle) {
+    if let Ok(base) = app.path().app_data_dir() {
+        clear_marker(&base);
+    }
+}
+
 fn cli_name() -> &'static str {
     if cfg!(windows) { "effectcraft-cli.exe" } else { "effectcraft-cli" }
 }
@@ -242,13 +348,16 @@ fn looks_like_cli(p: &Path) -> bool {
 }
 
 fn run_version(cli: &Path) -> Result<String, String> {
-    let mut child = Command::new(cli)
-        .arg("--version")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Could not start {}: {e}", cli.display()))?;
+    let mut cmd = Command::new(cli);
+    cmd.arg("--version").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    // effectcraft-cli is a console program. Without this Windows opens a console window for it, and with Windows Terminal as the
+    // default terminal that is a terminal window flashing over the app every time the engine is checked.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("Could not start {}: {e}", cli.display()))?;
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match child.try_wait().map_err(|e| e.to_string())? {
@@ -324,15 +433,27 @@ pub struct EngineState {
     spend: Mutex<HashMap<String, Instant>>,
 }
 
-const ENGINE_METHODS: [&str; 19] = [
+const ENGINE_METHODS: [&str; 43] = [
     "open", "inspect", "add_text", "set_text", "add_camera", "lock", "unlock", "preview", "close", "add_shape", "add_solid", "add_media", "apply_primitive",
-    "primitives", "audio_analyze", "sync_markers", "preview_movie_start", "render_start", "render_poll",
+    "primitives", "audio_analyze", "audio_cached", "sync_markers", "preview_movie_start", "render_start", "render_poll", "builder_execute", "qa_run", "qa_fix",
+    "snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore",
+    "render_resume", "render_cancel", "render_discard", "render_jobs", "songmap_import", "sync_labelled_markers", "timeline_read", "layer_timing", "place_pictures", "picture_check", "fonts_available", "place_audio", "set_audio_level", "key_out", "export_bridge", "set_backdrop",
 ];
-const MODEL_METHODS: [&str; 5] = ["models", "models_refresh", "generate_start", "generate_poll", "generate_cancel"];
-const WRITE_METHODS: [&str; 10] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers"];
+const MODEL_METHODS: [&str; 15] = ["models", "models_refresh", "models_add", "model_schema", "speech_models", "speech_generate", "generate_start", "generate_poll", "generate_cancel", "llm_status", "llm_set", "llm_models", "llm_complete", "director_intent", "builder_plan"];
+/// Methods that call a language model: a cloud provider needs a key and a spend token, a local one neither.
+const LLM_CALL_METHODS: [&str; 3] = ["llm_complete", "director_intent", "builder_plan"];
+/// Language-model providers that run in the cloud: a call needs a key and a spend token. Local ones (ollama, lmstudio, inkling) need neither,
+/// and the helper only lets them reach a loopback address. Value = the credential-store account the key is kept under.
+const LLM_CLOUD: [(&str, &str); 4] = [("openai", "openai"), ("anthropic", "anthropic"), ("gemini", "google"), ("openrouter", "openrouter")];
+const LLM_LOCAL: [&str; 3] = ["ollama", "lmstudio", "inkling"];
+/// Credential-store accounts: the generation providers plus the two language-model-only ones.
+const KEY_ACCOUNTS: [&str; 7] = ["byteplus", "google", "openai", "kie", "fal", "anthropic", "openrouter"];
+const WRITE_METHODS: [&str; 22] = ["add_text", "set_text", "add_camera", "lock", "unlock", "add_shape", "add_solid", "add_media", "apply_primitive", "sync_markers", "builder_execute", "qa_fix", "snapshot_save", "snapshot_restore", "sync_labelled_markers", "layer_timing", "place_pictures", "place_audio", "set_audio_level", "key_out", "export_bridge", "set_backdrop"];
 /// Methods that spend money or make a deliverable: they need a live spend token from a click (AGENTS.md).
-const PAID_ENGINE_METHODS: [&str; 1] = ["render_start"];
+const PAID_ENGINE_METHODS: [&str; 2] = ["render_start", "render_resume"];
 const PROVIDERS: [&str; 5] = ["byteplus", "google", "openai", "kie", "fal"];
+/// Voiceover is made by official providers only (ADR-0005 bans voice and music models through aggregators).
+const SPEECH_PROVIDERS: [&str; 2] = ["openai", "google"];
 const KEY_SERVICE: &str = "motioncraft";
 const SPEND_TTL: Duration = Duration::from_secs(300);
 
@@ -413,7 +534,9 @@ fn provider_ok(p: &str) -> Result<(), String> {
 }
 
 fn key_entry(provider: &str) -> Result<keyring::Entry, String> {
-    provider_ok(provider)?;
+    if !KEY_ACCOUNTS.contains(&provider) {
+        return Err(format!("Unknown provider {provider}."));
+    }
     keyring::Entry::new(KEY_SERVICE, &format!("{provider}-api-key")).map_err(|e| format!("Credential store unavailable: {e}"))
 }
 
@@ -437,7 +560,7 @@ fn delete_provider_key(provider: String) -> Result<(), String> {
 
 #[tauri::command(async)]
 fn provider_key_status() -> HashMap<String, bool> {
-    PROVIDERS.iter().map(|p| (p.to_string(), key_entry(p).ok().and_then(|e| e.get_password().ok()).is_some())).collect()
+    KEY_ACCOUNTS.iter().map(|p| (p.to_string(), key_entry(p).ok().and_then(|e| e.get_password().ok()).is_some())).collect()
 }
 
 fn get_key(provider: &str) -> Result<String, String> {
@@ -454,8 +577,8 @@ fn random_token() -> Result<String, String> {
 /// single use and expires; `engine_call` refuses `generate_start` without a live one.
 #[tauri::command(async)]
 fn confirm_spend(st: State<EngineState>, provider: String, model: String) -> Result<String, String> {
-    if provider != "local-render" {
-        provider_ok(&provider)?; // a final render on this computer is the only non-provider spend
+    if provider != "local-render" && !LLM_CLOUD.iter().any(|(p, _)| *p == provider) {
+        provider_ok(&provider)?; // a final render on this computer is the only non-provider spend; cloud language models are the other
     }
     if model.is_empty() || model.len() > 200 {
         return Err("Bad model.".into());
@@ -502,7 +625,7 @@ fn engine_call(
             o.remove(k);
         }
     }
-    if method == "open" || method == "generate_start" {
+    if method == "open" || method == "generate_start" || method == "speech_generate" {
         let root = projects_root(&app)?;
         let pkg = check_package(&root, package.as_deref().ok_or("No project path.")?)?;
         params.as_object_mut().unwrap().insert("package".into(), Value::String(pkg.to_string_lossy().into_owned()));
@@ -512,6 +635,18 @@ fn engine_call(
         if !take_spend(&st, &token) {
             return Err("A final render needs a confirmation from a click on the render sheet. Confirm again.".into());
         }
+    }
+    if method == "speech_generate" {
+        let provider = params.get("provider").and_then(Value::as_str).ok_or("No provider.")?.to_string();
+        if !SPEECH_PROVIDERS.contains(&provider.as_str()) {
+            return Err("Voiceover uses official providers only: OpenAI or Google.".into());
+        }
+        let token = params.get("spend_token").and_then(Value::as_str).unwrap_or("").to_string();
+        if !take_spend(&st, &token) {
+            return Err("A voiceover needs a spend confirmation from a click on the confirmation sheet. Confirm again.".into());
+        }
+        let key = get_key(&provider)?;
+        params.as_object_mut().unwrap().insert("api_key".into(), Value::String(key));
     }
     if method == "generate_start" {
         let provider = params.get("provider").and_then(Value::as_str).ok_or("No provider.")?.to_string();
@@ -523,10 +658,25 @@ fn engine_call(
         let key = get_key(&provider)?;
         params.as_object_mut().unwrap().insert("api_key".into(), Value::String(key));
     }
+    if LLM_CALL_METHODS.contains(&method.as_str()) {
+        let provider = params.get("provider").and_then(Value::as_str).ok_or("No language-model provider.")?.to_string();
+        if let Some((_, account)) = LLM_CLOUD.iter().find(|(p, _)| *p == provider) {
+            let token = params.get("spend_token").and_then(Value::as_str).unwrap_or("").to_string();
+            if !take_spend(&st, &token) {
+                return Err("A cloud language-model call needs a spend confirmation from a click. Confirm again.".into());
+            }
+            let key = get_key(account)?;
+            params.as_object_mut().unwrap().insert("api_key".into(), Value::String(key));
+        } else if !LLM_LOCAL.contains(&provider.as_str()) {
+            return Err(format!("Unknown language-model provider {provider}."));
+        }
+    }
     if method == "models_refresh" {
         let mut keys = serde_json::Map::new();
-        if let Ok(k) = get_key("fal") {
-            keys.insert("fal".into(), Value::String(k)); // only fal's listing needs a key
+        for p in ["fal", "google"] {
+            if let Ok(k) = get_key(p) {
+                keys.insert(p.into(), Value::String(k)); // fal's and Google's lists need a key; listing models costs nothing
+            }
         }
         params.as_object_mut().unwrap().insert("keys".into(), Value::Object(keys));
     }
@@ -555,7 +705,7 @@ fn sidecar_request(st: &EngineState, cli: Option<&Path>, data_dir: Option<&Path>
     sc.next_id += 1;
     let line = serde_json::json!({"id": id, "method": method, "params": params}).to_string();
     let io_ok = writeln!(sc.stdin, "{line}").and_then(|_| sc.stdin.flush()).is_ok();
-    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" { 180 } else { 60 });
+    let timeout = Duration::from_secs(if method == "open" || method == "preview" || method == "models_refresh" || method == "builder_execute" || method == "qa_run" || method.starts_with("snapshot_") || LLM_CALL_METHODS.contains(&method) { 180 } else { 60 });
     let reply: Result<Value, String> = if io_ok {
         loop {
             match sc.rx.recv_timeout(timeout) {
@@ -678,10 +828,31 @@ fn export_package(app: tauri::AppHandle, path: String, dest_parent: String) -> R
     }
     let base = src.file_stem().and_then(|s| s.to_str()).unwrap_or("project").to_string();
     let dst = unique_package(&parent, &base);
-    copy_dir(&src, &dst, 0).inspect_err(|_| {
+    collect_package(&src, &dst).inspect_err(|_| {
         let _ = fs::remove_dir_all(&dst);
     })?;
     Ok(dst.to_string_lossy().into_owned())
+}
+
+/// What a collected editable project leaves out: the draft movies and stills (they are made again on Build) and the working logs. Everything else is
+/// kept, with its relative paths, so the package opens on another computer: the composition, the assets, the font manifest, the renders, the project file.
+const COLLECT_SKIP: [&str; 2] = ["previews", "logs"];
+
+fn collect_package(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| format!("Could not create {}: {e}", dst.display()))?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
+        let name = entry.file_name();
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_symlink() || (kind.is_dir() && COLLECT_SKIP.iter().any(|s| name == std::ffi::OsStr::new(s))) {
+            continue;
+        }
+        if kind.is_dir() {
+            copy_dir(&entry.path(), &dst.join(&name), 1)?;
+        } else if kind.is_file() {
+            fs::copy(entry.path(), dst.join(&name)).map_err(|e| format!("Could not copy {}: {e}", entry.path().display()))?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command(async)]
@@ -752,6 +923,48 @@ fn import_asset(app: tauri::AppHandle, path: String, source: String) -> Result<I
     let name = format!("imp-{}-{}.{}", &id[..8], stem.replace(' ', "-"), ext);
     fs::copy(&src, folder.join(&name)).map_err(|e| format!("Could not copy the file: {e}"))?;
     Ok(ImportedAsset { kind, path: format!("assets/{sub}/{name}"), name: stem })
+}
+
+/// A Pulseframe SongMap is plain JSON. Before it is copied into the project it must really be one: valid JSON, an object, schema version 1,
+/// a duration and a list of sections. (The engine helper checks and clamps every field again when it reads it.)
+pub fn validate_songmap(text: &str) -> Result<(), String> {
+    let v: Value = serde_json::from_str(text).map_err(|_| "That is not a SongMap file (it is not valid JSON).".to_string())?;
+    let o = v.as_object().ok_or("That is not a SongMap file.")?;
+    if o.get("schema_version").and_then(Value::as_i64) != Some(1) {
+        return Err("This SongMap is not schema version 1, which is the version MotionCraft reads.".into());
+    }
+    if !o.get("duration").map(|d| d.is_number()).unwrap_or(false) || !o.get("sections").map(Value::is_array).unwrap_or(false) {
+        return Err("That SongMap has no duration or no sections.".into());
+    }
+    Ok(())
+}
+
+/// Brings a SongMap made by Pulseframe into the project as assets/audio/imp-<id>-<name>.songmap.json. It is not an audio track and is not
+/// listed as one: the page records it separately.
+#[tauri::command(async)]
+fn import_songmap(app: tauri::AppHandle, path: String, source: String) -> Result<ImportedAsset, String> {
+    use std::io::Read;
+    let dir = check_package(&projects_root(&app)?, &path)?;
+    let src = PathBuf::from(&source).canonicalize().map_err(|_| "That file does not exist.".to_string())?;
+    if !src.is_file() {
+        return Err("Choose a file, not a folder.".into());
+    }
+    const CAP: u64 = 5 * 1024 * 1024;
+    if src.metadata().map_err(|e| e.to_string())?.len() > CAP {
+        return Err("That SongMap is larger than 5 MB.".into());
+    }
+    let mut text = String::new();
+    fs::File::open(&src)
+        .and_then(|f| f.take(CAP + 1).read_to_string(&mut text))
+        .map_err(|_| "That file could not be read as text.".to_string())?;
+    validate_songmap(&text)?;
+    let stem = safe_name(src.file_stem().and_then(|s| s.to_str()).unwrap_or("songmap").trim_end_matches(".songmap")).unwrap_or_else(|_| "songmap".into());
+    let folder = dir.join("assets").join("audio");
+    fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let id = random_token()?;
+    let name = format!("imp-{}-{}.songmap.json", &id[..8], stem.replace(' ', "-"));
+    fs::write(folder.join(&name), text.as_bytes()).map_err(|e| format!("Could not copy the file: {e}"))?;
+    Ok(ImportedAsset { kind: "songmap", path: format!("assets/audio/{name}"), name: stem })
 }
 
 fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<(), String> {
@@ -841,20 +1054,53 @@ fn duplicate_project(app: tauri::AppHandle, path: String, project: Value) -> Res
     Ok(summary(&dst.canonicalize().unwrap_or(dst), &project))
 }
 
+/// The finished example project that ships with the app (the Civilization I-VII walkthrough), as a folder path, or None when this build has no
+/// example (a development build). The page offers it on the Projects page and brings it in with `import_project`, which copies it into the
+/// projects folder, so the shipped copy is never edited.
+const EXAMPLE_NAME: &str = "Civilization I-VII.motioncraft";
+
+#[tauri::command]
+fn example_project(app: tauri::AppHandle) -> Option<String> {
+    let dir = app.path().resource_dir().ok()?.join("examples").join(EXAMPLE_NAME);
+    dir.join("project.json").is_file().then(|| dir.to_string_lossy().into_owned())
+}
+
 /// When the splash was shown, and the minimum time it stays up (so it is not a flash).
 static SPLASH_AT: Mutex<Option<Instant>> = Mutex::new(None);
 const SPLASH_MIN: Duration = Duration::from_millis(1500);
 const DOCS_URL: &str = "https://github.com/Olusegune/MotionCraft/tree/main/docs";
 
+/// Windows 11 animates a window as it appears and disappears. Over a window that is already on screen that shows up as a ghost copy
+/// of it, with its own title-bar buttons, drifting in and fading out at start-up. Turning the transitions off for our windows
+/// removes it. Other platforms have nothing to do.
+#[cfg(windows)]
+fn no_window_animation(w: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED};
+    if let Ok(h) = w.hwnd() {
+        let on: i32 = 1;
+        // SAFETY: a valid window handle from Tauri, and a pointer to a 4-byte BOOL that lives for the call.
+        unsafe {
+            DwmSetWindowAttribute(h.0 as _, DWMWA_TRANSITIONS_FORCEDISABLED as u32, &on as *const i32 as *const _, 4);
+        }
+    }
+}
+#[cfg(not(windows))]
+fn no_window_animation(_: &tauri::WebviewWindow) {}
+
 /// Closes the splash and shows the main window (idempotent). A timer calls it too, so a page that never loads cannot leave the
 /// user looking at the splash forever.
 fn show_main(app: &tauri::AppHandle) {
-    if let Some(sp) = app.get_webview_window("splashscreen") {
-        let _ = sp.close();
-    }
+    // Main first, then the splash is hidden (no animation) and only then closed. Closing it in the same instant the main window
+    // appeared let Windows 11 play the close animation as a ghost panel, with title-bar buttons, over the main window.
     if let Some(m) = app.get_webview_window("main") {
+        // show() already activates the window. Asking for focus again right afterwards made Windows draw a flickering translucent
+        // copy of the window (with title-bar buttons) for about a second and a half; measured on screen, and gone without it.
         let _ = m.show();
-        let _ = m.set_focus();
+    }
+    if let Some(sp) = app.get_webview_window("splashscreen") {
+        let _ = sp.set_always_on_top(false);
+        let _ = sp.hide();
+        let _ = sp.close();
     }
 }
 
@@ -911,16 +1157,62 @@ fn open_docs(app: tauri::AppHandle) {
     open_docs_now(&app);
 }
 
+/// What the updater found. The notes are plain text from the release; the UI shows them as text, never as markup.
+#[derive(Serialize)]
+struct UpdateInfo {
+    version: String,
+    current: String,
+    notes: Option<String>,
+}
+
+/// Look for a newer signed release. Never runs in offline mode. The updater only accepts a package whose signature
+/// verifies against the public key in tauri.conf.json and whose version is newer than this one.
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle, offline: bool) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    if offline {
+        return Ok(None);
+    }
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let found = updater.check().await.map_err(|e| e.to_string())?;
+    Ok(found.map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current: u.current_version.clone(),
+        notes: u.body.clone().map(|b| b.chars().take(2000).collect()),
+    }))
+}
+
+/// Download, verify and install the update, then restart. Only reachable from the person's click on "Install and restart".
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle, offline: bool) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    if offline {
+        return Err("Offline mode is on.".into());
+    }
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        return Err("No update is available.".into());
+    };
+    update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+    app.restart();
+}
+
+/// Menu labels use `&` mnemonics on Windows and Linux; macOS would show the ampersand, so it is dropped there.
+fn lbl(label: &str) -> String {
+    if cfg!(target_os = "macos") { label.replace('&', "") } else { label.to_string() }
+}
+
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
     let it = |id: &str, label: &str, acc: Option<&str>| {
-        let mut b = MenuItemBuilder::with_id(id, label);
+        let mut b = MenuItemBuilder::with_id(id, lbl(label));
         if let Some(a) = acc {
             b = b.accelerator(a);
         }
         b.build(app)
     };
-    let file = SubmenuBuilder::new(app, "&File")
+    let mac = cfg!(target_os = "macos");
+    let mut file = SubmenuBuilder::new(app, lbl("&File"))
         .item(&it("file-new", "&New Project…", Some("CmdOrCtrl+N"))?)
         .item(&it("file-open", "&Open Project…", Some("CmdOrCtrl+O"))?)
         .item(&it("file-open-folder", "Open Project &Folder…", Some("CmdOrCtrl+Shift+O"))?)
@@ -929,12 +1221,17 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&it("file-save-copy", "Save a &Copy…", Some("CmdOrCtrl+Shift+S"))?)
         .item(&it("file-close", "C&lose Project", Some("CmdOrCtrl+W"))?)
         .separator()
-        .item(&it("file-reveal", "Show Projects Fol&der", None)?)
-        .item(&it("file-settings", "Se&ttings…", Some("CmdOrCtrl+,"))?)
-        .separator()
-        .item(&PredefinedMenuItem::quit(app, Some("E&xit"))?)
-        .build()?;
-    let edit = SubmenuBuilder::new(app, "&Edit")
+        .item(&it("file-reveal", "Show Projects Fol&der", None)?);
+    if !mac {
+        // On macOS Settings and Quit live in the app menu (built below), never in File.
+        file = file
+            .separator()
+            .item(&it("file-settings", "Se&ttings…", Some("CmdOrCtrl+,"))?)
+            .separator()
+            .item(&PredefinedMenuItem::quit(app, Some("Exit"))?);
+    }
+    let file = file.build()?;
+    let edit = SubmenuBuilder::new(app, lbl("&Edit"))
         .item(&PredefinedMenuItem::undo(app, None)?)
         .item(&PredefinedMenuItem::redo(app, None)?)
         .separator()
@@ -946,7 +1243,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&it("edit-palette", "Command &Palette…", Some("CmdOrCtrl+K"))?)
         .build()?;
     let stage = |n: u8, id: &str, label: &str| it(id, label, Some(&format!("CmdOrCtrl+{n}")));
-    let go = SubmenuBuilder::new(app, "&Go")
+    let go = SubmenuBuilder::new(app, lbl("&Go"))
         .item(&stage(1, "go-brief", "&Brief")?)
         .item(&stage(2, "go-intent", "&Intent")?)
         .item(&stage(3, "go-direction", "&Direction")?)
@@ -955,7 +1252,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .item(&stage(6, "go-review", "&Review")?)
         .item(&stage(7, "go-deliver", "De&liver")?)
         .build()?;
-    let view = SubmenuBuilder::new(app, "&View")
+    let view = SubmenuBuilder::new(app, lbl("&View"))
         .item(&it("view-viewer-only", "&Viewer-only Mode", Some("CmdOrCtrl+Shift+V"))?)
         .item(&it("view-inspector", "Show or Hide &Inspector", Some("CmdOrCtrl+\\"))?)
         .separator()
@@ -965,22 +1262,39 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         .separator()
         .item(&PredefinedMenuItem::fullscreen(app, None)?)
         .build()?;
-    let tools = SubmenuBuilder::new(app, "&Tools")
+    let tools = SubmenuBuilder::new(app, lbl("&Tools"))
         .item(&it("tools-models", "Image and Video &Models…", None)?)
         .item(&it("tools-effectcraft", "Open in &EffectCraft", Some("CmdOrCtrl+E"))?)
         .item(&it("tools-engine", "&Locate EffectCraft…", None)?)
         .build()?;
-    let window = SubmenuBuilder::new(app, "&Window")
+    let window = SubmenuBuilder::new(app, lbl("&Window"))
         .item(&PredefinedMenuItem::minimize(app, None)?)
         .item(&PredefinedMenuItem::maximize(app, None)?)
         .item(&PredefinedMenuItem::close_window(app, None)?)
         .build()?;
-    let help = SubmenuBuilder::new(app, "&Help")
+    let help = SubmenuBuilder::new(app, lbl("&Help"))
         .item(&it("help-docs", "&Documentation", Some("F1"))?)
         .item(&it("help-shortcuts", "&Keyboard Shortcuts", None)?)
         .item(&it("help-manual", "Working &Manually (no AI)", None)?)
         .item(&it("help-about", "&About MotionCraft", None)?)
         .build()?;
+    if mac {
+        // Native macOS layout: the app menu comes first and carries About, Settings (Cmd+,), Hide and Quit (Cmd+Q).
+        let appmenu = SubmenuBuilder::new(app, "MotionCraft")
+            .item(&it("help-about", "About MotionCraft", None)?)
+            .separator()
+            .item(&it("file-settings", "Settings…", Some("CmdOrCtrl+,"))?)
+            .separator()
+            .item(&PredefinedMenuItem::services(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::hide(app, None)?)
+            .item(&PredefinedMenuItem::hide_others(app, None)?)
+            .item(&PredefinedMenuItem::show_all(app, None)?)
+            .separator()
+            .item(&PredefinedMenuItem::quit(app, Some("Quit MotionCraft"))?)
+            .build()?;
+        return MenuBuilder::new(app).items(&[&appmenu, &file, &edit, &go, &view, &tools, &window, &help]).build();
+    }
     MenuBuilder::new(app).items(&[&file, &edit, &go, &view, &tools, &window, &help]).build()
 }
 
@@ -989,6 +1303,10 @@ pub fn run() {
     use tauri::Emitter;
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Every command that takes `State<EngineState>` (engine_call, confirm_spend, effectcraft_window_open, ...) fails with "state not
+        // managed" without this. It was lost once and nothing noticed, because the tests call the functions directly.
+        .manage(EngineState::default())
         .on_page_load(|webview, payload| {
             use tauri::webview::PageLoadEvent;
             let app = webview.app_handle().clone();
@@ -1017,7 +1335,7 @@ pub fn run() {
                 .center()
                 .always_on_top(true)
                 .skip_taskbar(true)
-                .shadow(true)
+                .shadow(false)   // a shadow gives the borderless window a frame that Windows animates when it closes
                 .visible(false)
                 .background_color(tauri::window::Color(24, 26, 28, 255))
                 .on_navigation(move |url| {
@@ -1030,8 +1348,12 @@ pub fn run() {
                     matches!(url.host_str(), Some("tauri.localhost") | Some("localhost")) || url.scheme() == "tauri"
                 })
                 .build()?;
+            if let Some(sp) = app.get_webview_window("splashscreen") {
+                no_window_animation(&sp);
+            }
             // The menu belongs to the main window only; the splash window must not get a menu bar.
             if let Some(main) = app.get_webview_window("main") {
+                no_window_animation(&main);
                 main.set_menu(build_menu(app.handle())?)?;
             }
             let h = app.handle().clone();
@@ -1050,6 +1372,9 @@ pub fn run() {
             load_project,
             save_project,
             engine_status,
+            update_check,
+            update_install,
+            example_project,
             open_in_effectcraft,
             effectcraft_window_open,
             engine_call,
@@ -1063,19 +1388,127 @@ pub fn run() {
             import_project,
             duplicate_project,
             import_asset,
+            import_songmap,
             package_file,
             export_package,
             app_ready,
             startup_step,
-            open_docs
+            open_docs,
+            project_health,
+            restore_backup,
+            unclean_session,
+            session_begin,
+            session_end
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running MotionCraft");
+        .build(tauri::generate_context!())
+        .expect("error while building MotionCraft")
+        .run(|app, event| {
+            // A normal exit removes the "project is open" marker; a crash or kill leaves it, which is what the next launch looks for.
+            if let tauri::RunEvent::Exit = event {
+                if let Ok(base) = app.path().app_data_dir() {
+                    clear_marker(&base);
+                }
+            }
+        });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_engine_state_is_registered_with_the_app() {
+        // A command taking State<EngineState> cannot run unless the builder manages it, and the unit tests above never go through the
+        // command layer. Keep this guard in step with `run()`.
+        let src = include_str!("lib.rs");
+        let needle = format!(".{}(EngineState::default())", "manage");   // built at run time so this test's own text is not what it finds
+        assert_eq!(src.lines().filter(|l| l.trim_start().starts_with(&needle)).count(), 1, "run() must register the engine state exactly once");
+        assert!(src.matches("State<EngineState>").count() >= 4, "commands that need the engine state exist");
+    }
+
+    #[test]
+    fn a_crash_mid_save_loses_nothing_and_a_damaged_file_can_be_restored() {
+        let dir = std::env::temp_dir().join(format!("mc-crash-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("project.json");
+        let v1 = serde_json::json!({"schemaVersion": "1.0", "name": "x", "updatedAt": "t1"});
+        let v2 = serde_json::json!({"schemaVersion": "1.0", "name": "x", "updatedAt": "t2"});
+        atomic_write(&main, &serialise(&v1).unwrap()).unwrap();
+        assert!(!dir.join("project.json.bak").exists(), "the first write has nothing to back up");
+        atomic_write(&main, &serialise(&v2).unwrap()).unwrap();
+        assert_eq!(health_of(&dir).state, "ok");
+        assert_eq!(health_of(&dir).backup_updated_at.as_deref(), Some("t1"), "the backup is the previous good save");
+
+        // The process dies half-way through the next save: a torn temp file is left, project.json is untouched.
+        fs::write(dir.join("project.json.tmp"), b"{\"schemaVersion\": \"1.").unwrap();
+        assert_eq!(read_valid(&main).unwrap()["updatedAt"], "t2");
+
+        // The file itself is damaged (disk fault): it is reported, and restore brings back the last good copy.
+        fs::write(&main, b"{ not json").unwrap();
+        assert_eq!(health_of(&dir).state, "damaged");
+        restore_backup_in(&dir).unwrap();
+        assert_eq!(health_of(&dir).state, "ok");
+        assert_eq!(read_valid(&main).unwrap()["updatedAt"], "t1");
+        assert!(dir.join("project.damaged.json").exists(), "the damaged file is kept, not deleted");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_damaged_file_never_becomes_the_backup_and_restore_needs_a_good_one() {
+        let dir = std::env::temp_dir().join(format!("mc-nobak-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("project.json");
+        let good = serialise(&serde_json::json!({"schemaVersion": "1.0", "name": "x", "updatedAt": "g"})).unwrap();
+        atomic_write(&main, &good).unwrap();
+        atomic_write(&main, &good).unwrap();
+        fs::write(&main, b"junk").unwrap();
+        atomic_write(&main, &good).unwrap(); // saving over a damaged file must not overwrite the good backup with junk
+        assert_eq!(read_valid(&dir.join("project.json.bak")).unwrap()["updatedAt"], "g");
+        fs::write(dir.join("project.json.bak"), b"also junk").unwrap();
+        fs::write(&main, b"junk").unwrap();
+        assert!(restore_backup_in(&dir).is_err());
+        assert_eq!(fs::read(&main).unwrap(), b"junk", "nothing is touched when there is no good backup");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_open_project_marker_survives_only_an_unclean_exit() {
+        let base = std::env::temp_dir().join(format!("mc-marker-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        assert_eq!(read_marker(&base), None);
+        write_marker(&base, "C:/docs/MotionCraft/A.motioncraft").unwrap();
+        assert_eq!(read_marker(&base).as_deref(), Some("C:/docs/MotionCraft/A.motioncraft"), "still there after a crash");
+        clear_marker(&base);
+        assert_eq!(read_marker(&base), None, "a normal exit or close removes it");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_songmap_must_be_a_real_one_before_it_is_copied_in() {
+        let good = r#"{"schema_version": 1, "duration": 88.0, "bpm": 120, "sections": [], "beats": []}"#;
+        assert!(validate_songmap(good).is_ok());
+        for (bad, why) in [
+            ("not json at all", "valid JSON"),
+            ("[1, 2, 3]", "not a SongMap"),
+            (r#"{"schema_version": 2, "duration": 1, "sections": []}"#, "schema version 1"),
+            (r#"{"duration": 1, "sections": []}"#, "schema version 1"),
+            (r#"{"schema_version": 1, "sections": []}"#, "no duration"),
+            (r#"{"schema_version": 1, "duration": 5}"#, "no sections"),
+            (r#"{"schema_version": 1, "duration": "5", "sections": []}"#, "no duration"),
+        ] {
+            let e = validate_songmap(bad).expect_err(bad);
+            assert!(e.contains(why), "{bad}: {e}");
+        }
+    }
+
+    #[test]
+    fn songmap_import_and_marker_writes_are_in_the_closed_method_list() {
+        assert!(ENGINE_METHODS.contains(&"songmap_import") && !WRITE_METHODS.contains(&"songmap_import"), "reading a SongMap writes nothing");
+        assert!(ENGINE_METHODS.contains(&"sync_labelled_markers") && WRITE_METHODS.contains(&"sync_labelled_markers"), "markers write the composition");
+        assert!(!PAID_ENGINE_METHODS.contains(&"sync_labelled_markers") && !PAID_ENGINE_METHODS.contains(&"songmap_import"), "neither costs anything");
+    }
 
     #[test]
     fn names_are_sanitised() {
@@ -1145,7 +1578,7 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
-    /// Spend-gate test list (AGENTS.md): every paid path must go through `take_spend`. `generate_start` is the only paid method.
+    /// Spend-gate test list (AGENTS.md): every paid path must go through `take_spend`: generate_start, render_start and a cloud llm_complete.
     #[test]
     fn spend_tokens_are_single_use_and_expire() {
         let st = EngineState::default();
@@ -1163,10 +1596,46 @@ mod tests {
 
     #[test]
     fn only_generate_start_is_paid_and_providers_are_a_closed_list() {
-        assert!(MODEL_METHODS.contains(&"generate_start"));
+        assert!(MODEL_METHODS.contains(&"generate_start") && MODEL_METHODS.contains(&"speech_generate"));
+        assert!(SPEECH_PROVIDERS.contains(&"openai") && SPEECH_PROVIDERS.contains(&"google") && !SPEECH_PROVIDERS.contains(&"kie") && !SPEECH_PROVIDERS.contains(&"fal"), "voices come from official providers only");
+        assert!(!WRITE_METHODS.contains(&"speech_generate"));
         assert!(provider_ok("kie").is_ok() && provider_ok("fal").is_ok() && provider_ok("byteplus").is_ok());
         assert!(provider_ok("suno").is_err() && provider_ok("../x").is_err());
         assert!(!WRITE_METHODS.contains(&"generate_start"));
+    }
+
+    #[test]
+    fn cloud_language_models_are_gated_and_keys_never_come_from_the_page() {
+        assert!(MODEL_METHODS.contains(&"llm_complete"));
+        for m in LLM_CALL_METHODS {
+            assert!(MODEL_METHODS.contains(&m) && !WRITE_METHODS.contains(&m), "{m} must be allowed, gated and not write the project");
+        }
+        assert!(LLM_CALL_METHODS.contains(&"builder_plan"), "the Builder's planning call goes through the same gate");
+        assert!(ENGINE_METHODS.contains(&"builder_execute") && WRITE_METHODS.contains(&"builder_execute"), "building writes the project, so it is refused while EffectCraft has it open");
+        assert!(ENGINE_METHODS.contains(&"qa_run") && !WRITE_METHODS.contains(&"qa_run") && !PAID_ENGINE_METHODS.contains(&"qa_run"), "QA reads the composition and writes nothing");
+        assert!(ENGINE_METHODS.contains(&"qa_fix") && WRITE_METHODS.contains(&"qa_fix") && !PAID_ENGINE_METHODS.contains(&"qa_fix"), "a QA fix writes the composition, so it is refused while EffectCraft has it open");
+        // P5-02: resuming a final render is a final render, so it needs its own fresh spend token; cancel, discard and list cost nothing.
+        assert!(PAID_ENGINE_METHODS.contains(&"render_resume"), "a resumed render needs a confirmation from a click");
+        for m in ["render_cancel", "render_discard", "render_jobs"] {
+            assert!(ENGINE_METHODS.contains(&m) && !PAID_ENGINE_METHODS.contains(&m) && !WRITE_METHODS.contains(&m), "{m} is free and does not write the project");
+        }
+        for m in ["snapshot_save", "snapshot_diff", "snapshot_preview", "snapshot_restore"] {
+            assert!(ENGINE_METHODS.contains(&m) && !PAID_ENGINE_METHODS.contains(&m), "{m} needs the engine and costs nothing");
+        }
+        assert!(WRITE_METHODS.contains(&"snapshot_save") && WRITE_METHODS.contains(&"snapshot_restore"), "saving and restoring a version write the project");
+        assert!(ENGINE_METHODS.contains(&"timeline_read") && !WRITE_METHODS.contains(&"timeline_read") && !PAID_ENGINE_METHODS.contains(&"timeline_read"), "the timeline only reads and costs nothing");
+        assert!(ENGINE_METHODS.contains(&"audio_cached") && !WRITE_METHODS.contains(&"audio_cached") && !PAID_ENGINE_METHODS.contains(&"audio_cached"), "reading a kept analysis writes nothing and costs nothing");
+        assert!(ENGINE_METHODS.contains(&"layer_timing") && WRITE_METHODS.contains(&"layer_timing") && !PAID_ENGINE_METHODS.contains(&"layer_timing"), "moving or trimming a layer writes the composition (blocked while EffectCraft has it open) and costs nothing");
+        assert!(!WRITE_METHODS.contains(&"snapshot_diff") && !WRITE_METHODS.contains(&"snapshot_preview"), "comparing and previewing only read");
+        assert!(!PAID_ENGINE_METHODS.contains(&"builder_execute"), "a plan costs a known $0 today; a paid plan would need its own token path");
+        assert!(LLM_CALL_METHODS.contains(&"director_intent"), "the Director calls a model, so it goes through the same gate");
+        for (p, account) in LLM_CLOUD {
+            assert!(!LLM_LOCAL.contains(&p), "{p} cannot be both cloud and local");
+            assert!(KEY_ACCOUNTS.contains(&account), "{account} has no credential-store account");
+        }
+        assert!(LLM_LOCAL.iter().all(|p| !LLM_CLOUD.iter().any(|(c, _)| c == p)));
+        assert!(!WRITE_METHODS.contains(&"llm_complete"), "a language-model call does not write the project");
+        assert!(key_entry("suno").is_err() && key_entry("../x").is_err());
     }
 
     #[test]
@@ -1215,6 +1684,35 @@ mod tests {
         copy_dir(&src, &dst, 0).unwrap();
         assert_eq!(fs::read(dst.join("assets").join("images").join("x.png")).unwrap(), b"png");
         assert_eq!(unique_package(&base, "a").file_name().unwrap(), "a 2.motioncraft");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_collected_project_keeps_what_is_needed_to_reopen_it_and_leaves_out_drafts_and_logs() {
+        let base = std::env::temp_dir().join(format!("mc-collect-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let src = base.join("a.motioncraft");
+        for d in ["assets/images", "assets/audio", "fonts", "renders", "previews", "logs", "analysis", "revisions"] {
+            fs::create_dir_all(src.join(d)).unwrap();
+        }
+        fs::write(src.join("project.json"), b"{}").unwrap();
+        fs::write(src.join("comp.ecproj"), b"ecproj").unwrap();
+        fs::write(src.join("fonts").join("manifest.json"), b"[]").unwrap();
+        fs::write(src.join("assets/images/x.png"), b"png").unwrap();
+        fs::write(src.join("assets/audio/s.wav"), b"wav").unwrap();
+        fs::write(src.join("renders/final.mp4"), b"mp4").unwrap();
+        fs::write(src.join("analysis/s.wav.1-2.json"), b"{}").unwrap();
+        fs::write(src.join("revisions/v1.ecproj"), b"v1").unwrap();
+        fs::write(src.join("previews/draft.mp4"), b"big draft").unwrap();
+        fs::write(src.join("logs/text-layers.json"), b"{}").unwrap();
+        let dst = base.join("out.motioncraft");
+        collect_package(&src, &dst).unwrap();
+        for kept in ["project.json", "comp.ecproj", "fonts/manifest.json", "assets/images/x.png", "assets/audio/s.wav", "renders/final.mp4", "analysis/s.wav.1-2.json", "revisions/v1.ecproj"] {
+            assert!(dst.join(kept).is_file(), "{kept} should be kept");
+        }
+        assert!(!dst.join("previews").exists(), "draft movies are left out");
+        assert!(!dst.join("logs").exists(), "working logs are left out");
+        assert_eq!(fs::read(dst.join("comp.ecproj")).unwrap(), b"ecproj");
         let _ = fs::remove_dir_all(&base);
     }
 

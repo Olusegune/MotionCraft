@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from ..proc import NO_WINDOW
 from .base import BaseAdapter, SpendVerifier
 from .errors import (AdapterContractError, EnginePinMismatch, EngineUnavailable, GuiWriteConflict)
 from .models import (Command, CompInfo, CompSettings, DocSnapshot, ExportResult, FinalRenderJob, LayerInfo, MarkerInfo,
@@ -27,7 +28,7 @@ class _Stdio:
     def __init__(self, args: list[str]):
         env = {k: v for k, v in os.environ.items() if k.upper() in _ENV_KEEP}
         self.p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                                  encoding="utf-8", bufsize=1, env=env, shell=False)
+                                  encoding="utf-8", bufsize=1, env=env, shell=False, **NO_WINDOW)
         self.err: list[str] = []
         threading.Thread(target=lambda: [self.err.append(l.rstrip()) for l in self.p.stderr], daemon=True).start()
         self.n = 0
@@ -80,7 +81,7 @@ class EffectCraftAdapter(BaseAdapter):
 
     # ------------------------------------------------------------- process
     def version(self) -> str:
-        out = subprocess.run([str(self.cli), "--version"], capture_output=True, text=True, timeout=10, shell=False).stdout
+        out = subprocess.run([str(self.cli), "--version"], capture_output=True, text=True, timeout=10, shell=False, **NO_WINDOW).stdout
         m = re.search(r"\d+\.\d+\.\d+", out)
         return m.group(0) if m else out.strip()
 
@@ -248,12 +249,33 @@ class EffectCraftAdapter(BaseAdapter):
         self._run(Command(id="file.checkOutput", params={"path": str(job.output)}))
         params: dict[str, Any] = {"comp": job.comp, "output": str(job.output)}
         params.update({"format": "prores", "proresProfile": "4444", "channels": "rgba"} if job.preset == "prores4444" else {"format": "h264"})
+        if job.start is not None and job.end is not None:
+            params.update({"timeSpan": "custom", "start": float(job.start), "end": float(job.end)})
         self._run(Command(id="renderQueue.add", params=params))
         out = self._run(Command(id="renderQueue.render", params={"wait": True}))
         if isinstance(out, dict) and out.get("failed"):
             raise RuntimeError(f"render failed: {out}")
         frames = sum(i.get("frames", 0) for i in (out or {}).get("items", []))
         return RenderResult(output=job.output, frames=frames, bytes=job.output.stat().st_size if job.output.exists() else 0)
+
+    def layer_spans(self, comp: int | str) -> dict[int, dict]:
+        """When each layer is on screen, for the whole composition in ONE call (`comp.info`): {id: {"in", "out", "start"}} in seconds.
+        Measured on EffectCraft 0.24.1: in and out are the layer's own in and out points, `start` is where its source begins."""
+        info = self._run(Command(id="comp.info", params={"comp": comp}))
+        out: dict[int, dict] = {}
+        for l in (info or {}).get("layers", []):
+            if isinstance(l, dict) and isinstance(l.get("id"), int):
+                out[l["id"]] = {"in": float(l.get("in") or 0.0), "out": float(l.get("out") or 0.0), "start": float(l.get("start") or 0.0)}
+        return out
+
+    def abort(self) -> None:
+        """Stops the engine process now, mid-render if need be (used to cancel). The adapter is not usable afterwards."""
+        io = self._io
+        if io is not None:
+            try:
+                io.p.kill()
+            except Exception:  # noqa: BLE001
+                pass
 
     def export(self, kind: str, comp: int | str, path: Path) -> ExportResult:
         if not self._under(path, self.write_roots):

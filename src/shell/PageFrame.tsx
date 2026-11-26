@@ -11,17 +11,18 @@ export interface MainAction { label: string; onClick: () => void; disabledReason
  * One layout for every page: large central area, optional left rail, collapsible right inspector with the page main
  * action pinned at its bottom, shallow story strip, and the stage bar (rendered by App).
  */
-export function PageFrame({ title, intro, main, inspector, rail, strip, action, viewerOnly, inspectorOpen, onToggleInspector }: {
-  title: string; intro: string; main: ReactNode; inspector?: ReactNode; rail?: ReactNode; strip?: boolean; action?: MainAction;
+export function PageFrame({ title, intro, main, inspector, rail, strip, action, viewerOnly, inspectorOpen, onToggleInspector, compactHead }: {
+  /** compactHead: the studio pages have no title row; the title stays for screen readers. */
+  compactHead?: boolean; title: string; intro: string; main: ReactNode; inspector?: ReactNode; rail?: ReactNode; strip?: boolean; action?: MainAction;
   viewerOnly: boolean; inspectorOpen: boolean; onToggleInspector: () => void;
 }) {
   const showSide = !viewerOnly;
   return (
-    <div className={`frame${viewerOnly ? " viewer-only" : ""}`}>
+    <div className={`frame${viewerOnly ? " viewer-only" : ""}${compactHead ? " compact" : ""}`}>
       {showSide && rail && <aside className="rail" aria-label="Rail">{rail}</aside>}
       <section className="center" aria-labelledby="page-title">
-        <div className="page-head">
-          <div><h1 id="page-title">{title}</h1><p className="intro">{intro}</p></div>
+        <div className={`page-head${compactHead ? " compact" : ""}`}>
+          <div><h1 id="page-title" className={compactHead ? "visually-hidden" : undefined}>{title}</h1><p className="intro">{intro}</p></div>
           {showSide && inspector && (
             <button className="icon-btn" aria-label={inspectorOpen ? "Collapse inspector" : "Expand inspector"} aria-expanded={inspectorOpen} onClick={onToggleInspector}>
               {inspectorOpen ? <PanelRightClose size={20} strokeWidth={1.75} /> : <PanelRightOpen size={20} strokeWidth={1.75} />}
@@ -67,12 +68,12 @@ export function Viewer({ aspect = "16 / 9", children }: { aspect?: string; child
           <div className="viewer-empty">
             <p className="strong">No preview yet</p>
             <p>{engine?.state === "connected"
-              ? "Preview renders come from the engine through the adapter. The adapter is wired in ticket P1-11."
+              ? "Your first preview appears here once the piece has something in it. Start in Build."
               : "The engine is not connected, so there is nothing to render. Brief to Treatment still work."}</p>
           </div>
         )}
       </div>
-      <p className="viewer-meta"><span className="mono">--:--:--</span> No render yet. Targets: first preview 60 s, small edit 10 s.</p>
+      <p className="viewer-meta"><span className="mono">--:--:--</span> No render yet.</p>
     </div>
   );
 }
@@ -81,6 +82,7 @@ export function StoryStrip() {
   const { project, stage, projectPath } = useApp();
   const fps = project.brief.deliverables[0]?.fps ?? 30;
   const beats = project.intent.arc;
+  const audio = (project.assets ?? []).filter((a) => a.kind === "audio");
   return (
     <div className="strip" role="region" aria-label="Story strip">
       <div className="strip-row">
@@ -93,7 +95,7 @@ export function StoryStrip() {
           ))}</ol>
         )}
       </div>
-      <div className="strip-row"><span className="strip-label">Audio</span><span className="muted">No audio imported. Waveform, beats and word timings appear here after analysis (Phase 3).</span></div>
+      <div className="strip-row"><span className="strip-label">Audio</span><span className="muted">{audio.length ? `${audio.length} audio file${audio.length === 1 ? "" : "s"} imported. The waveform and beats are on the Build timeline.` : "No audio yet. Add music or narration on the Brief page."}</span></div>
       {stage === "intent" && <div className="strip-row"><span className="strip-label">Arc</span><span className="muted">{beats.length ? `${beats.length} beat${beats.length === 1 ? "" : "s"}, energy ${beats.map((b) => b.energy).join(" → ")}` : "Appears once beats exist."}</span></div>}
       <span className="visually-hidden">{STAGE_LABEL[stage]} story strip</span>
     </div>

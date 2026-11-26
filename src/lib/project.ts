@@ -1,9 +1,10 @@
 import type { ApprovalRecord, ControlMode, Deliverable, GateId, ModeKey, MotionProject, RevisionRecord, Stage } from "../types";
 import { PINNED_COMMIT, PINNED_VERSION } from "../types";
+import { getSettings } from "./settings";
 
 export const DEFAULT_MODES: Record<ModeKey, ControlMode> = {
   intent: "assisted", style: "assisted", treatment: "assisted", sound: "assisted",
-  build: "agent-led", "audio-sync": "assisted", "qa-fixes": "assisted",
+  build: "assisted", "audio-sync": "assisted", "qa-fixes": "assisted",
 };
 /** Which control-mode key each page carries (UI_UX 4.3). Brief and Deliver have none. */
 export const STAGE_MODE: Partial<Record<Stage, ModeKey>> = {
@@ -101,7 +102,8 @@ export function setMode(p: MotionProject, key: ModeKey, mode: ControlMode): Moti
   return { ...p, controlModes: { ...p.controlModes, [key]: mode }, updatedAt: nowIso() };
 }
 
-export const hasAnyProvider = () => false; // Providers arrive in P1-05; until then Manual is the only usable mode.
+/** True when a language model is chosen and usable right now (Settings, Language model). Set from the engine at start and after a change. */
+export const hasAnyProvider = () => getSettings().llmReady;
 export function effectiveMode(p: MotionProject, key: ModeKey): ControlMode {
   return hasAnyProvider() ? p.controlModes[key] : "manual";
 }

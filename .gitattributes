@@ -1,0 +1,3 @@
+
+# The example project is data, not source: never change its line endings (the composition files are read by EffectCraft).
+examples/** -text
