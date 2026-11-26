@@ -207,7 +207,7 @@ export async function speakVoicekiller(text: string, voiceName: string, key: str
   if (r.status === 401 || r.status === 403) throw new Error("Voicekiller did not accept the User ID and key. Copy them again from your Voicekiller API page.");
   if (r.status === 402) throw new Error("Voicekiller says your plan has no credit left for this.");
   if (r.status === 429) throw new Error("Voicekiller says you are asking too fast. Wait a minute and try again.");
-  if (!r.ok) throw new Error(`Voicekiller could not make the voice (${r.status}).`);
+  if (!r.ok) { const why = (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160); throw new Error(`Voicekiller could not make the voice (${r.status})${why ? `: ${why}` : ""}.`); }
   const bytes = Buffer.from(await r.arrayBuffer());
   if (audioKind(bytes) === null) throw new Error("What came back from Voicekiller was not a usable sound (it may have sent a message instead; check the voice name).");
   return bytes;
