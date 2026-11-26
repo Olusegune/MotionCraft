@@ -169,3 +169,32 @@ test("chained clips: a scene plays its clips one after the other, each from its 
     assert.ok(held.b > held.r + 20 && held.b > held.g + 20, `the last clip holds to the end of the scene, got ${JSON.stringify(held)}`);
   } finally { ec.stop(); }
 });
+
+test("loudness and effects on the real engine: a quiet and a loud voice come out within 3 dB of each other, and an effect is heard in its scene and nowhere else", { skip: have && ffmpegOk ? false : "EffectCraft or ffmpeg missing: NOT CHECKED" }, async () => {
+  const { writeWav } = await import("../src/wav.ts");
+  const { voiceFileName } = await import("../src/voice.ts");
+  const { checkPlan } = await import("../src/server.ts");
+  const dir = mkdtempSync(join(tmpdir(), "qp-real-mix-"));
+  mkdirSync(join(dir, "assets", "audio"), { recursive: true });
+  const speech = (amp: number) => { const n = 2 * 22050, a = new Float32Array(n); for (let i = 0; i < n; i++) a[i] = Math.sin((2 * Math.PI * 220 * i) / 22050) * amp; return writeWav(a, a, 22050); };
+  const v1 = "win:Microsoft David Desktop", v2 = "win:Microsoft Zira Desktop";
+  writeFileSync(join(dir, "assets", "audio", voiceFileName(v1, "quiet")), speech(0.03));
+  writeFileSync(join(dir, "assets", "audio", voiceFileName(v2, "loud")), speech(0.6));
+  const plan = checkPlan({ voice: v1, scenes: [{ headline: "quiet", seconds: 4 }, { headline: "loud", seconds: 4, voice: v2 }, { headline: "effect only", say: " ", seconds: 4, fx: ["clack"] }] });
+  const ec = new EffectCraft(cli, [dir]);
+  try {
+    await ec.start();
+    const resolved = await resolveSound(dir, plan);
+    const built = await buildComposition(ec, resolved.plan, "16:9", dir, resolved.sound);
+    const out = join(dir, "mix.mp4");
+    await renderVideo(ec, built.comp, out, "draft");
+    const { spawnSync } = await import("node:child_process");
+    const mean = (from: number, len: number) => Number(/mean_volume: (-?[\d.]+) dB/.exec(String(spawnSync("ffmpeg", ["-hide_banner", "-ss", String(from), "-t", String(len), "-i", out, "-af", "volumedetect", "-vn", "-f", "null", "-"], { encoding: "utf-8" }).stderr))![1]);
+    const quiet = mean(0.5, 1.8), loud = mean(4.5, 1.8);
+    assert.ok(Math.abs(quiet - loud) < 3, `voices within 3 dB: quiet ${quiet}, loud ${loud}`);
+    const quietRaw = 20 * Math.log10(0.03 / Math.SQRT2), loudRaw = 20 * Math.log10(0.6 / Math.SQRT2);
+    assert.ok(loudRaw - quietRaw > 25, "the sources really were far apart");
+    const clack = mean(8.2, 0.4), silent = mean(10.5, 1.0);
+    assert.ok(clack > silent + 12, `the clack is heard in its scene (${clack}) and the end of the scene is quiet (${silent})`);
+  } finally { ec.stop(); }
+});

@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { makeMusic, MOODS } from "./music.ts";
 import type { Plan } from "./plan.ts";
 import { lineFor, spokenText, VOICE_CHOICE } from "./voice.ts";
+import { effectById, fxFileName, fxTimes, makeEffect } from "./fx.ts";
+import { levelOf, voiceGain } from "./loudness.ts";
 import { AUDIO_NAME } from "./wav.ts";
 
 export type Level = "soft" | "medium" | "loud";
@@ -15,9 +17,10 @@ export const VOICE_TAIL = 0.6;                  // and the scene holds a little 
 
 export class SoundRefused extends Error {}
 
-export type VoiceCue = { file: string; start: number; seconds: number };
+export type VoiceCue = { file: string; start: number; seconds: number; gain?: number };
+export type FxCue = { file: string; start: number; seconds: number; db: number; id: string; scene: number };
 export type MusicCue = { file: string; db: number; seconds?: number };
-export type Sound = { voices: (VoiceCue | null)[]; music: MusicCue | null };
+export type Sound = { voices: (VoiceCue | null)[]; music: MusicCue | null; fx?: FxCue[] };
 
 /** The voice that speaks a scene: its own, else the video's, else none (a valid choice only). */
 export function sceneVoice(plan: Plan, s: { voice?: string }): string {
@@ -41,8 +44,18 @@ export async function resolveSound(dir: string, planIn: Plan): Promise<{ plan: P
     const start = Math.round((t + VOICE_LEAD) * 100) / 100;
     t += s.seconds;
     const l = lines[i];
-    return l ? { file: l.file, start, seconds: l.info.seconds } : null;
+    return l ? { file: l.file, start, seconds: l.info.seconds, gain: voiceGain(levelOf(dir, l.file)) } : null;     // every voice is brought to the same speech level
   });
+  const fx: FxCue[] = [];
+  let at = 0;
+  for (const [i, s] of plan.scenes.entries()) {
+    for (const c of fxTimes(at, s.seconds, (s.fx ?? []).filter((x) => effectById(x)))) {
+      const file = fxFileName(c.id), path = join(dir, "assets", "audio", file);
+      if (!existsSync(path)) { mkdirSync(join(dir, "assets", "audio"), { recursive: true }); writeFileSync(path, makeEffect(c.id)); }
+      fx.push({ file, start: c.start, seconds: c.seconds, db: effectById(c.id)!.db, id: c.id, scene: i + 1 });
+    }
+    at += s.seconds;
+  }
   const total = Math.round(t * 10) / 10;
   let music: MusicCue | null = null;
   const m = plan.music;
@@ -55,7 +68,7 @@ export async function resolveSound(dir: string, planIn: Plan): Promise<{ plan: P
     if (!existsSync(path)) { mkdirSync(join(dir, "assets", "audio"), { recursive: true }); writeFileSync(path, makeMusic(m.mood, secs)); }
     music = { file, db: LEVEL_DB[m.level ?? "medium"] };
   }
-  return { plan, sound: { voices, music } };
+  return { plan, sound: { voices, music, fx } };
 }
 
 /** The music level keys: fade in, dip under each voice, fade out. Times strictly increase; levels are decibels. */

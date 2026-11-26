@@ -149,6 +149,14 @@ async function placeSound(ec: EffectCraft, dir: string, sound: Sound, total: num
     if (layer === null) continue;
     if (v.start + v.seconds > total) await ec.run("layer.timing", { layers: [layer], out: r4(Math.max(0.1, total - v.start)) });
     await ec.run("layer.timing", { layers: [layer], delta: r4(v.start) });
+    if (v.gain) await ec.run("prop.set", { layer, path: "audio/levels", value: [v.gain, v.gain] });
+  }
+  for (const f of sound.fx ?? []) {                                                          // small effects under the voices, each cut off at the end of its scene
+    const layer = await add(f.file, `Scene ${f.scene} effect ${f.id}`);
+    if (layer === null) continue;
+    await ec.run("layer.timing", { layers: [layer], out: r4(f.seconds) });
+    await ec.run("layer.timing", { layers: [layer], delta: r4(f.start) });
+    await ec.run("prop.set", { layer, path: "audio/levels", value: [f.db, f.db] });
   }
   if (sound.music) {
     const layer = await add(sound.music.file, "Music");

@@ -1,6 +1,7 @@
 // A timed script (a table of rows: time, picture and motion, voice-over and sound) turned into scenes.
 // Pure text work: no network, no files. The page is never trusted and neither is the script.
 import type { Plan, Scene } from "./plan.ts";
+import { effectsFor } from "./fx.ts";
 
 const TIME = /(\d{1,2}):(\d{2})\s*[–—\-]\s*(\d{1,2}):(\d{2})/;
 const QUOTE = /[“"]([^”"]+)[”"]/;
@@ -51,7 +52,7 @@ export function parseScript(raw: string): ScriptPlan {
     const vm = /\*\*([^*]+?):\*\*\s*(.*)$/s.exec(voicePart);
     const speaker = vm ? plain(vm[1]) : "";
     const spoken = QUOTE.exec(plain(vm ? vm[2] : voicePart))?.[1];
-    scenes.push({ headline, sub: "", seconds: Math.round(seconds * 10) / 10, ...(card ? { card } : {}), ...(note ? { note } : {}), ...(spoken ? { say: squash(spoken).slice(0, 600) } : {}), speaker: speaker.slice(0, 40), sound });
+    scenes.push({ headline, sub: "", seconds: Math.round(seconds * 10) / 10, ...(card ? { card } : {}), ...(note ? { note } : {}), ...(spoken ? { say: squash(spoken).slice(0, 600) } : {}), ...(effectsFor(sound).length ? { fx: effectsFor(sound) } : {}), speaker: speaker.slice(0, 40), sound });
   }
   if (!scenes.length) throw new Error("I could not find any timed rows. Each row of the table needs a time range such as 00:10-00:22 in its first column.");
   if (scenes.length > 12) throw new Error("A video can have up to 12 scenes; this script has " + scenes.length + ".");

@@ -102,6 +102,7 @@ function drawScenes() {
     }
     li.append(mediaRow(s, i));
     const rv = reviewRow(s, i); if (rv) li.append(rv);
+    const fr = fxRow(s, i); if (fr) li.append(fr);
     ol.appendChild(li);
   });
   drawTimeline();
@@ -337,6 +338,57 @@ function reviewRow(s, i) {
   return d;
 }
 
+
+// ---- Sound: every voice brought to the same level, and small effects for the moments a script names.
+// The browser can decode MP3; the server cannot. So the page measures each new MP3 (speech only, gaps ignored, same method as the server uses for WAV) and tells the server the number.
+async function measureAudio() {
+  if (!state.id) return;
+  let files = [];
+  try { files = (await (await fetch(`/api/audio/unmeasured?id=${encodeURIComponent(state.id)}`)).json()).files || []; } catch { return; }
+  for (const f of files) {
+    try {
+      const buf = await (await fetch(`/media/${state.id}/assets/audio/${f}`)).arrayBuffer();
+      const ab = await new OfflineAudioContext(1, 1, 44100).decodeAudioData(buf);
+      const size = Math.max(1, Math.round(ab.sampleRate * 0.05)), blocks = [];
+      for (let i = 0; i < ab.length; i += size) {
+        let s = 0; const end = Math.min(ab.length, i + size);
+        for (let k = i; k < end; k++) { let v = 0; for (let c = 0; c < ab.numberOfChannels; c++) v += ab.getChannelData(c)[k]; v /= ab.numberOfChannels; s += v * v; }
+        blocks.push(s / (end - i));
+      }
+      const loud = Math.max(0, ...blocks); if (loud <= 0) continue;
+      const kept = blocks.filter((b) => b >= Math.max(1e-5, loud * Math.pow(10, -3.5)));
+      if (!kept.length) continue;
+      const db = 10 * Math.log10(kept.reduce((a, b) => a + b, 0) / kept.length);
+      if (Number.isFinite(db)) await api("/api/audio/level", { id: state.id, file: f, db: Math.max(-80, Math.min(0, db)) });
+    } catch { /* a sound the browser cannot read keeps its own level */ }
+  }
+}
+
+function fxRow(s, i) {
+  if (!state.effects || !state.effects.length) return null;
+  const d = document.createElement("details"); d.className = "review";
+  const sum = document.createElement("summary");
+  const label = () => { sum.textContent = `Sound effects${s.fx && s.fx.length ? ` (${s.fx.length})` : ""}`; };
+  label(); d.append(sum);
+  const row = document.createElement("div"); row.className = "pic";
+  for (const e of state.effects) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "btn quiet small"; b.textContent = e.name;
+    const sync = () => b.setAttribute("aria-pressed", String(!!(s.fx && s.fx.includes(e.id))));
+    sync();
+    b.addEventListener("click", () => {
+      const on = !(s.fx && s.fx.includes(e.id));
+      s.fx = on ? [...(s.fx || []), e.id].slice(0, 6) : (s.fx || []).filter((x) => x !== e.id);
+      if (!s.fx.length) delete s.fx;
+      row.querySelectorAll("button").forEach((x, k) => x.setAttribute("aria-pressed", String(!!(s.fx && s.fx.includes(state.effects[k].id)))));
+      label(); touch();
+    });
+    row.append(b);
+  }
+  const note = document.createElement("p"); note.className = "note"; note.textContent = "Simple built-in sounds that mark a moment, placed in order across the scene and kept low under the voice. They are made on this computer, not recordings.";
+  d.append(row, note);
+  return d;
+}
+
 function drawRefs() {
   let box = $("refs");
   if (!box) { box = document.createElement("section"); box.id = "refs"; box.className = "refs"; $("scenes").before(box); }
@@ -495,6 +547,7 @@ async function render(quality) {
   try {
     if (!(await ensureVoice())) { setBusy(false); if ($("video").src) { $("video").hidden = false; $("empty").hidden = true; } return; }
     setBusy(true, label);
+    await measureAudio();
     const out = await api("/api/render", { plan: state.plan, shape: state.shape, quality, id: state.id });
     state.id = out.id;
     if (Array.isArray(out.scenes) && out.scenes.some((sec, k) => state.plan.scenes[k] && Math.abs(sec - state.plan.scenes[k].seconds) > 0.05)) {
@@ -717,7 +770,7 @@ function init() {
   $("again").addEventListener("click", () => { if (state.dirty && !confirm("Start over? Your changes will be lost.")) return; $("studio").hidden = true; $("start").hidden = false; $("make").disabled = false; $("startnote").textContent = ""; $("video").removeAttribute("src"); state.plan = null; state.id = null; drawRecent(); });
   $("reveal").addEventListener("click", () => state.last && api("/api/reveal", { url: state.last }).catch(() => {}));
   api("/api/status").then((s) => {
-    state.looks = s.looks; state.recycles = !!s.recycles;
+    state.looks = s.looks; state.recycles = !!s.recycles; state.effects = s.effects || [];
     fillSound(s);
     drawRecent();
     const e = $("engine");

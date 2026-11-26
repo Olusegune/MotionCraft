@@ -20,6 +20,8 @@ import { resolveSound, sceneVoice, SoundRefused, type Level } from "./sound.ts";
 import { KIE_VOICES, knownVoice, makeKieLines, makeOpenAILines, OPENAI_VOICES, spokenText, voiceMissing, windowsVoices } from "./voice.ts";
 import { dollars, download, KieError, runTask, uploadPicture, type KieOpts } from "./kie.ts";
 import { isNarrator, parseScript } from "./script.ts";
+import { EFFECTS, effectById } from "./fx.ts";
+import { readLevels, saveLevel } from "./loudness.ts";
 import { audioInfo, audioKind, AUDIO_NAME, MAX_AUDIO_BYTES, wavInfo } from "./wav.ts";
 
 // Where the page lives: QUICKPATH_UI when the desktop app sets it, else the ui folder beside src. (The bundled desktop build has no import.meta.url.)
@@ -33,7 +35,7 @@ const CANDIDATES = [
 ].filter(Boolean);
 const cliPath = () => CANDIDATES.find((p) => existsSync(p)) ?? "";
 
-const MIME: Record<string, string> = { ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
+const MIME: Record<string, string> = { ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".svg": "image/svg+xml", ".png": "image/png" };
 const SHAPES = Object.keys(SIZES) as Shape[];
 
 class Refused extends Error {}
@@ -138,7 +140,7 @@ const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSy
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}) }));
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}), ...(Array.isArray(s?.fx) && s.fx.some((x: unknown) => typeof x === "string" && effectById(x)) ? { fx: [...new Set(s.fx.filter((x: unknown) => typeof x === "string" && effectById(x)))].slice(0, 6) } : {}) }));
   if (scenes.some((s: { headline: string; card?: string; picture?: string; note?: string }) => !s.headline && !s.card && !s.picture && !s.note)) throw new Refused("Every scene needs some words (or a picture or clip).");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
@@ -230,7 +232,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       const url = new URL(req.url ?? "/", `http://${host}`);
 
       if (req.method === "GET" && url.pathname === "/api/status") {
-        return send(res, 200, { shapes: SHAPE_LIST, recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], kieVoices: (await providerKey("kie")) ? KIE_VOICES : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
+        return send(res, 200, { shapes: SHAPE_LIST, recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], kieVoices: (await providerKey("kie")) ? KIE_VOICES : [], moods: MOODS, effects: EFFECTS.map((e) => ({ id: e.id, name: e.name })), looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
       }
       if (req.method === "GET" && url.pathname === "/api/projects") {
         return send(res, 200, { projects: listProjects() });
@@ -293,6 +295,19 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const scenes = parsed.scenes.map(({ speaker, sound, ...s }) => ({ ...s, ...(!isNarrator(speaker) && character ? { voice: character } : {}), ...(sound ? { note: `${s.note ?? ""} Sound: ${sound}`.trim().slice(0, 900) } : {}) }));
         const plan = checkPlan({ title: parsed.title, look: parsed.look, scenes, voice: narrator || undefined, source: "words" });
         return send(res, 200, { ...plan, id, scriptSeconds: parsed.scriptSeconds });
+      }
+      if (req.method === "GET" && url.pathname === "/api/audio/unmeasured") {          // sound files the page should measure (the browser can decode MP3; the server reads WAV itself)
+        const dir = projectDir(url.searchParams.get("id") ?? "");
+        let files: string[] = [];
+        try { files = readdirSync(join(dir, "assets", "audio")).filter((f) => f.endsWith(".mp3") && AUDIO_NAME.test(f)); } catch { /* none yet */ }
+        const known = readLevels(dir);
+        return send(res, 200, { files: files.filter((f) => !(f in known)) });
+      }
+      if (req.method === "POST" && url.pathname === "/api/audio/level") {
+        const b = await readJson(req);
+        const dir = projectDir(String(b.id ?? ""));
+        if (!saveLevel(dir, String(b.file ?? ""), b.db)) throw new Refused("That sound level could not be saved.");
+        return send(res, 200, { saved: true });
       }
       if (req.method === "POST" && url.pathname === "/api/plan/save") {      // keeps edits safe between renders: the same checks as a render, nothing is made or paid for
         const b = await readJson(req);
@@ -487,6 +502,8 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       const pic = /^\/media\/([a-f0-9]{12})\/assets\/([a-f0-9]{12}\.(?:png|jpg|webp|mp4))$/.exec(url.pathname);
       if (req.method === "GET" && pic) return serveFile(req, res, join(HOME, "projects", pic[1], "assets", pic[2]));
+      const snd = /^\/media\/([a-f0-9]{12})\/assets\/audio\/([a-f0-9]{12}\.(?:wav|mp3))$/.exec(url.pathname);        // the page measures how loud a voice is
+      if (req.method === "GET" && snd) return serveFile(req, res, join(HOME, "projects", snd[1], "assets", "audio", snd[2]));
       const media = /^\/media\/([a-f0-9]{12})\/([\w.-]+\.mp4)$/.exec(url.pathname);
       if (req.method === "GET" && media) return serveFile(req, res, join(HOME, "projects", media[1], media[2]));
       if (req.method === "GET") {
