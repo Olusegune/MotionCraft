@@ -1,0 +1,12 @@
+{
+  "name": "quickpath",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Idea to a finished video draft in a minute. Node and TypeScript only, EffectCraft does the rendering.",
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node src/server.ts",
+    "test": "node --test \"test/*.test.ts\""
+  }
+}
