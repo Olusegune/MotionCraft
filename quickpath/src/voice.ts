@@ -233,3 +233,13 @@ export function parseVoicekillerVoices(body: unknown): string[] {
   const names = (arr as unknown[]).map((v) => (typeof v === "string" ? v : v && typeof v === "object" ? String((v as any).name ?? (v as any).voice_name ?? (v as any).voice ?? (v as any).id ?? "") : "")).map((s) => s.trim());
   return [...new Set(names.filter((n) => /^[A-Za-z0-9][A-Za-z0-9 ._\-]{0,39}$/.test(n)))].slice(0, 200);
 }
+
+/** Voicekiller's voice list as it really answers: plain text, one name after another (separated by new lines or spaces). JSON is also understood. */
+export function parseVoicekillerReply(text: string): string[] {
+  const t = String(text ?? "").trim();
+  if (!t) return [];
+  try { const j = parseVoicekillerVoices(JSON.parse(t)); if (j.length) return j; } catch { /* not JSON: plain text */ }
+  const lines = t.split(/[\r\n,;]+/).map((s) => s.trim()).filter(Boolean);
+  const names = lines.length > 1 ? lines : lines[0].split(/\s+/);          // a single line is a list of one-word names
+  return [...new Set(names.filter((n) => /^[A-Za-z0-9][A-Za-z0-9 ._\-]{0,39}$/.test(n)))].slice(0, 200);
+}

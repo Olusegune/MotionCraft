@@ -17,7 +17,7 @@ import { canSaveKeys, keyStatus, kieKey, PROVIDERS, providerKey, removeKey, save
 import { effectiveCap, saveCap } from "./settings.ts";
 import { MOODS } from "./music.ts";
 import { resolveSound, sceneVoice, SoundRefused, type Level } from "./sound.ts";
-import { ELEVEN_BASE, isPaidVoice, KIE_VOICES, knownVoice, makeElevenLines, makeKieLines, makeOpenAILines, makeVoicekillerLines, OPENAI_VOICES, parseVoicekillerVoices, spokenText, splitVoicekillerKey, voiceKind, voiceMissing, VOICEKILLER_BASE, windowsVoices } from "./voice.ts";
+import { ELEVEN_BASE, isPaidVoice, KIE_VOICES, knownVoice, makeElevenLines, makeKieLines, makeOpenAILines, makeVoicekillerLines, OPENAI_VOICES, parseVoicekillerReply, spokenText, splitVoicekillerKey, voiceKind, voiceMissing, VOICEKILLER_BASE, windowsVoices } from "./voice.ts";
 import { dollars, download, KieError, runTask, uploadPicture, type KieOpts } from "./kie.ts";
 import { isNarrator, parseScript } from "./script.ts";
 import { EFFECTS, effectById } from "./fx.ts";
@@ -140,7 +140,7 @@ async function vkVoiceList(): Promise<string[]> {
   return cached(`vk:${k.userId}`, async () => {
     try {
       const r = await fetch(`${process.env.QUICKPATH_VOICEKILLER_BASE ?? VOICEKILLER_BASE}/api/generate-speech/voicelist`, { method: "POST", headers: { "api-key": k.apiKey, userid: k.userId }, signal: AbortSignal.timeout(8_000) });
-      return r.ok ? parseVoicekillerVoices(await r.json().catch(() => null)) : [];
+      return r.ok ? parseVoicekillerReply(await r.text()) : [];
     } catch { return []; }
   });
 }
@@ -176,8 +176,9 @@ async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> 
       const r = await fetch(`${process.env.QUICKPATH_VOICEKILLER_BASE ?? VOICEKILLER_BASE}/api/generate-speech/voicelist`, { method: "POST", headers: { "api-key": k.apiKey, userid: k.userId }, signal: AbortSignal.timeout(15_000) });
       if (r.status === 401 || r.status === 403) return { ok: false, message: "Voicekiller did not accept the User ID and key. Copy them again from your Voicekiller API page." };
       if (!r.ok) return { ok: false, message: `Voicekiller answered with an error (${r.status}). Try again in a moment.` };
-      const n = parseVoicekillerVoices(await r.json().catch(() => null)).length;
-      return { ok: true, message: n ? `The key works. ${n} voices available.` : "The key was accepted, but the voice list was not in a shape QuickPath understands." };
+      const text = await r.text();
+      const n = parseVoicekillerReply(text).length;
+      return { ok: true, message: n ? `The key works. ${n} voices available.` : `The key was accepted, but the voice list was not in a shape QuickPath understands. It began: ${text.replace(/\s+/g, " ").slice(0, 200)}` };
     } catch { return { ok: false, message: "Could not reach Voicekiller. Check your internet connection." }; }
   }
   if (p === "fal") {

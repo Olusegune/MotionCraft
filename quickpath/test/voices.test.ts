@@ -156,7 +156,14 @@ test("voice choices are only ever real shapes, and the lists the page shows are 
   for (const bad of ["nocolon", ":key", "user:", "us er:key", ""]) assert.equal(splitVoicekillerKey(bad), null, bad);
   assert.deepEqual(parseVoicekillerVoices(["Matthias", "Aria", "../evil", "Matthias"]), ["Matthias", "Aria"]);
   assert.deepEqual(parseVoicekillerVoices({ voices: [{ name: "A" }, { voice_name: "B" }, { id: "C" }, 5, null] }), ["A", "B", "C"]);
-  assert.deepEqual(parseVoicekillerVoices("junk"), []);
+  assert.deepEqual(parseVoicekillerVoices("junk"), [], "the JSON reader wants JSON");
+  const { parseVoicekillerReply } = await import("../src/voice.ts");
+  assert.deepEqual(parseVoicekillerReply("alloy\nAshton\nBella\nCoraline"), ["alloy", "Ashton", "Bella", "Coraline"], "one name per line");
+  assert.deepEqual(parseVoicekillerReply("alloy Ashton Bella Coraline"), ["alloy", "Ashton", "Bella", "Coraline"], "one line of one-word names");
+  assert.deepEqual(parseVoicekillerReply("Voice One\nVoice Two"), ["Voice One", "Voice Two"], "one name per line keeps spaces");
+  assert.deepEqual(parseVoicekillerReply('["A","B"]'), ["A", "B"]);
+  assert.deepEqual(parseVoicekillerReply(""), []);
+  assert.deepEqual(parseVoicekillerReply("../evil <b>x</b>"), []);
   assert.deepEqual(parseVoicekillerVoices(null), []);
   const s = (await call("GET", "/api/status")).json;
   assert.deepEqual(s.elevenVoices.map((v: any) => v.name), ["My Cloned Voice", "Narrator"], "the account's own voices, with bad ids dropped");
