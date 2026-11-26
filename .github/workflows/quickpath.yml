@@ -53,12 +53,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      # Prove the packaged app really starts on this system: it loads its own page, checks the menu, the guides and the server, and exits 0.
+      # (The app ends itself after 60 seconds with a failure if it gets no answer, so no outside timer is needed: macOS has no `timeout`.) Prove the packaged app really starts on this system: it loads its own page, checks the menu, the guides and the server, and exits 0.
       - name: Smoke test the packaged app
         shell: bash
         run: |
           set -o pipefail
-          QUICKPATH_SMOKE=1 timeout 120 "${{ matrix.app }}" 2>&1 | tee smoke.log
+          QUICKPATH_SMOKE=1 "${{ matrix.app }}" 2>&1 | tee smoke.log
           grep -q '"ok":true' smoke.log
       - uses: actions/upload-artifact@v4
         with:
