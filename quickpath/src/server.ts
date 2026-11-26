@@ -1,10 +1,10 @@
 // The local app: a tiny web server on 127.0.0.1 and one page. Nothing leaves the computer except what the person chooses to ask a model.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { EffectCraft, EngineError } from "./ec.ts";
 import { buildComposition, renderVideo } from "./build.ts";
@@ -34,6 +34,49 @@ const MIME: Record<string, string> = { ".webp": "image/webp", ".jpg": "image/jpe
 const SHAPES: Shape[] = ["16:9", "9:16", "1:1"];
 
 class Refused extends Error {}
+
+/** A saved video's plan, re-checked as if it came from the page (the folder may have been edited by hand), or null when it cannot be read. */
+function readProject(id: string): { plan: Plan; shape: Shape } | null {
+  try {
+    const raw = JSON.parse(readFileSync(join(HOME, "projects", id, "plan.json"), "utf-8"));
+    return { plan: checkPlan(raw.plan), shape: SHAPES.includes(raw.shape) ? raw.shape : "16:9" };
+  } catch { return null; }
+}
+
+/** The most recent videos, newest first: enough to show a card and reopen it. */
+export function listProjects(limit = 12) {
+  const root = join(HOME, "projects");
+  const out: { id: string; title: string; shape: Shape; scenes: number; seconds: number; updated: string; hasFinal: boolean }[] = [];
+  let ids: string[] = [];
+  try { ids = readdirSync(root).filter((x) => /^[a-f0-9]{12}$/.test(x)); } catch { return out; }
+  for (const id of ids) {
+    const file = join(root, id, "plan.json");
+    let mtime: Date;
+    try { mtime = statSync(file).mtime; } catch { continue; }
+    const p = readProject(id);
+    if (!p) continue;
+    let hasFinal = false;
+    try { hasFinal = readdirSync(join(root, id)).some((f) => f.startsWith("final-") && f.endsWith(".mp4")); } catch { /* none */ }
+    out.push({ id, title: p.plan.title, shape: p.shape, scenes: p.plan.scenes.length, seconds: Math.round(p.plan.scenes.reduce((n, x) => n + x.seconds, 0) * 10) / 10, updated: mtime.toISOString(), hasFinal });
+  }
+  return out.sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, limit);
+}
+
+/** Removes a saved video's folder. On Windows it goes to the Recycle Bin (so it can be put back); elsewhere, or with QUICKPATH_DELETE=permanent, it is deleted. */
+export async function removeProject(id: string): Promise<"recycled" | "deleted"> {
+  if (!/^[a-f0-9]{12}$/.test(id)) throw new Refused("That video could not be removed.");
+  const dir = join(HOME, "projects", id);
+  if (!existsSync(join(dir, "plan.json"))) throw new Refused("That video could not be removed.");        // only folders that are QuickPath videos
+  if (process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent") {
+    const q = dir.replace(/'/g, "''");
+    await new Promise<void>((resolve, reject) => execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+      `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('${q}', 'OnlyErrorDialogs', 'SendToRecycleBin')`],
+      { windowsHide: true, timeout: 60_000 }, (err) => (err ? reject(new Refused("Windows would not move that video to the Recycle Bin.")) : resolve())));
+    return "recycled";
+  }
+  rmSync(dir, { recursive: true, force: true });
+  return "deleted";
+}
 
 /** Checks and trims a plan from the page: the page is never trusted. */
 export function checkPlan(raw: any): Plan {
@@ -127,7 +170,20 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       const url = new URL(req.url ?? "/", `http://${host}`);
 
       if (req.method === "GET" && url.pathname === "/api/status") {
-        return send(res, 200, { engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
+        return send(res, 200, { recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
+      }
+      if (req.method === "GET" && url.pathname === "/api/projects") {
+        return send(res, 200, { projects: listProjects() });
+      }
+      if (req.method === "GET" && url.pathname === "/api/project") {
+        const id = url.searchParams.get("id") ?? "";
+        const found = /^[a-f0-9]{12}$/.test(id) ? readProject(id) : null;
+        if (!found) throw new Refused("That video could not be opened.");
+        return send(res, 200, { id, ...found });
+      }
+      if (req.method === "POST" && url.pathname === "/api/project/remove") {
+        const b = await readJson(req);
+        return send(res, 200, { how: await removeProject(String(b.id ?? "")) });
       }
       if (req.method === "POST" && url.pathname === "/api/plan") {
         const b = await readJson(req);

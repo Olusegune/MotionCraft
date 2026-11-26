@@ -91,4 +91,19 @@ dialog h2 { margin: 0 0 12px; }
 .row.tight { margin-top: 4px; gap: 10px; }
 .row.tight select { width: auto; }
 .scene .say { font-size: 14px; }
+.recent { max-width: 760px; margin: 28px auto 0; }
+.recent h2 { font-size: 16px; color: var(--text2); }
+.cards { list-style: none; padding: 0; margin: 10px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.vid { width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: var(--text); font: inherit; cursor: pointer; display: grid; gap: 2px; }
+.vid:hover { border-color: var(--line-strong); }
+.vid strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vid span { color: var(--text3); font-size: 13px; }
+.cards li { position: relative; }
+.vid-x { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 8px; border: 0; background: transparent; color: var(--text3); font-size: 18px; line-height: 1; cursor: pointer; opacity: 0; }
+.cards li:hover .vid-x, .vid-x:focus-visible { opacity: 1; }
+.vid-x:hover { color: var(--error); background: var(--raised); }
+.stage { position: sticky; top: 16px; }
+.actions { position: sticky; bottom: 0; background: var(--panel); padding-top: 12px; border-top: 1px solid var(--line); margin-top: 14px; }
+.side { max-height: calc(100vh - 32px); overflow-y: auto; position: sticky; top: 16px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+@media (max-width: 960px) { .stage, .side { position: static; max-height: none; } }
 [hidden] { display: none !important; }

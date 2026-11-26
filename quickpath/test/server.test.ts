@@ -213,3 +213,56 @@ test("the plan's sound fields are re-checked on the server", async () => {
   const r = checkPlan({ scenes: [{ headline: "a", seconds: 3 }], music: { mood: "warm", level: "weird" } });
   assert.deepEqual(r.music, { mood: "warm", level: "medium" });
 });
+
+import { mkdirSync, writeFileSync, utimesSync } from "node:fs";
+
+function seed(id: string, content: string, mtime?: number) {
+  const dir = join(process.env.QUICKPATH_HOME as string, "projects", id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "plan.json"), content);
+  if (mtime) utimesSync(join(dir, "plan.json"), mtime / 1000, mtime / 1000);
+}
+
+test("Your videos: saved plans are listed newest first, and anything unreadable is left out, not shown", async () => {
+  const good = (title: string) => JSON.stringify({ plan: { title, look: "paper", source: "words", scenes: [{ headline: "One", sub: "", seconds: 3 }, { headline: "Two", sub: "", seconds: 4 }] }, shape: "9:16" });
+  seed("111111111111", good("Older one"), Date.now() - 86_400_000 * 3);
+  seed("222222222222", good("Newer one"), Date.now() - 1000);
+  seed("333333333333", "{ this is not json", Date.now());
+  seed("444444444444", JSON.stringify({ plan: { scenes: [] } }), Date.now());
+  const list = JSON.parse((await call("GET", "/api/projects")).text).projects as { id: string; title: string; shape: string; scenes: number; seconds: number }[];
+  const ids = list.map((p) => p.id);
+  assert.ok(ids.indexOf("222222222222") !== -1 && ids.indexOf("222222222222") < ids.indexOf("111111111111"), "newest first");
+  assert.ok(!ids.includes("333333333333") && !ids.includes("444444444444"), "damaged and empty plans are not listed");
+  const newer = list.find((p) => p.id === "222222222222")!;
+  assert.deepEqual([newer.title, newer.shape, newer.scenes, newer.seconds], ["Newer one", "9:16", 2, 7]);
+});
+
+test("opening a saved video re-checks it like any plan from the page, and bad ids are refused", async () => {
+  seed("555555555555", JSON.stringify({ plan: { title: "Edited by hand", look: "../../etc/passwd", voice: "powershell:evil", music: { file: "../x.wav" }, source: "words", scenes: [{ headline: "Hi", sub: "", seconds: 99999, picture: "../../secret.png" }] }, shape: "nope" }));
+  const ok = JSON.parse((await call("GET", "/api/project?id=555555555555")).text);
+  assert.equal(ok.shape, "16:9");
+  assert.equal(ok.plan.look, "midnight");
+  assert.equal(ok.plan.voice, undefined);
+  assert.equal(ok.plan.music, undefined);
+  assert.equal(ok.plan.scenes[0].picture, undefined);
+  assert.equal(ok.plan.scenes[0].seconds, 30);
+  for (const bad of ["../../etc", "zzzz", "", "555555555555/../x", "AAAAAAAAAAAA", "999999999999"]) assert.equal((await call("GET", `/api/project?id=${encodeURIComponent(bad)}`)).status, 400, bad);
+});
+
+test("removing a video: only real QuickPath videos, only by exact id, and the folder is gone afterwards", async () => {
+  process.env.QUICKPATH_DELETE = "permanent";                    // tests must not fill the real Recycle Bin
+  try {
+    seed("666666666666", JSON.stringify({ plan: { title: "Remove me", look: "paper", source: "words", scenes: [{ headline: "One", sub: "", seconds: 3 }] }, shape: "16:9" }));
+    const dir = join(process.env.QUICKPATH_HOME as string, "projects", "666666666666");
+    assert.ok((await call("GET", "/api/projects")).text.includes("666666666666"));
+    const gone = await call("POST", "/api/project/remove", { body: JSON.stringify({ id: "666666666666" }) });
+    assert.equal(gone.status, 200);
+    assert.equal(JSON.parse(gone.text).how, "deleted");
+    assert.ok(!(await import("node:fs")).existsSync(dir));
+    assert.ok(!(await call("GET", "/api/projects")).text.includes("666666666666"));
+    for (const bad of ["../../x", "", "zzzz", "666666666666", "aaaaaaaaaaaa", "..", "AAAAAAAAAAAA"]) assert.equal((await call("POST", "/api/project/remove", { body: JSON.stringify({ id: bad }) })).status, 400, bad);
+    mkdirSync(join(process.env.QUICKPATH_HOME as string, "projects", "777777777777"), { recursive: true });    // a folder with no plan is not ours to delete
+    assert.equal((await call("POST", "/api/project/remove", { body: JSON.stringify({ id: "777777777777" }) })).status, 400);
+    assert.ok((await import("node:fs")).existsSync(join(process.env.QUICKPATH_HOME as string, "projects", "777777777777")));
+  } finally { delete process.env.QUICKPATH_DELETE; }
+});

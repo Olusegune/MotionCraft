@@ -53,11 +53,19 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-54 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
+57 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
 (no credit, bad key, refused prompt, slow, not a picture, non-https address), the server's refusals (every kind of bad upload), the sound (music that never clips and is the same every time, music levels that dip under each voice, every refusal for a voice or sound file),
 and six that build and render real videos in EffectCraft and check pixels and sound: your picture shows, a short clip holds its last frame, a long clip is
 trimmed, a voice and music are in the movie, scenes stretch to fit their voice, and no sound means no audio track (skipped, and reported as skipped, if
 EffectCraft, ffmpeg or Windows voices are not available).
+
+## Your videos
+
+The start screen lists the videos you have made (newest first). Click one to reopen it: its draft is rebuilt so it is always current. Hover a card and press
+the cross to remove it; on Windows it goes to the Recycle Bin, so you can put it back. Only folders that QuickPath made (they hold a `plan.json`) can be removed,
+and a saved plan is re-checked when it is opened, in case the folder was edited by hand.
+
+While you edit, the preview and the buttons stay in view as the scene list scrolls, and Ctrl+Enter updates the video.
 
 ## The desktop app
 

@@ -241,6 +241,54 @@ function fillSound(s) {
   });
 }
 
+// "Your videos": what is saved in the QuickPath folder, newest first. Opening one rebuilds its draft so it is always current.
+const when = (iso) => {
+  const d = new Date(iso), now = new Date(), days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return days === 0 ? `Today, ${t}` : days === 1 ? `Yesterday, ${t}` : d.toLocaleDateString([], { month: "short", day: "numeric", ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
+};
+
+async function drawRecent() {
+  let list = [];
+  try { list = (await api("/api/projects")).projects; } catch { /* the list is a convenience */ }
+  const host = $("recentList"); host.textContent = "";
+  $("recent").hidden = !list.length || !$("studio").hidden;
+  for (const p of list.slice(0, 9)) {
+    const li = document.createElement("li");
+    const b = document.createElement("button"); b.type = "button"; b.className = "vid";
+    const t = document.createElement("strong"); t.textContent = p.title || "Untitled";
+    const m = document.createElement("span"); m.textContent = `${p.scenes} scene${p.scenes === 1 ? "" : "s"} · ${p.seconds} s · ${p.shape}`;
+    const w = document.createElement("span"); w.textContent = `${when(p.updated)}${p.hasFinal ? " · saved" : ""}`;
+    b.append(t, m, w);
+    b.addEventListener("click", () => openProject(p.id));
+    const x = document.createElement("button"); x.type = "button"; x.className = "vid-x"; x.textContent = "\u00d7"; x.setAttribute("aria-label", `Remove ${p.title || "this video"}`); x.title = "Remove this video";
+    x.addEventListener("click", async () => {
+      const how = state.recycles ? "It goes to the Recycle Bin, so you can put it back." : "This cannot be undone.";
+      if (!confirm(`Remove "${p.title || "this video"}" and its files? ${how}`)) return;
+      try { await api("/api/project/remove", { id: p.id }); drawRecent(); } catch (e) { $("startnote").textContent = e.message; }
+    });
+    li.append(b, x); host.appendChild(li);
+  }
+}
+
+async function openProject(id) {
+  $("startnote").textContent = "Opening…";
+  try {
+    const p = await api(`/api/project?id=${encodeURIComponent(id)}`);
+    state.plan = p.plan; state.shape = p.shape; state.id = p.id; state.idea = p.plan.title; state.dirty = false;
+    state.musicFile = p.plan.music && p.plan.music.file ? p.plan.music.file : null;
+    const v = $("voice"); v.value = p.plan.voice || ""; if (v.value !== (p.plan.voice || "")) { v.value = ""; delete state.plan.voice; }
+    const m = $("music"), mu = p.plan.music;
+    m.value = mu ? (mu.file ? "file" : "mood:" + mu.mood) : ""; if (mu && m.value !== (mu.file ? "file" : "mood:" + mu.mood)) { m.value = ""; delete state.plan.music; }
+    $("level").value = (state.plan.music && state.plan.music.level) || "medium";
+    $("musicOpts").hidden = !m.value; $("musicFileLabel").hidden = m.value !== "file";
+    segmented($("shape"), SHAPES, state.shape, (x) => { state.shape = x; });
+    $("start").hidden = true; $("recent").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
+    $("startnote").textContent = "";
+    await render("draft");
+  } catch (e) { $("startnote").textContent = e.message; }
+}
+
 function init() {
   segmented($("len"), LENGTHS.map((n) => [n, `${n} s`]), state.seconds, (v) => (state.seconds = v));
   segmented($("shape"), SHAPES, state.shape, (v) => { state.shape = v; });
@@ -248,12 +296,14 @@ function init() {
   $("idea").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) make(); });
   document.querySelectorAll("[data-ex]").forEach((b) => b.addEventListener("click", () => { $("idea").value = b.dataset.ex; $("idea").focus(); }));
   $("update").addEventListener("click", () => render("draft"));
+  document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && state.plan && !state.busy && $("studio").hidden === false) { e.preventDefault(); render("draft"); } });
   $("final").addEventListener("click", () => render("final"));
   $("add").addEventListener("click", () => { if (state.plan.scenes.length >= 12) return; state.plan.scenes.push({ headline: "New scene", sub: "", seconds: 3 }); drawScenes(); touch(); });
-  $("again").addEventListener("click", () => { if (state.dirty && !confirm("Start over? Your changes will be lost.")) return; $("studio").hidden = true; $("start").hidden = false; $("make").disabled = false; $("startnote").textContent = ""; $("video").removeAttribute("src"); state.plan = null; state.id = null; });
+  $("again").addEventListener("click", () => { if (state.dirty && !confirm("Start over? Your changes will be lost.")) return; $("studio").hidden = true; $("start").hidden = false; $("make").disabled = false; $("startnote").textContent = ""; $("video").removeAttribute("src"); state.plan = null; state.id = null; drawRecent(); });
   $("reveal").addEventListener("click", () => state.last && api("/api/reveal", { url: state.last }).catch(() => {}));
+  drawRecent();
   api("/api/status").then((s) => {
-    state.looks = s.looks;
+    state.looks = s.looks; state.recycles = !!s.recycles;
     fillSound(s);
     const e = $("engine");
     e.textContent = s.engine ? "EffectCraft ready" : "EffectCraft not found";
