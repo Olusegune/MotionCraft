@@ -7,7 +7,7 @@ export const MAX_AUDIO_BYTES = 40 * 1024 * 1024;
 /** What an uploaded sound file really is, from its first bytes: a WAV (readable), an MP3 (an ID3 tag or a frame sync), or neither. */
 export function audioKind(b: Buffer): "wav" | "mp3" | null {
   if (wavInfo(b)) return "wav";
-  if (b.length > 1024 && (b.toString("latin1", 0, 3) === "ID3" || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0 && (b[1] & 0x06) !== 0))) return "mp3";
+  if (b.length > 1024 && (b.toString("latin1", 0, 3) === "ID3" || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0 && (b[1] & 0x06) !== 0)) && mp3Seconds(b) !== null) return "mp3";
   return null;
 }
 
@@ -44,4 +44,31 @@ export function writeWav(left: Float32Array, right: Float32Array, rate: number):
     out.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(right[i] * 32767))), 46 + i * 4);
   }
   return out;
+}
+
+/** The length of an MP3 in seconds, read from its frame headers (MPEG layer III; an ID3 tag in front is skipped). Null when it does not hold at least a few real frames. */
+export function mp3Seconds(b: Buffer): number | null {
+  let i = 0;
+  if (b.length > 10 && b.toString("latin1", 0, 3) === "ID3") i = 10 + (((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f));
+  const BR1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], BR2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+  const SR: Record<number, number[]> = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+  let frames = 0, samples = 0, rate = 0;
+  for (let guard = 0; i + 4 <= b.length && guard < 3_000_000; guard++) {
+    if (b[i] !== 0xff || (b[i + 1] & 0xe0) !== 0xe0) { i++; continue; }
+    const ver = (b[i + 1] >> 3) & 3, layer = (b[i + 1] >> 1) & 3, br = (b[i + 2] >> 4) & 15, sri = (b[i + 2] >> 2) & 3, pad = (b[i + 2] >> 1) & 1;
+    if (ver === 1 || layer !== 1 || br === 0 || br === 15 || sri === 3) { i++; continue; }
+    const sr = SR[ver][sri], kbps = (ver === 3 ? BR1 : BR2)[br];
+    const len = Math.floor(((ver === 3 ? 144 : 72) * kbps * 1000) / sr) + pad;
+    if (len < 4) { i++; continue; }
+    frames++; samples += ver === 3 ? 1152 : 576; rate ||= sr; i += len;
+  }
+  return frames >= 3 && rate ? samples / rate : null;
+}
+
+/** The length of a sound file, WAV or MP3, or null when it is neither. */
+export function audioInfo(b: Buffer): { seconds: number } | null {
+  const w = wavInfo(b);
+  if (w) return { seconds: w.seconds };
+  const m = mp3Seconds(b);
+  return m !== null && Number.isFinite(m) && m > 0 ? { seconds: m } : null;
 }

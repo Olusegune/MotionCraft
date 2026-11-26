@@ -4,7 +4,8 @@ import { mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeMusic, MOODS } from "../src/music.ts";
-import { audioKind, wavInfo, writeWav } from "../src/wav.ts";
+import { audioInfo, audioKind, mp3Seconds, wavInfo, writeWav } from "../src/wav.ts";
+import { mp3Frames } from "./png.ts";
 import { DUCK_DB, musicKeys, type VoiceCue } from "../src/sound.ts";
 import { makeOpenAILines, openAIMissing, spokenText, speakOpenAI, voiceFileName, VOICE_CHOICE, OPENAI_USD_PER_CHAR } from "../src/voice.ts";
 
@@ -27,8 +28,12 @@ test("wav and sound-file detection read bytes, not names", () => {
   const w = writeWav(new Float32Array(4410), new Float32Array(4410), 44100);
   assert.equal(audioKind(w), "wav");
   assert.ok(Math.abs(wavInfo(w)!.seconds - 0.1) < 0.001);
-  const mp3 = Buffer.concat([Buffer.from("ID3\x03\x00\x00\x00\x00\x00\x00"), Buffer.alloc(2000, 1)]);
-  assert.equal(audioKind(mp3), "mp3");
+  assert.equal(audioKind(mp3Frames(60)), "mp3");
+  assert.equal(audioKind(mp3Frames(60, true)), "mp3", "with an ID3 tag in front");
+  assert.ok(Math.abs(mp3Seconds(mp3Frames(100))! - 100 * 1152 / 44100) < 0.001, "100 frames of 1152 samples at 44.1 kHz");
+  assert.ok(Math.abs(audioInfo(mp3Frames(100, true))!.seconds - 2.612) < 0.01, "the length survives a tag in front");
+  assert.equal(audioKind(Buffer.concat([Buffer.from("ID3 and then nothing like sound"), Buffer.alloc(3000, 1)])), null, "a tag with no sound behind it is not an MP3");
+  assert.equal(audioInfo(mp3Frames(2)), null, "two frames are not a sound");
   for (const bad of [Buffer.from("hello"), Buffer.alloc(0), Buffer.from("<html>" + "x".repeat(3000)), Buffer.alloc(3000, 0), Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(60)])]) assert.equal(audioKind(bad), null);
 });
 

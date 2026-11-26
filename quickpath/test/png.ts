@@ -33,3 +33,10 @@ export function jpegHeader(width: number, height: number): Buffer {
   sof[0] = 0xff; sof[1] = 0xc0; sof.writeUInt16BE(17, 2); sof[4] = 8; sof.writeUInt16BE(height, 5); sof.writeUInt16BE(width, 7); sof[9] = 3;
   return Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46]), sof]);
 }
+
+/** An MP3 made of `n` real frame headers (MPEG 1 layer III, 128 kbps, 44.1 kHz: 417 bytes and 26.1 ms each): enough to be read as one, not to be listened to. */
+export function mp3Frames(n: number, withId3 = false): Buffer {
+  const frame = Buffer.alloc(417); frame[0] = 0xff; frame[1] = 0xfb; frame[2] = 0x90; frame[3] = 0x00;
+  const id3 = withId3 ? Buffer.concat([Buffer.from("ID3\x03\x00\x00\x00\x00\x00\x0a"), Buffer.alloc(10)]) : Buffer.alloc(0);
+  return Buffer.concat([id3, ...Array.from({ length: n }, () => frame)]);
+}

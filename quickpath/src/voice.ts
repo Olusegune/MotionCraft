@@ -4,12 +4,14 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { wavInfo, type WavInfo } from "./wav.ts";
+import { audioInfo, audioKind, wavInfo } from "./wav.ts";
+import { dollars, download, KieError, runTask, type KieOpts } from "./kie.ts";
 
 export const OPENAI_VOICES = ["nova", "onyx", "alloy", "shimmer"] as const;
 /** What a voice choice looks like: "win:Microsoft David Desktop" or "openai:nova". Anything else is refused. */
-export const VOICE_CHOICE = /^(?:win:[A-Za-z0-9][A-Za-z0-9 .\-]{0,59}|openai:(?:nova|onyx|alloy|shimmer))$/;
+export const VOICE_CHOICE = /^(?:win:[A-Za-z0-9][A-Za-z0-9 .\-]{0,59}|openai:(?:nova|onyx|alloy|shimmer)|kie:[A-Za-z0-9]{20})$/;
 export const OPENAI_USD_PER_CHAR = 0.000015;       // tts-1, as OpenAI lists it: $15 per million characters
+export const KIE_USD_PER_LINE = 0.03;              // ElevenLabs on Kie.ai: 6 credits ($0.03) for each line of up to 1,000 characters. Measured on a real call: 4 short lines cost $0.12, so it is per line, not per character
 export const MAX_SPOKEN_CHARS = 600;
 
 /** The words actually spoken for a scene: what the person wrote for the voice, else the scene's own words. */
@@ -20,7 +22,7 @@ export function spokenText(scene: { headline: string; sub?: string; say?: string
 
 /** The file a line of speech is saved as: 12 hex characters from the voice and the words. */
 export function voiceFileName(voice: string, text: string): string {
-  return createHash("sha1").update(voice).update("\0").update(text).digest("hex").slice(0, 12) + ".wav";
+  return createHash("sha1").update(voice).update("\0").update(text).digest("hex").slice(0, 12) + (voice.startsWith("kie:") ? ".mp3" : ".wav");
 }
 
 const ps = (script: string, timeout = 60_000) => new Promise<string>((resolve, reject) => {
@@ -66,18 +68,18 @@ export async function speakOpenAI(text: string, voice: string, key: string, opts
   return bytes;
 }
 
-export type Spoken = { file: string; info: WavInfo };
+export type Spoken = { file: string; info: { seconds: number } };
 
 /** The speech for one line, from the saved copy if there is one. OpenAI lines that are not saved yet are refused here: they must be confirmed first. */
 export async function lineFor(dir: string, voice: string, text: string, ask: { openaiKey?: () => Promise<string | null>; fetchImpl?: typeof fetch; base?: string } = {}): Promise<Spoken | null> {
   if (!VOICE_CHOICE.test(voice) || !text) return null;
   const file = voiceFileName(voice, text);
   const path = join(dir, "assets", "audio", file);
-  if (existsSync(path)) { const info = wavInfo(readFileSync(path)); if (info) return { file, info }; }
-  if (voice.startsWith("openai:")) return null;                       // paid: made only by makeLines, after a confirmation
+  if (existsSync(path)) { const info = audioInfo(readFileSync(path)); if (info) return { file, info }; }
+  if (voice.startsWith("openai:") || voice.startsWith("kie:")) return null;      // paid: made only after a confirmation
   mkdirSync(join(dir, "assets", "audio"), { recursive: true });
   await speakWindows(text, voice.slice(4), path);
-  const info = existsSync(path) ? wavInfo(readFileSync(path)) : null;
+  const info = existsSync(path) ? audioInfo(readFileSync(path)) : null;
   if (!info) throw new Error("The Windows voice did not make a sound file.");
   return { file, info };
 }
@@ -97,8 +99,40 @@ export async function makeOpenAILines(dir: string, voice: string, texts: string[
 }
 
 /** How many characters of OpenAI speech still have to be made, and what that costs. */
-export function openAIMissing(dir: string, voice: string, texts: string[]): { chars: number; usd: number } {
-  let chars = 0;
-  for (const text of new Set(texts)) if (!existsSync(join(dir, "assets", "audio", voiceFileName(voice, text)))) chars += text.length;
-  return { chars, usd: Math.round(chars * OPENAI_USD_PER_CHAR * 10000) / 10000 };
+export function voiceMissing(dir: string, voice: string, texts: string[]): { chars: number; usd: number; lines: number } {
+  let chars = 0, usd = 0, lines = 0;
+  for (const text of new Set(texts)) {
+    if (existsSync(join(dir, "assets", "audio", voiceFileName(voice, text)))) continue;
+    chars += text.length; lines++;
+    usd += voice.startsWith("kie:") ? Math.ceil(Math.max(1, text.length) / 1000) * KIE_USD_PER_LINE : text.length * OPENAI_USD_PER_CHAR;
+  }
+  return { chars, lines, usd: Math.round(usd * 10000) / 10000 };
+}
+export const openAIMissing = voiceMissing;
+
+// ---- Kie.ai voices (ElevenLabs Turbo 2.5): more voices than Windows, one provider with pictures, music and video. Paid, confirmed first.
+export const KIE_VOICES: { id: string; name: string }[] = [
+  ["EXAVITQu4vr4xnSDxMaL", "Sarah"], ["Xb7hH8MSUJpSbSDYk0k2", "Alice"], ["cgSgspJ2msm6clMCkdW9", "Jessica"], ["FGY2WhTYpPnrIDTdsKH5", "Laura"], ["XrExE9yKIg1WjnnlVkGX", "Matilda"],
+  ["pFZP5JQG7iQjIQuC4Bku", "Lily"], ["SAz9YHcvj6GT2YYXdXww", "River"], ["pNInz6obpgDQGcFmaJgB", "Adam"], ["nPczCjzI2devNBz1zQrb", "Brian"], ["onwK4e9ZLuTAKqWW03F9", "Daniel"],
+  ["JBFqnCBsd6RMkjVDRZzb", "George"], ["TX3LPaxmHKxFdv7VOQHJ", "Liam"], ["CwhRBWXzGAHq8TQ4Fs17", "Roger"], ["bIHbv24MWmeRgasZH58o", "Will"], ["iP95p4xoKVk53GoZ742B", "Chris"],
+  ["cjVigY5qzO86Huf0OWal", "Eric"], ["IKne3meq5aSn9XLyUdCD", "Charlie"], ["N2lVS1w4EtoT3dr4eOWO", "Callum"], ["pqHfZKP75CvOlQylNhV4", "Bill"], ["SOYHLrjzK2X1ezoPC6cr", "Harry"],
+].map(([id, name]) => ({ id, name }));
+/** Whether a voice choice names a real voice: Kie voices must be one of the listed ones. */
+export const knownVoice = (choice: string) => VOICE_CHOICE.test(choice) && (!choice.startsWith("kie:") || KIE_VOICES.some((v) => v.id === choice.slice(4)));
+
+/** Makes (and saves) the Kie lines that are missing, as MP3. The caller has already had the person confirm the price. Returns how many were made and what Kie says they cost. */
+export async function makeKieLines(dir: string, voice: string, texts: string[], key: string, opts: KieOpts = {}): Promise<{ made: number; usd: number }> {
+  if (!knownVoice(voice) || !voice.startsWith("kie:")) throw new KieError("That Kie.ai voice is not one of the listed voices.");
+  let made = 0, usd = 0;
+  mkdirSync(join(dir, "assets", "audio"), { recursive: true });
+  for (const text of new Set(texts)) {
+    const path = join(dir, "assets", "audio", voiceFileName(voice, text));
+    if (existsSync(path)) continue;
+    const m = await runTask("elevenlabs/text-to-speech-turbo-2-5", { text, voice: voice.slice(4), stability: 0.5, similarity_boost: 0.75, style: 0, speed: 1, language_code: "" }, key, { pollMs: 2000, timeoutMs: 180_000, ...opts });
+    const bytes = await download(m.urls[0], 20 * 1024 * 1024, opts);
+    if (audioKind(bytes) === null || !audioInfo(bytes)) throw new KieError("What came back from Kie.ai was not a usable sound.");
+    writeFileSync(path, bytes, { flag: "wx" });
+    made++; usd += dollars(m.credits, Math.ceil(Math.max(1, text.length) / 1000) * KIE_USD_PER_LINE);
+  }
+  return { made, usd: Math.round(usd * 10000) / 10000 };
 }

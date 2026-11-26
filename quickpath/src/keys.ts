@@ -5,13 +5,13 @@
 // The names read and written are fixed here: nothing the page sends ever decides which entry is touched.
 import { spawn } from "node:child_process";
 
-export type Provider = "kie" | "openai";
-export const PROVIDERS: Provider[] = ["kie", "openai"];
+export type Provider = "kie" | "openai" | "fal";
+export const PROVIDERS: Provider[] = ["kie", "openai", "fal"];
 export type KeySource = "env" | "saved" | "motioncraft" | null;
 
-const ENV: Record<Provider, string> = { kie: "KIE_API_KEY", openai: "OPENAI_API_KEY" };
+const ENV: Record<Provider, string> = { kie: "KIE_API_KEY", openai: "OPENAI_API_KEY", fal: "FAL_KEY" };
 const SAVED = (p: Provider) => `QuickPath/${p}`;
-const MOTIONCRAFT: Record<Provider, string> = { kie: "kie-api-key.motioncraft", openai: "openai-api-key.motioncraft" };
+const MOTIONCRAFT: Record<Provider, string> = { kie: "kie-api-key.motioncraft", openai: "openai-api-key.motioncraft", fal: "fal-api-key.motioncraft" };
 
 /** A place to keep secrets. Windows Credential Manager in the real app; a plain object in tests. */
 export interface Store {
@@ -57,7 +57,7 @@ ${op === "get" ? `[Console]::Out.Write([QpCred]::Get('${target}'))`
   : `if ([QpCred]::Remove('${target}')) { [Console]::Out.Write('ok') }`}
 `;
 
-const TARGET_OK = /^(?:QuickPath\/(?:kie|openai)|(?:kie|openai)-api-key\.motioncraft)$/;
+const TARGET_OK = /^(?:QuickPath\/(?:kie|openai|fal)|(?:kie|openai|fal)-api-key\.motioncraft)$/;
 
 function powershell(script: string, stdin?: string): Promise<string> {
   return new Promise((resolve) => {

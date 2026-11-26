@@ -10,15 +10,16 @@ import { EffectCraft, EngineError } from "./ec.ts";
 import { buildComposition, renderVideo } from "./build.ts";
 import { LOOKS, lookById } from "./looks.ts";
 import { clamp, makePlan, pickModel, SHAPE_LIST, SIZES, type Plan, type Shape } from "./plan.ts";
-import { imageInfo, MAX_PICTURE_BYTES, MEDIA_NAME } from "./images.ts";
+import { imageInfo, MAX_PICTURE_BYTES, MEDIA_NAME, PICTURE_NAME } from "./images.ts";
 import { looksLikeMp4, MAX_CLIP_BYTES, mp4Info } from "./mp4.ts";
 import { generatePicture, picturePrompt, Spend, SpendRefused } from "./ai.ts";
 import { canSaveKeys, keyStatus, kieKey, PROVIDERS, providerKey, removeKey, saveKey, type Provider } from "./keys.ts";
 import { effectiveCap, saveCap } from "./settings.ts";
 import { MOODS } from "./music.ts";
 import { resolveSound, SoundRefused, type Level } from "./sound.ts";
-import { makeOpenAILines, openAIMissing, OPENAI_VOICES, spokenText, VOICE_CHOICE, windowsVoices } from "./voice.ts";
-import { audioKind, AUDIO_NAME, MAX_AUDIO_BYTES, wavInfo } from "./wav.ts";
+import { KIE_VOICES, knownVoice, makeKieLines, makeOpenAILines, OPENAI_VOICES, spokenText, voiceMissing, windowsVoices } from "./voice.ts";
+import { dollars, download, KieError, runTask, uploadPicture, type KieOpts } from "./kie.ts";
+import { audioInfo, audioKind, AUDIO_NAME, MAX_AUDIO_BYTES, wavInfo } from "./wav.ts";
 
 // Where the page lives: QUICKPATH_UI when the desktop app sets it, else the ui folder beside src. (The bundled desktop build has no import.meta.url.)
 const UI = process.env.QUICKPATH_UI ? resolve(process.env.QUICKPATH_UI) : resolve(typeof __dirname !== "undefined" ? __dirname : fileURLToPath(new URL(".", import.meta.url)), typeof __dirname !== "undefined" ? "." : "..", "ui");
@@ -91,6 +92,14 @@ async function settingsView() {
 async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> {
   const key = await providerKey(p);
   if (!key) return { ok: false, message: "No key is saved yet." };
+  if (p === "fal") {
+    // fal has no balance question, so ask for a request that cannot exist: a wrong key is refused outright (401 or 403), a good key gets "not found" or similar.
+    try {
+      const r = await fetch(`${process.env.QUICKPATH_FAL_BASE ?? "https://queue.fal.run"}/fal-ai/flux/dev/requests/00000000-0000-0000-0000-000000000000/status`, { headers: { Authorization: `Key ${key}` }, signal: AbortSignal.timeout(15_000) });
+      if (r.status === 401 || r.status === 403) return { ok: false, message: "fal did not accept this key. Copy it again from your account page." };
+      return { ok: true, message: "fal accepted the key. (QuickPath does not use fal yet; a later version will.)" };
+    } catch { return { ok: false, message: "Could not reach fal. Check your internet connection." }; }
+  }
   const url = p === "kie" ? `${process.env.QUICKPATH_KIE_BASE ?? "https://api.kie.ai/api/v1"}/chat/credit` : `${process.env.QUICKPATH_OPENAI_BASE ?? "https://api.openai.com/v1"}/models`;
   try {
     const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) });
@@ -106,6 +115,12 @@ async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> 
   } catch { return { ok: false, message: "Could not reach the provider. Check your internet connection." }; }
 }
 
+/** Where Kie.ai is, and how patiently to wait. Tests point these at a fake; otherwise they are Kie's own. */
+const kieOpts = (): KieOpts => (process.env.QUICKPATH_KIE_BASE ? { base: process.env.QUICKPATH_KIE_BASE, allowLocalHttp: true, pollMs: 20 } : {});
+const NO_KIE = "No Kie.ai key was found. Add one in Settings (the sliders button at the top right), then try again.";
+const NO_OPENAI = "No OpenAI key was found. Add one in Settings (the sliders button at the top right), then try again.";
+const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first."); return join(HOME, "projects", id); };
+
 /** Checks and trims a plan from the page: the page is never trusted. */
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
@@ -114,7 +129,7 @@ export function checkPlan(raw: any): Plan {
   if (scenes.some((s: { headline: string }) => !s.headline)) throw new Refused("Every scene needs some words.");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
-  const voice = typeof raw.voice === "string" && VOICE_CHOICE.test(raw.voice) ? raw.voice : undefined;
+  const voice = typeof raw.voice === "string" && knownVoice(raw.voice) ? raw.voice : undefined;
   const m = raw.music;
   const level: Level = m?.level === "soft" || m?.level === "loud" ? m.level : "medium";
   const music = m && typeof m.file === "string" && AUDIO_NAME.test(m.file) ? { file: m.file, level } : m && typeof m.mood === "string" && MOODS.some((x) => x.id === m.mood) ? { mood: m.mood, level } : undefined;
@@ -201,7 +216,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       const url = new URL(req.url ?? "/", `http://${host}`);
 
       if (req.method === "GET" && url.pathname === "/api/status") {
-        return send(res, 200, { shapes: SHAPE_LIST, recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
+        return send(res, 200, { shapes: SHAPE_LIST, recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], kieVoices: (await providerKey("kie")) ? KIE_VOICES : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
       }
       if (req.method === "GET" && url.pathname === "/api/projects") {
         return send(res, 200, { projects: listProjects() });
@@ -318,30 +333,99 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       if (req.method === "POST" && url.pathname === "/api/voice/quote") {
         const b = await readJson(req);
-        const id = String(b.id ?? "");
-        if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first.");
+        const dir = projectDir(String(b.id ?? ""));
         const plan = checkPlan(b.plan);
-        if (!plan.voice?.startsWith("openai:")) return send(res, 200, { needed: false });
+        const kie = !!plan.voice?.startsWith("kie:"), openai = !!plan.voice?.startsWith("openai:");
+        if (!plan.voice || (!kie && !openai)) return send(res, 200, { needed: false });
         const texts = plan.scenes.map((x) => spokenText(x));
-        const miss = openAIMissing(join(HOME, "projects", id), plan.voice, texts);
+        const miss = voiceMissing(dir, plan.voice, texts);
         if (miss.chars === 0) return send(res, 200, { needed: false });
-        if (!(await providerKey("openai"))) throw new Refused("No OpenAI key was found. Save one in Windows Credential Manager as QuickPath/openai, or set OPENAI_API_KEY, and try again.");
-        const offer = { provider: "OpenAI", model: "tts-1 voice " + plan.voice.slice(7), usd: Math.max(0.001, miss.usd), note: "Priced by OpenAI at $15 per million characters.", what: `${miss.chars} characters of speech` };
-        return send(res, 200, { needed: true, ...spend.quote(id, texts.join("|"), "16:9", offer) });
+        if (!(await providerKey(kie ? "kie" : "openai"))) throw new Refused(kie ? NO_KIE : NO_OPENAI);
+        const offer = kie
+          ? { provider: "Kie.ai", model: `ElevenLabs voice ${KIE_VOICES.find((v) => v.id === plan.voice!.slice(4))?.name ?? ""}`.trim(), usd: Math.max(0.001, miss.usd), note: "Kie.ai charges about $0.03 for each line of speech (up to 1,000 characters), so every scene costs about that, however short. The real cost is read back from Kie afterwards.", what: `${miss.lines} line${miss.lines === 1 ? "" : "s"} of speech` }
+          : { provider: "OpenAI", model: "tts-1 voice " + plan.voice.slice(7), usd: Math.max(0.001, miss.usd), note: "Priced by OpenAI at $15 per million characters.", what: `${miss.chars} characters of speech` };
+        return send(res, 200, { needed: true, ...spend.quote(b.id, texts.join("|"), "16:9", offer) });
       }
       if (req.method === "POST" && url.pathname === "/api/voice/make") {
         const b = await readJson(req);
-        const id = String(b.id ?? "");
-        if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first.");
+        const dir = projectDir(String(b.id ?? ""));
         const plan = checkPlan(b.plan);
-        if (!plan.voice?.startsWith("openai:")) throw new Refused("Only OpenAI voices need to be made first.");
+        const kie = !!plan.voice?.startsWith("kie:"), openai = !!plan.voice?.startsWith("openai:");
+        if (!plan.voice || (!kie && !openai)) throw new Refused("Only paid voices need to be made first.");
         const texts = plan.scenes.map((x) => spokenText(x));
-        const held = spend.redeem(String(b.token ?? ""), id, texts.join("|"));
-        const key = await providerKey("openai");
-        if (!key) throw new Refused("No OpenAI key was found.");
-        const made = await makeOpenAILines(join(HOME, "projects", id), plan.voice, texts, key, { base: process.env.QUICKPATH_OPENAI_BASE });
-        spend.record(id, held.offer.usd, `${made} spoken lines`, held.offer);
+        const held = spend.redeem(String(b.token ?? ""), String(b.id), texts.join("|"));
+        const key = await providerKey(kie ? "kie" : "openai");
+        if (!key) throw new Refused(kie ? NO_KIE : NO_OPENAI);
+        if (kie) {
+          const r = await makeKieLines(dir, plan.voice, texts, key, kieOpts());
+          spend.record(String(b.id), r.usd, `${r.made} spoken lines`, held.offer);
+          return send(res, 200, { made: r.made, spentUsd: spend.spent() });
+        }
+        const made = await makeOpenAILines(dir, plan.voice, texts, key, { base: process.env.QUICKPATH_OPENAI_BASE });
+        spend.record(String(b.id), held.offer.usd, `${made} spoken lines`, held.offer);
         return send(res, 200, { made, spentUsd: spend.spent() });
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/music/quote") {
+        const b = await readJson(req);
+        projectDir(String(b.id ?? ""));
+        const typed = String(b.style ?? "").replace(/\s+/g, " ").trim().slice(0, 900);
+        const style = typed || `Instrumental background music for a short video about: ${String(b.idea ?? "").replace(/\s+/g, " ").trim().slice(0, 200)}. Soft, steady, no vocals, easy to talk over.`.slice(0, 900);
+        if (!(await providerKey("kie"))) throw new Refused(NO_KIE);
+        return send(res, 200, spend.quote(String(b.id), style, "16:9", { provider: "Kie.ai", model: "Suno V6 Mini (music)", usd: 0.06, note: "About $0.06 a track (measured on a real call: 12 credits). The real cost is read back from Kie afterwards. You get one track the length of your video.", what: "one music track" }));
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/music") {
+        const b = await readJson(req);
+        const dir = projectDir(String(b.id ?? ""));
+        const style = String(b.style ?? "");
+        const held = spend.redeem(String(b.token ?? ""), String(b.id), style);
+        const key = await providerKey("kie");
+        if (!key) throw new Refused(NO_KIE);
+        const seconds = clamp(Math.ceil(Number(b.seconds) || 15) + 3, 10, 360);
+        const m = await runTask("ai-music-api/generate", { custom_mode: true, instrumental: true, model: "V6_MINI", title: "QuickPath music", style, duration: seconds }, key, { timeoutMs: 420_000, ...kieOpts() });
+        const bytes = await download(m.urls[0], MAX_AUDIO_BYTES, kieOpts());
+        const info = audioKind(bytes) === "mp3" ? audioInfo(bytes) : null;
+        if (!info) throw new KieError("What came back from Kie.ai was not a usable sound.");
+        const name = `${randomBytes(6).toString("hex")}.mp3`;
+        mkdirSync(join(dir, "assets", "audio"), { recursive: true });
+        writeFileSync(join(dir, "assets", "audio", name), bytes, { flag: "wx" });
+        const usd = dollars(m.credits, held.offer.usd);
+        spend.record(String(b.id), usd, "music track", held.offer);
+        return send(res, 200, { name, seconds: Math.round(info.seconds * 10) / 10, usd, spentUsd: spend.spent() });
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/animate/quote") {
+        const b = await readJson(req);
+        const dir = projectDir(String(b.id ?? ""));
+        const picture = String(b.picture ?? "");
+        if (!PICTURE_NAME.test(picture) || !existsSync(join(dir, "assets", picture))) throw new Refused("That picture is not in this video.");
+        const prompt = String(b.prompt ?? "").replace(/\s+/g, " ").trim().slice(0, 600) || "Gentle natural motion, a very slow camera push-in, soft light.";
+        if (!(await providerKey("kie"))) throw new Refused(NO_KIE);
+        return send(res, 200, { ...spend.quote(String(b.id), `${picture}|${prompt}`, "16:9", { provider: "Kie.ai", model: "Wan 2.2 Turbo (picture to video, 720p)", usd: 0.4, note: "An estimate: Kie.ai prices video by the second (about $0.04 to $0.08 a second, a clip of about 5 seconds). Your picture is uploaded to Kie.ai for 24 hours so the model can start from it. The real cost is read back afterwards.", what: "one short video clip" }), prompt });
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/animate") {
+        const b = await readJson(req);
+        const dir = projectDir(String(b.id ?? ""));
+        const picture = String(b.picture ?? "");
+        if (!PICTURE_NAME.test(picture)) throw new Refused("That picture is not in this video.");
+        const prompt = String(b.prompt ?? "");
+        const held = spend.redeem(String(b.token ?? ""), String(b.id), `${picture}|${prompt}`);
+        const key = await providerKey("kie");
+        if (!key) throw new Refused(NO_KIE);
+        let src: Buffer;
+        try { src = readFileSync(join(dir, "assets", picture)); } catch { throw new Refused("That picture is not in this video."); }
+        const info = imageInfo(src);
+        if (!info) throw new Refused("That picture cannot be read.");
+        const mime = info.ext === "png" ? "image/png" : info.ext === "jpg" ? "image/jpeg" : "image/webp";
+        const url = await uploadPicture(src, mime, `${randomBytes(6).toString("hex")}.${info.ext}`, key, { ...kieOpts(), base: process.env.QUICKPATH_KIE_UPLOAD_BASE });
+        const m = await runTask("wan/2-2-a14b-image-to-video-turbo", { image_url: url, prompt, resolution: "720p", enable_prompt_expansion: false, acceleration: "none" }, key, { timeoutMs: 600_000, ...kieOpts() });
+        const bytes = await download(m.urls[0], MAX_CLIP_BYTES, kieOpts());
+        const clip = looksLikeMp4(bytes) ? mp4Info(bytes) : null;
+        if (!clip) throw new KieError("What came back from Kie.ai was not a usable clip.");
+        const name = `${randomBytes(6).toString("hex")}.mp4`;
+        mkdirSync(join(dir, "assets"), { recursive: true });
+        writeFileSync(join(dir, "assets", name), bytes, { flag: "wx" });
+        const usd = dollars(m.credits, held.offer.usd);
+        spend.record(String(b.id), usd, "picture to video", held.offer);
+        return send(res, 200, { name, seconds: Math.round(clip.seconds * 10) / 10, width: clip.width, height: clip.height, usd, spentUsd: spend.spent() });
       }
       if (req.method === "POST" && url.pathname === "/api/reveal") {
         const b = await readJson(req);
@@ -363,7 +447,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       send(res, 405, { error: "Not allowed." });
     } catch (e) {
       const msg = (e as Error).message ?? "";
-      const known = e instanceof Refused || e instanceof EngineError || e instanceof SpendRefused || e instanceof SoundRefused || /^(Kie\.ai|OpenAI|The picture|What came back|Your Kie|That Windows voice|The Windows voice)/.test(msg);
+      const known = e instanceof Refused || e instanceof EngineError || e instanceof SpendRefused || e instanceof SoundRefused || e instanceof KieError || /^(Kie\.ai|OpenAI|The picture|What came back|Your Kie|That Windows voice|The Windows voice)/.test(msg);
       send(res, known ? 400 : 500, { error: known ? (e as Error).message : "Something went wrong. Try again." });
     }
   });

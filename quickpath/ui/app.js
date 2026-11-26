@@ -127,6 +127,11 @@ function mediaRow(s, i) {
     if (isClip) { thumb.muted = true; thumb.preload = "metadata"; thumb.src = src + "#t=0.5"; } else { thumb.src = src; thumb.alt = `Scene ${i + 1} picture`; }
     const rm = document.createElement("button"); rm.type = "button"; rm.className = "btn quiet small"; rm.textContent = isClip ? "Remove clip" : "Remove picture";
     rm.addEventListener("click", () => { delete s.picture; drawScenes(); touch(); });
+    if (!isClip) {
+      const an = document.createElement("button"); an.type = "button"; an.className = "btn quiet small"; an.textContent = "Animate this picture";
+      an.addEventListener("click", () => askAnimate(s, i));
+      row.append(thumb, rm, an); return row;
+    }
     row.append(thumb, rm); return row;
   }
   const label = document.createElement("label"); label.className = "btn quiet small";
@@ -189,9 +194,44 @@ async function askPicture(s, i) {
   } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); }
 }
 
+// Music made by AI: asks first (price, and the words describing the music, which can be changed), then makes one track as long as the video needs.
+async function askMusic() {
+  say("");
+  const total = state.plan.scenes.reduce((n, x) => n + x.seconds, 0);
+  let quote;
+  try { quote = await api("/api/ai/music/quote", { id: state.id, style: "", idea: state.idea }); } catch (e) { say(e.message, "error"); return false; }
+  const ok = await confirmSpend(quote, { title: "Make music with AI?", forWhat: `${Math.round(total)} seconds of video`, words: quote.prompt, editable: true, button: "Confirm and make the music" });
+  if (!ok) return false;
+  try {
+    let token = quote.token, style = quote.prompt;
+    if (ok.edited && ok.edited !== style) { const q2 = await api("/api/ai/music/quote", { id: state.id, style: ok.edited, idea: state.idea }); token = q2.token; style = q2.prompt; }
+    setBusy(true, "Making the music. This can take a minute or two…");
+    const out = await api("/api/ai/music", { id: state.id, token, style, seconds: total });
+    setBusy(false); state.musicFile = out.name; return out;
+  } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); return false; }
+}
+
+// A scene's picture brought to life as a short video clip. The window says the picture is uploaded to Kie.ai, and shows the price, before anything is sent.
+async function askAnimate(s, i) {
+  say("");
+  const first = `${s.headline}. Gentle natural motion, a very slow camera push-in, soft light.`;
+  let quote;
+  try { quote = await api("/api/ai/animate/quote", { id: state.id, picture: s.picture, prompt: first }); } catch (e) { say(e.message, "error"); return; }
+  const ok = await confirmSpend(quote, { title: "Bring this picture to life?", forWhat: `Scene ${i + 1}`, words: quote.prompt, editable: true, button: "Confirm and make the clip" });
+  if (!ok) return;
+  try {
+    let token = quote.token, prompt = quote.prompt;
+    if (ok.edited && ok.edited !== prompt) { const q2 = await api("/api/ai/animate/quote", { id: state.id, picture: s.picture, prompt: ok.edited }); token = q2.token; prompt = q2.prompt; }
+    setBusy(true, "Bringing the picture to life. This usually takes one to three minutes…");
+    const out = await api("/api/ai/animate", { id: state.id, token, picture: s.picture, prompt });
+    s.picture = out.name; setBusy(false); drawScenes(); touch();
+    say(`Clip added (${out.seconds} s). Used so far: $${out.spentUsd.toFixed(2)}. Press Update video to see it.`, "ok");
+  } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); }
+}
+
 // A paid voice must be made, and confirmed, before the video is. Windows voices need nothing.
 async function ensureVoice() {
-  if (!state.plan.voice || !state.plan.voice.startsWith("openai:")) return true;
+  if (!state.plan.voice || !(state.plan.voice.startsWith("openai:") || state.plan.voice.startsWith("kie:"))) return true;
   const q = await api("/api/voice/quote", { id: state.id, plan: state.plan });
   if (!q.needed) return true;
   const words = state.plan.scenes.map((s) => (s.say && s.say.trim()) || [s.headline, s.sub].filter(Boolean).join(". ")).join("\n");
@@ -264,12 +304,14 @@ function fillSound(s) {
   const opt = (sel, value, label) => { const o = document.createElement("option"); o.value = value; o.textContent = label; sel.appendChild(o); };
   opt(v, "", "No voiceover");
   for (const n of s.voices || []) opt(v, "win:" + n, `${n.replace(/^Microsoft /, "").replace(/ Desktop$/, "")} (Windows, free)`);
+  for (const k of s.kieVoices || []) opt(v, "kie:" + k.id, `${k.name} (Kie, ElevenLabs, paid)`);
   for (const n of s.openaiVoices || []) opt(v, "openai:" + n, `${n[0].toUpperCase() + n.slice(1)} (OpenAI, paid)`);
   v.addEventListener("change", () => { if (!state.plan) return; if (v.value) state.plan.voice = v.value; else delete state.plan.voice; drawScenes(); touch(); });
   const m = $("music"); m.textContent = "";
   opt(m, "", "No music");
   for (const x of s.moods || []) opt(m, "mood:" + x.id, `${x.name}: ${x.note}`);
   opt(m, "file", "My own sound file…");
+  if (s.kieVoices && s.kieVoices.length) opt(m, "ai", "Make with AI (Suno, paid)…");
   const apply = () => {
     if (!state.plan) return;
     const level = $("level").value;
@@ -278,7 +320,16 @@ function fillSound(s) {
     else delete state.plan.music;
     $("musicOpts").hidden = !m.value; $("musicFileLabel").hidden = m.value !== "file";
   };
-  m.addEventListener("change", () => { apply(); touch(); });
+  let lastMusic = "";
+  m.addEventListener("change", async () => {
+    if (m.value === "ai") {                                         // made by AI: asks first, then the track becomes the sound file for this video
+      const out = await askMusic();
+      if (out) { m.value = "file"; lastMusic = "file"; apply(); touch(); say(`AI music added (${out.seconds} s). Used so far: $${out.spentUsd.toFixed(2)}. Press Update video to hear it.`, "ok"); }
+      else m.value = lastMusic;
+      return;
+    }
+    lastMusic = m.value; apply(); touch();
+  });
   $("level").addEventListener("change", () => { apply(); touch(); });
   $("musicFile").addEventListener("change", async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -398,8 +449,9 @@ async function renderSettings() {
       keyrow, actions,
       s.canSaveKeys ? el("span", {}) : el("p", { class: "hint", text: "Saving keys from here works on Windows. On this system, set the key as a computer setting instead (see the user guide)." }));
   };
-  body.append(row("kie", "Pictures (Kie.ai)", "AI pictures behind your scenes, made by Google's Imagen through Kie.ai.", "Create a key in your Kie.ai account (kie.ai, API Key page), then paste it here.", "About $0.02 per picture, always asked first."));
+  body.append(row("kie", "Pictures, voices, music and video (Kie.ai)", "One account for AI pictures (Imagen), voices (ElevenLabs), music (Suno) and video clips (Wan).", "Create a key in your Kie.ai account (kie.ai, API Key page), then paste it here.", "Pictures about $0.02, voices about $0.03 per 1,000 characters, a music track or a video clip a few cents to a few tens of cents. Always asked first."));
   body.append(row("openai", "Voices (OpenAI)", "More natural voiceovers. The free Windows voices need no key.", "Create a key in your OpenAI account (platform.openai.com, API keys), then paste it here.", "About $0.002 for a 15 second video, always asked first."));
+  body.append(row("fal", "fal (optional, not used yet)", "A second place to make AI pictures and videos. QuickPath does not use fal yet: saving a key now is safe, and a later version will.", "Create a key in your fal account (fal.ai, Keys page), then paste it here.", "Nothing is charged by saving it."));
 
   // The spending limit
   const cap = el("input", { type: "number", min: "0.5", max: "100", step: "0.5", value: String(s.capUsd), "aria-label": "Spending limit in dollars", class: "capnum" });

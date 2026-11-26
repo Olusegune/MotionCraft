@@ -26,7 +26,7 @@ export async function resolveSound(dir: string, planIn: Plan): Promise<{ plan: P
   const lines: (Awaited<ReturnType<typeof lineFor>>)[] = [];
   for (const s of plan.scenes) {
     const line = voice ? await lineFor(dir, voice, spokenText(s)) : null;
-    if (voice && !line && voice.startsWith("openai:")) throw new SoundRefused("Make the voiceover first: that voice has not been made yet, and it needs your confirmation.");
+    if (voice && !line && (voice.startsWith("openai:") || voice.startsWith("kie:"))) throw new SoundRefused("Make the voiceover first: that voice has not been made yet, and it needs your confirmation.");
     lines.push(line);
     if (line) s.seconds = Math.max(s.seconds, Math.ceil((VOICE_LEAD + line.info.seconds + VOICE_TAIL) * 10) / 10);
   }
