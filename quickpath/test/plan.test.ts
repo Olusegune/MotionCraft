@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { cleanModelPlan, planFromWords, sceneCount, spread } from "../src/plan.ts";
 import { LOOKS, suggestLook } from "../src/looks.ts";
-import { fitSize, layoutScene, wrapText } from "../src/build.ts";
+import { fitSize, layoutScene, safeText, wrapText } from "../src/build.ts";
 import { checkPlan } from "../src/server.ts";
 
 const sum = (a: number[]) => Math.round(a.reduce((n, x) => n + x, 0) * 10) / 10;
@@ -88,4 +88,10 @@ test("the server never trusts a plan from the page", () => {
   assert.equal(p.scenes[0].headline.length, 90);
   assert.equal(p.scenes[0].seconds, 30);
   assert.equal(p.scenes[0].sub, "5");
+});
+
+test("words that look like file paths are kept as words (an invisible mark stops EffectCraft opening them as files)", () => {
+  const ZW = String.fromCharCode(0x200b);
+  for (const t of ["/slow start", "~/notes", "C:" + String.fromCharCode(92) + "Users", "c:/x", String.fromCharCode(92, 92) + "server", String.fromCharCode(92) + "x"]) assert.equal(safeText(t), ZW + t, t);
+  for (const t of ["slow start", "50/50", "see C:" + String.fromCharCode(92) + "x", "C:", "a/b", "https://example.com", "@file", ""]) assert.equal(safeText(t), t, t);
 });

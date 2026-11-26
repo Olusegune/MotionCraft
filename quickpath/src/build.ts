@@ -60,7 +60,7 @@ export function layoutScene(headline: string, sub: string, width: number, height
         barY: top - size * 0.45, barW: Math.round(width * 0.09), barH: Math.max(6, Math.round(height * 0.007)),
       };
     }
-    size -= 4;
+    size = Math.max(36, size - 4);
   }
 }
 
@@ -80,8 +80,14 @@ async function fadeSlide(ec: EffectCraft, layer: number, t0: number, t1: number,
   await key("transform/position", t0 + fin, [x, y, 0]);
 }
 
+/** EffectCraft reads text that starts like a file path (/, ~, \\, or C:\ and C:/) as a file to open, and refuses it outside the project folder, so words
+ * like "/slow start" or "C:\\Users" would fail to build. An invisible zero-width space in front keeps them as plain words (measured: it draws nothing). */
+export function safeText(value: string): string {
+  return /^[\\/~]|^[A-Za-z]:[\\/]/.test(value) ? "\u200B" + value : value;
+}
+
 async function text(ec: EffectCraft, name: string, value: string, size: number, x: number, y: number, fill: Rgb): Promise<number> {
-  const { layer } = await ec.run<{ layer: number }>("layer.newText", { text: value, name, size, position: [x, y] });
+  const { layer } = await ec.run<{ layer: number }>("layer.newText", { text: safeText(value), name, size, position: [x, y] });
   await ec.run("layer.setText", { layer, fill });
   return layer;
 }

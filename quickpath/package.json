@@ -15,6 +15,7 @@
     "dist": "npm run bundle && electron-builder --win nsis zip --publish never"
   },
   "devDependencies": {
+    "axe-core": "^4.14.1",
     "electron": "^45.5.0",
     "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2"

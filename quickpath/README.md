@@ -53,11 +53,13 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-57 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
-(no credit, bad key, refused prompt, slow, not a picture, non-https address), the server's refusals (every kind of bad upload), the sound (music that never clips and is the same every time, music levels that dip under each voice, every refusal for a voice or sound file),
-and six that build and render real videos in EffectCraft and check pixels and sound: your picture shows, a short clip holds its last frame, a long clip is
-trimmed, a voice and music are in the movie, scenes stretch to fit their voice, and no sound means no audio track (skipped, and reported as skipped, if
-EffectCraft, ffmpeg or Windows voices are not available).
+82 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
+the server's refusals, awkward text and extremes on the real EffectCraft, and fuzzing of every file reader. The tests that need EffectCraft, ffmpeg or Windows
+voices report as skipped (never passed) when those are missing.
+
+Other checks: `node scripts/drive.cjs <QuickPath.exe>` drives the installed app end to end; `node scripts/a11y.cjs <QuickPath.exe>` runs an accessibility audit (axe-core).
+
+Documents: `docs/USER_GUIDE.md` (how to use it) and `docs/QA.md` (test strategy, results, bugs found, security review, manual test script, release checklist).
 
 ## Your videos
 

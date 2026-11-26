@@ -1,0 +1,167 @@
+# QuickPath 0.2.0: QA document
+
+Quality assurance for QuickPath (branch `claude/quick-path`). It says what was tested, how, what was found, and what has not been checked.
+Read it with `README.md` (what the app does) and `docs/USER_GUIDE.md` (how to use it).
+
+Status in one line: **82 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
+script (section 6) is ready for a person to run on a clean PC and a Mac. Not signed. The Mac build has never been run.**
+
+## 1. Scope
+
+In scope: the local server and its HTTP API, planning (scenes from an idea), the layout and the EffectCraft build, rendering, pictures and clips
+(your own and AI-made), voiceover, music, the spend gate, saving and reopening videos, the page, and the Windows desktop app and its installer.
+
+Out of scope here: EffectCraft itself (a separate product, pinned to 0.24.1), Ollama, Kie.ai and OpenAI as services, and the main MotionCraft app.
+
+## 2. Environments tested
+
+| Where | What |
+|---|---|
+| The owner's PC | Windows 11 Home, Node 24.14, EffectCraft 0.24.1, Ollama with `qwen3:8b`, ffmpeg 8.1, Electron 45.5 (installed with the NSIS installer, upgrade-over-install checked) |
+| GitHub Actions, Linux | Node 24: all tests that do not need EffectCraft (the real-engine tests report as skipped) |
+| GitHub Actions, Windows and macOS | `npm ci` and the installer build (Windows: setup EXE and zip; macOS: Apple Silicon `.dmg`) |
+| **Not tested** | A clean Windows PC with no development tools; any Mac (the `.dmg` is built, never opened); Intel Mac; Windows 10; Linux desktop; other EffectCraft versions; a machine without Ollama was only covered by the fallback tests, not by hand |
+
+## 3. How it was tested
+
+| Layer | Method | Count |
+|---|---|---|
+| Unit | Pure functions: planning, text wrapping and fitting, layout, music levels, name and voice-choice checks, file readers (`plan`, `images`, `mp4`, `sound`) | 27 |
+| Fake provider | A fake Kie.ai and OpenAI answer every case: success, bad key, no credit, refused prompt, slow, not a picture, non-https address (`ai`, plus the voice cases in `sound` and `server`) | 7 |
+| Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal | 18 |
+| Real engine | The real EffectCraft builds and renders; pixels and audio of the result are checked | 6 + 18 |
+| Fuzz | Seeded random and corrupted bytes at every file reader, random JSON at the plan checker, random text at the layout and planner | 6 |
+| Page | Driven through the real desktop window (Chromium debug port); accessibility with axe-core in three states | scripts, not in `npm test` |
+| Manual | Section 6 | 30 steps |
+
+Run the automated tests with `npm test` (about 40 s on the owner's PC). Tests that need EffectCraft, ffmpeg or Windows voices say "skipped: NOT CHECKED" when
+they are missing. A skip is never reported as a pass.
+
+Per file: `plan` 10, `ai` 7, `images` 5, `mp4` 3, `sound` 9, `server` 18, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 82.
+
+## 4. What the tests prove, by feature
+
+| Feature | Checked by | Result |
+|---|---|---|
+| Scenes from an idea (own words, local model, fallback) | `plan`, `fuzz` (3000 random ideas and model answers) | pass |
+| Text fits the frame in every shape; no orphan words; minimum size | `plan`, `fuzz` (1500 random texts x 3 shapes), `edge.real` | pass |
+| Odd text: quotes, backslashes, newlines, emoji, Chinese/Japanese/Korean, Arabic, symbols, one huge word, 40-word sentence, one character, text that looks like a file path | `edge.real` against the real engine, each must render and show the words | pass |
+| Extremes: 12 scenes of 1.5 s; 8 scenes over 120 s; every look in every shape; two videos built at once | `edge.real` | pass |
+| Own picture shows (pixel check) and a missing picture file does not break the build | `engine.real` | pass |
+| Clips: shorter than the scene holds its last frame, longer is trimmed, both start with the scene (pixel checks) | `engine.real` | pass |
+| MP4, PNG, JPEG, WebP, WAV, MP3 recognised by their bytes, not names; garbage, truncated and flipped-byte files never throw | `images`, `mp4`, `sound`, `fuzz` (over 10,000 files) | pass |
+| Voice: scenes grow to fit the voice, audio track in the movie, no sound means no audio track | `engine.real` | pass |
+| Music: four moods, never clip, deterministic; levels fade in, dip under each voice, fade out | `sound` | pass |
+| Spend gate: one-time, expires after 5 minutes, bound to the exact words and project, $5 cap counted from the ledger on disk | `ai`, `server` | pass |
+| Paid AI picture and OpenAI voice end to end against a fake provider | `server` | pass |
+| One real AI picture and one real OpenAI voice through the real confirmation windows | manual, live | worked ($0.02 and $0.002, recorded in the ledger) |
+| Reopen and remove saved videos; hand-edited and corrupt plans are re-checked or left out | `server` | pass |
+| Desktop app: opens, makes a video, one window only, quits cleanly, page has no Node access | scripted drive of the installed app | pass |
+| Accessibility (WCAG 2 A/AA, 2.1 A/AA, best practice) | axe-core: start screen, studio, confirmation window | 0 violations in each |
+
+## 5. Bugs found by this QA
+
+Found by testing, fixed, and now covered by a test.
+
+| # | Bug | Found by | Fix |
+|---|---|---|---|
+| 1 | Square video with a long headline wrapped into seven huge lines and ran off the frame | layout unit test | text shrinks until the whole block fits |
+| 2 | Music fade-in jumped back to full volume in the middle of the first voice line | music-levels test | every level key respects ducking |
+| 3 | A paid voice not yet made was reported as "EffectCraft not found" on a machine without EffectCraft | CI (Linux) | cheap checks run before looking for the engine |
+| 4 | Words that start like a file path (`/slow start`, `~/notes`, `C:\x`, `\\server`) failed to build: EffectCraft treats them as files to open | edge test | an invisible zero-width space in front (measured: draws nothing). EffectCraft refuses paths outside the project, and does not copy the file's contents into the text, so there was no leak, only a failure |
+| 5 | Text size could step down to 34, below the stated minimum 36, in tall videos | fuzz test | clamped |
+| 6 | The preview began on an empty frame because the words fade in | live use | preview starts 1.2 s in |
+| 7 | Hidden items (spinner, "Show in folder") still showed because a style overrode `hidden` | live use | one rule for `[hidden]` |
+| 8 | Accent line missing: EffectCraft's solid layer does not take a size | real engine | uses a rectangle shape |
+| 9 | Headlines wrapped leaving single words alone on a line | live use | even line breaks |
+| 10 | The first fuzz run failed on impossible input (my test built objects JSON cannot make) | fuzz test | the fuzzer now produces real JSON; not a product bug |
+
+Open, known, not fixed:
+
+| # | Issue | Severity | Note |
+|---|---|---|---|
+| A | OpenAI voice lines are quieter than Windows voice lines | low | not loudness-matched |
+| B | AI pictures may contain stray words despite the instruction and a negative prompt | low | the one real picture made had none; no automatic check and retry |
+| C | The built-in music moods were measured (length, loudness, clipping) but not listened to by a person | medium for taste | please listen |
+| D | The desktop download is about 120 MB (it carries the Chromium engine) | low | |
+| E | `npm audit`: moderate issue in a file-matching helper inside `electron-builder` | low | packaging tool only, not in the installed app |
+
+## 6. Security review
+
+Rafter's remote scan was out of quota for the billing period, so the review below was done by hand, against the code and with tests. The local
+secret scan (`rafter secrets`) found nothing.
+
+| Entry point | Threat | Mitigation | Test |
+|---|---|---|---|
+| Local HTTP server | A web page you visit talks to it (cross-site, DNS rebinding) | listens on 127.0.0.1 only; refuses any Host or Origin that is not that address and port | `server` |
+| JSON bodies | Memory exhaustion; broken input | 64 KB cap; a plain message for broken JSON | `server`, `fuzz` |
+| Plan from the page | Hostile fields: path walking, shell text, huge values, prototype pollution | re-checked on the server: scene count, text lengths, seconds, look name, voice choice, music, file names must match exact shapes | `server`, `fuzz` (4000 random JSON documents) |
+| Saved `plan.json` | A hand-edited file | goes through the same checker when opened | `server` |
+| Uploads (pictures, clips, sounds) | Wrong type, disguised file, oversized file, path walking | type judged from the file's own bytes (never the name or header); size caps (12 MB, 150 MB, 40 MB); names made by the server (12 hex characters); stored only inside the project folder | `images`, `mp4`, `sound`, `server`, `fuzz` |
+| Media URLs | Reading other files | exact patterns for project id and file name; nothing else is served | `server` |
+| Spend | Paid calls without consent, repeated charges | one-time confirmation tied to the exact words; $5 cap from an on-disk ledger; saved voice lines are never paid for twice | `ai`, `server` |
+| Keys | Leaking | read only from fixed places; never sent to the page; never written to disk or a log; sent only to their provider | code review |
+| Provider answers | A hostile or odd answer | only https addresses followed; size checks; the bytes must really be a picture or sound | `ai`, `sound` |
+| Windows voices | Command injection through the voice name or words | the voice name must be one of the installed voices; words travel in a file, never in a command; `shell: false` | `sound`, `server` |
+| EffectCraft | Reading or writing elsewhere | started with `shell: false`, confined to the one project folder; text that looks like a path is neutralised | `edge.real` |
+| Desktop window | The page reaching the system | only QuickPath's own page can load; no new windows; no Node access in the page; every browser permission refused | scripted drive |
+| Removing a video | Deleting the wrong folder | only folders with a `plan.json`, only by exact id; Recycle Bin on Windows | `server` |
+
+Residual risks: anyone who can already run programs as you could read the spend file or the saved videos (they are ordinary files); the app is not
+signed, so a tampered download would not be flagged by Windows (check `CHECKSUMS.txt`).
+
+## 7. Manual test script
+
+Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**. Tick each step; write what you saw if it differs.
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Run `QuickPath_0.2.0_x64-setup.exe` (More info, Run anyway) | installs; Start menu entry; no administrator prompt |
+| 2 | Open QuickPath **without** EffectCraft installed | window opens; top right says "EffectCraft not found"; pressing Make shows a plain message, not a crash |
+| 3 | Install EffectCraft 0.24.1, restart QuickPath | top right says "EffectCraft ready" |
+| 4 | Type "A 15 second teaser for a coffee brand" and press Make my video | in about 10 s a video plays; 4 or so scenes; words fade in |
+| 5 | Press play | words fade in and out; no flicker; no empty frames |
+| 6 | Change a headline, press Update video | the video updates in a few seconds; the change shows |
+| 7 | Change the length of a scene to 8 s | the video gets longer |
+| 8 | Remove a scene; add a scene | scene list and video follow |
+| 9 | Pick each look in turn | colours change; text stays readable |
+| 10 | Start over with Tall, then Square | the picture is the right shape and nothing is cut off |
+| 11 | Add your own PNG to a scene | thumbnail shows; after Update the picture is behind the words, dimmed |
+| 12 | Try to add a text file renamed `.png` | refused with a plain message |
+| 13 | Add an MP4 clip shorter than the scene, then one longer | short holds its last frame; long is trimmed; both start with the scene |
+| 14 | Voiceover: pick a Windows voice, press Update | scenes grow if needed; voice is heard; words match |
+| 15 | Type different words in "Voice says" | the voice says those words |
+| 16 | Music: try each mood, then Soft, Medium, Loud | music fades in and out, dips under the voice; levels differ |
+| 17 | Music: My own sound file (WAV, then MP3) | plays; a text file renamed `.mp3` is refused |
+| 18 | With no voice and no music, play the video | silent |
+| 19 | (Needs a Kie.ai key) Make a picture on a scene | window shows model, price, limit and the words; Cancel sends nothing |
+| 20 | Confirm, then Update video | a picture appears behind the words; "Used so far" went up by about $0.02 |
+| 21 | Edit the words in the window before confirming | the edited words are the ones used |
+| 22 | (Needs an OpenAI key) Pick an OpenAI voice, press Update | confirmation shows characters and price; after Confirm the voice plays |
+| 23 | Update again without changing words | no second confirmation (lines were saved) |
+| 24 | Save final video | a full-size MP4 appears in `Documents\QuickPath`; "Show in folder" opens it; it plays in another player with sound |
+| 25 | Close and reopen QuickPath | "Your videos" lists the video; opening it brings back the scenes, look, voice, music and pictures |
+| 26 | Remove a video from the list | asks first; goes to the Recycle Bin; can be restored |
+| 27 | Open `video.ecproj` in EffectCraft | text is editable; audio layers are there |
+| 28 | Start QuickPath twice | only one window |
+| 29 | Keyboard only: Tab through the start screen and the studio; Ctrl+Enter | every control reachable and visible; Update runs |
+| 30 | Uninstall from Windows Settings | removed; `Documents\QuickPath` is left alone |
+
+## 8. Release checklist and sign-off
+
+| Item | State |
+|---|---|
+| Automated tests (82) pass | done |
+| CI green on Windows, macOS, Linux | done |
+| Accessibility audit | done, 0 violations |
+| Fuzz and edge-case tests | done |
+| Installed and driven end to end on the development PC | done |
+| Manual script on a clean Windows PC | **not done** |
+| Manual script on a Mac | **not done** |
+| Code signing and notarisation | **not done** (no certificate or Apple account) |
+| Intel Mac build | **not done** |
+| Listen to the music moods; compare voices | **not done** (needs a person) |
+| Rafter remote scan | **not done** (quota); local secret scan done |
+
+Recommendation: fine for friends-and-family testing on Windows now. Before wider release: run section 7 on a clean PC and a Mac, sign the builds, and have
+a person listen to the music and voices.
