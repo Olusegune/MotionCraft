@@ -1,4 +1,4 @@
-// Accessibility audit of the running page with axe-core, in three states (start screen, studio, confirmation window).
+// Accessibility audit of the running page with axe-core, in four states (start screen, studio, confirmation window, settings window).
 // Usage: node scripts/a11y.cjs <path to QuickPath.exe>   (needs Node 22+; axe-core is a development dependency)
 "use strict";
 const { spawn } = require("node:child_process");
@@ -27,6 +27,10 @@ async function main() {
   await ev("(() => { const b = Array.from(document.querySelectorAll('.pic button')).find(x => x.textContent === 'Make a picture'); b.click(); return 0; })()");
   await sleep(2500);
   results.push(await audit("confirmation window (open: " + (await ev("document.getElementById('spend').open")) + ")"));
+  await ev("(() => { const d = document.getElementById('spend'); if (d.open) d.close('cancel'); return 0; })()");
+  await ev("document.getElementById('gear').click(); 0");
+  await sleep(2500);
+  results.push(await audit("settings window (open: " + (await ev("document.getElementById('settings').open")) + ")"));
   console.log(JSON.stringify(results, null, 1));
   ws.close(); child.kill();
 }

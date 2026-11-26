@@ -72,8 +72,12 @@ Almost everything is free: scenes, Windows voices, music, and your own pictures,
 (about $0.002 for a 15 second video) cost anything, and always after you press Confirm. QuickPath stops at **$5** in total (the number is kept in the file
 `spend.jsonl` in your QuickPath folder).
 
-QuickPath finds your keys in Windows Credential Manager (entries `QuickPath/kie` and `QuickPath/openai`), or the settings `KIE_API_KEY` and `OPENAI_API_KEY`.
-It never shows or saves them.
+## Where do I put my API keys?
+
+Press the **sliders button** at the top right (the same Settings window opens from the link under the idea box). Paste a key into the box for Pictures (Kie.ai) or Voices (OpenAI),
+press **Save key**, then **Check it works**. QuickPath keeps it in Windows Credential Manager and never shows it again, only "Key set". You never need a command line.
+The full walk-through, where to get each key, and troubleshooting are in `SETUP_KEYS.md`. The same window shows whether a model on your computer (Ollama) was found, and lets
+you change the **spending limit**.
 
 ## If something goes wrong
 

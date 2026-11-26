@@ -26,11 +26,11 @@ const PICTURE_OFFER: Offer = { provider: PROVIDER, model: MODEL, usd: ESTIMATE_U
 export class Spend {
   private held = new Map<string, Held>();
   private ledger: string;
-  private cap: number;
+  private capNow: () => number;
   private now: () => number;
 
-  constructor(ledger: string, capUsd = Number(process.env.QUICKPATH_SPEND_CAP_USD ?? 5), now: () => number = Date.now) {
-    this.ledger = ledger; this.cap = capUsd; this.now = now;
+  constructor(ledger: string, capUsd: number | (() => number) = Number(process.env.QUICKPATH_SPEND_CAP_USD ?? 5), now: () => number = Date.now) {
+    this.ledger = ledger; this.capNow = typeof capUsd === "function" ? capUsd : () => capUsd; this.now = now;
   }
 
   spent(): number {
@@ -44,12 +44,12 @@ export class Spend {
 
   /** Makes a quote the person must confirm. Refused when the cap would be passed. */
   quote(project: string, prompt: string, shape: Shape, offer: Offer = PICTURE_OFFER): Quote {
-    const spentUsd = this.spent();
-    if (spentUsd + offer.usd > this.cap) throw new SpendRefused(`This would pass your spending limit of $${this.cap.toFixed(2)} (about $${spentUsd.toFixed(2)} used so far).`);
+    const spentUsd = this.spent(), cap = this.capNow();
+    if (spentUsd + offer.usd > cap) throw new SpendRefused(`This would pass your spending limit of $${cap.toFixed(2)} (about $${spentUsd.toFixed(2)} used so far). You can change the limit in Settings.`);
     const token = randomBytes(16).toString("hex");
     for (const [k, v] of this.held) if (v.expires < this.now()) this.held.delete(k);
     this.held.set(token, { project, prompt, shape, expires: this.now() + QUOTE_SECONDS * 1000, offer });
-    return { token, provider: offer.provider, model: offer.model, estimateUsd: offer.usd, note: offer.note, prompt, what: offer.what, spentUsd, capUsd: this.cap };
+    return { token, provider: offer.provider, model: offer.model, estimateUsd: offer.usd, note: offer.note, prompt, what: offer.what, spentUsd, capUsd: cap };
   }
 
   /** Uses the quote up. It works once, for the project and prompt it was made for, before it expires. */

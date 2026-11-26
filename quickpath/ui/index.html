@@ -15,6 +15,9 @@
   <h1>QuickPath</h1>
   <span class="tag">Idea to video in a minute</span>
   <span id="engine" class="engine" role="status"></span>
+  <button id="gear" class="gear" type="button" aria-label="Settings and connections" title="Settings">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M20 6h0M4 12h4M14 12h6M4 18h12M20 18h0"/><circle cx="17" cy="6" r="2.2"/><circle cx="11" cy="12" r="2.2"/><circle cx="18" cy="18" r="2.2"/></svg>
+  </button>
 </header>
 
 <main>
@@ -39,6 +42,7 @@
         <div class="go"><button id="make" class="btn primary big" type="button">Make my video</button></div>
       </div>
       <p id="startnote" class="note" role="status"></p>
+      <p class="hint aihint">Everything works without AI. <button id="aiLink" class="linkbtn" type="button">Add keys for AI pictures and voices</button></p>
     </div>
   </section>
 
@@ -86,6 +90,13 @@
     </aside>
   </section>
 </main>
+<dialog id="settings" class="wide" aria-labelledby="setTitle">
+  <h2 id="setTitle">Settings</h2>
+  <p class="hint">QuickPath keeps your keys in Windows Credential Manager. After you save one it is never shown again, only whether it is set.</p>
+  <div id="settingsBody"></div>
+  <p id="settingsMsg" class="note" role="status" aria-live="polite"></p>
+  <div class="row end"><button id="settingsDone" class="btn primary" type="button">Done</button></div>
+</dialog>
 <dialog id="spend" aria-labelledby="spendTitle">
   <form method="dialog">
     <h2 id="spendTitle">Make a picture with AI?</h2>

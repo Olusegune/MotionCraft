@@ -3,7 +3,7 @@
 Quality assurance for QuickPath (branch `claude/quick-path`). It says what was tested, how, what was found, and what has not been checked.
 Read it with `README.md` (what the app does) and `docs/USER_GUIDE.md` (how to use it).
 
-Status in one line: **93 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
+Status in one line: **103 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
 script (section 6) is ready for a person to run on a clean PC and a Mac. Not signed. The Mac build has never been run.**
 
 ## 1. Scope
@@ -28,16 +28,17 @@ Out of scope here: EffectCraft itself (a separate product, pinned to 0.24.1), Ol
 |---|---|---|
 | Unit | Pure functions: planning, text wrapping and fitting, layout, music levels, name and voice-choice checks, file readers (`plan`, `images`, `mp4`, `sound`) | 27 |
 | Fake provider | A fake Kie.ai, OpenAI and Ollama answer every case: success, bad key, no credit, refused prompt, slow, never answers, not JSON, wrong shape, one scene, connection reset, only picture models installed, non-https address (`ai`, `planner`, plus the voice cases in `sound` and `server`) | 14 |
-| Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal, the strict page policy | 21 |
+| Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal, the strict page policy, Settings (keys, checks, spending limit) | 30 |
 | Real engine | The real EffectCraft builds and renders; pixels and audio of the result are checked | 6 + 18 |
 | Fuzz | Seeded random and corrupted bytes at every file reader, random JSON at the plan checker, random text at the layout and planner | 6 |
-| Page | Driven through the real desktop window (Chromium debug port): end to end (`drive.cjs`), accessibility with axe-core in three states (`a11y.cjs`), keyboard-only use (`keyboard.cjs`), screenshots at 1280, 1000 and 760 px wide with a check for sideways scrolling | scripts, not in `npm test` |
+| Real credential store | The real Windows Credential Manager: write, read back, remove, restore what was there; refuses any entry that is not QuickPath's | 2 |
+| Page | Driven through the real desktop window (Chromium debug port): end to end (`drive.cjs`), accessibility with axe-core in four states (`a11y.cjs`), keyboard-only use (`keyboard.cjs`), screenshots at 1280, 1000 and 760 px wide with a check for sideways scrolling | scripts, not in `npm test` |
 | Manual | Section 6 | 30 steps |
 
 Run the automated tests with `npm test` (about 40 s on the owner's PC). Tests that need EffectCraft, ffmpeg or Windows voices say "skipped: NOT CHECKED" when
 they are missing. A skip is never reported as a pass.
 
-Per file: `plan` 10, `ai` 8, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `server` 22, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 93.
+Per file: `plan` 10, `ai` 8, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `server` 30, `creds.real` 2, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 103.
 
 ## 4. What the tests prove, by feature
 
@@ -57,7 +58,9 @@ Per file: `plan` 10, `ai` 8, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `serve
 | One real AI picture and one real OpenAI voice through the real confirmation windows | manual, live | worked ($0.02 and $0.002, recorded in the ledger) |
 | Reopen and remove saved videos; hand-edited and corrupt plans are re-checked or left out | `server` | pass |
 | Desktop app: opens, makes a video, one window only, quits cleanly, page has no Node access | scripted drive of the installed app | pass |
-| Accessibility (WCAG 2 A/AA, 2.1 A/AA, best practice) | axe-core: start screen, studio, confirmation window | 0 violations in each |
+| Accessibility (WCAG 2 A/AA, 2.1 A/AA, best practice) | axe-core: start screen, studio, confirmation window, settings window | 0 violations in each |
+| Settings: a key is saved trimmed, never echoed back, never logged or written to a file; bad keys refused; removal touches only QuickPath's entry; MotionCraft's key is never changed; "Check it works" asks the provider a free question; the spending limit applies to the next quote and rejects silly numbers | `server`, `creds.real` | pass |
+| Live: both saved keys checked against the real providers (Kie.ai credit balance, OpenAI model list), nothing made or charged | manual, through Settings | worked |
 | Keyboard only: every control reachable with Tab (30 on the start screen, 40 in the studio), a visible focus ring on each, the confirmation window keeps focus inside and closes with Escape | `keyboard.cjs` against the installed app | pass |
 | Narrow windows: no sideways scrolling at 1000 and 760 px | `drive.cjs` | pass |
 | A local model that never answers, errors, or talks around its JSON: planning finishes with the idea's own words | `planner` | pass |
@@ -83,7 +86,8 @@ Found by testing, fixed, and now covered by a test.
 | 12 | The words sent to the AI had a doubled full stop ("Wake up slowly..") | the confirmation window screenshot | punctuation tidied; test added |
 | 13 | The text box and the video had no focus ring of their own; Tab showed nothing clear there | keyboard script | outline on the composer and the video |
 | 14 | A local model that hangs made people wait 45 seconds | planner test | 25 seconds, and a hint on the page after 7 |
-| 15 | The first fuzz run failed on impossible input (my test built objects JSON cannot make) | fuzz test | the fuzzer now produces real JSON; not a product bug |
+| 15 | There was no screen for entering API keys: they could only be set with a computer setting or a command line | the owner, in review | a Settings window (keys, check, remove, spending limit), with its own tests and audits |
+| 16 | The first fuzz run failed on impossible input (my test built objects JSON cannot make) | fuzz test | the fuzzer now produces real JSON; not a product bug |
 
 Open, known, not fixed:
 
@@ -109,7 +113,7 @@ secret scan (`rafter secrets`) found nothing.
 | Uploads (pictures, clips, sounds) | Wrong type, disguised file, oversized file, path walking | type judged from the file's own bytes (never the name or header); size caps (12 MB, 150 MB, 40 MB); names made by the server (12 hex characters); stored only inside the project folder | `images`, `mp4`, `sound`, `server`, `fuzz` |
 | Media URLs | Reading other files | exact patterns for project id and file name; nothing else is served | `server` |
 | Spend | Paid calls without consent, repeated charges | one-time confirmation tied to the exact words; $5 cap from an on-disk ledger; saved voice lines are never paid for twice | `ai`, `server` |
-| Keys | Leaking | read only from fixed places; never sent to the page; never written to disk or a log; sent only to their provider | code review |
+| Keys | Leaking | read only from fixed places; entered through Settings over the local channel, handed to Windows on standard input (never the command line), stored in Credential Manager under QuickPath's own names; never returned by the server (it reports only "set" and where from); the page empties the box before sending and keeps nothing in the browser; only QuickPath's own entries can be written or removed | `server`, `creds.real` |
 | Provider answers | A hostile or odd answer | only https addresses followed; size checks; the bytes must really be a picture or sound | `ai`, `sound` |
 | Windows voices | Command injection through the voice name or words | the voice name must be one of the installed voices; words travel in a file, never in a command; `shell: false` | `sound`, `server` |
 | EffectCraft | Reading or writing elsewhere | started with `shell: false`, confined to the one project folder; text that looks like a path is neutralised | `edge.real` |
@@ -144,6 +148,7 @@ Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**
 | 16 | Music: try each mood, then Soft, Medium, Loud | music fades in and out, dips under the voice; levels differ |
 | 17 | Music: My own sound file (WAV, then MP3) | plays; a text file renamed `.mp3` is refused |
 | 18 | With no voice and no music, play the video | silent |
+| 18b | Press the sliders button. Paste a Kie.ai key, Save key, then Check it works | the box empties; badge says Key set; "The key works. Credits left: ..."; the key is never shown again |
 | 19 | (Needs a Kie.ai key) Make a picture on a scene | window shows model, price, limit and the words; Cancel sends nothing |
 | 20 | Confirm, then Update video | a picture appears behind the words; "Used so far" went up by about $0.02 |
 | 21 | Edit the words in the window before confirming | the edited words are the ones used |
@@ -161,7 +166,7 @@ Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**
 
 | Item | State |
 |---|---|
-| Automated tests (93) pass | done |
+| Automated tests (103) pass | done |
 | CI green on Windows, macOS, Linux | done |
 | Accessibility audit | done, 0 violations |
 | Fuzz and edge-case tests | done |

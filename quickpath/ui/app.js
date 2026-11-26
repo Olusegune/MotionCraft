@@ -1,5 +1,5 @@
 "use strict";
-// One page, no framework. User text only ever goes in through textContent or .value, never innerHTML.
+// One page, no framework. Words from people, models and files only ever go in as plain text (textContent or .value), never as HTML.
 const $ = (id) => document.getElementById(id);
 const state = { plan: null, shape: "16:9", seconds: 15, id: null, busy: false, dirty: false, last: null, looks: [], idea: "" };
 const MB = 1024 * 1024;
@@ -332,6 +332,74 @@ async function openProject(id) {
   } catch (e) { $("startnote").textContent = e.message; }
 }
 
+// ---- Settings: where keys are entered. A key goes to the server once and is never shown again; the screen only knows whether one is set.
+const SOURCES = { env: "Set with a computer setting", saved: "Saved by QuickPath", motioncraft: "Using the key saved in MotionCraft" };
+
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v); }
+  for (const c of kids) e.append(c);
+  return e;
+}
+
+function setMsg(text, kind = "") { const m = $("settingsMsg"); m.textContent = text; m.className = "note " + (kind === "ok" ? "settings-msg-ok" : ""); if (kind === "error") m.classList.add("error"); }
+
+async function renderSettings() {
+  const s = await api("/api/settings");
+  const body = $("settingsBody"); body.textContent = "";
+
+  // The model on this computer
+  body.append(el("section", { class: "conn" },
+    el("h3", {}, "Scenes: a model on this computer ", el("span", { class: "badge" + (s.ollama.found ? " good" : ""), text: s.ollama.found ? "Found" : "Not found" })),
+    el("p", { class: "hint", text: s.ollama.found
+      ? `${s.ollama.model} (through Ollama) writes your scenes. It is free and nothing leaves your computer.`
+      : "Optional. Without it, your own sentences are cut into scenes. Install Ollama and a model such as qwen3 to let a model write them. No key is needed." })));
+
+  const row = (provider, title, what, where, cost) => {
+    const k = s.keys[provider];
+    const input = el("input", { type: "password", autocomplete: "off", spellcheck: "false", placeholder: k.set ? "Paste a new key to replace it" : "Paste your key here", "aria-label": `${title} key` });
+    const save = el("button", { class: "btn small primary", type: "button", text: "Save key" }); save.disabled = true;
+    input.addEventListener("input", () => { save.disabled = input.value.trim().length < 8; });
+    save.addEventListener("click", async () => {
+      save.disabled = true; setMsg("Saving…");
+      try { const key = input.value; input.value = ""; await api("/api/settings/key", { provider, key }); setMsg(`${title} key saved. It is not shown again.`, "ok"); await renderSettings(); }
+      catch (e) { setMsg(e.message, "error"); }
+    });
+    const check = el("button", { class: "btn small", type: "button", text: "Check it works" });
+    check.addEventListener("click", async () => { check.disabled = true; setMsg("Checking…"); try { const r = await api("/api/settings/check", { provider }); setMsg(r.message, r.ok ? "ok" : "error"); } catch (e) { setMsg(e.message, "error"); } check.disabled = false; });
+    const rm = el("button", { class: "btn small quiet", type: "button", text: "Remove" });
+    rm.addEventListener("click", async () => { if (!confirm(`Remove the saved ${title} key from this computer?`)) return; try { await api("/api/settings/key/remove", { provider }); setMsg(`${title} key removed.`, "ok"); await renderSettings(); } catch (e) { setMsg(e.message, "error"); } });
+    const keyrow = el("div", { class: "keyrow" });
+    if (s.canSaveKeys) keyrow.append(input, save);
+    const actions = el("div", { class: "keyrow" });
+    if (k.set) actions.append(check);
+    if (k.source === "saved") actions.append(rm);
+    return el("section", { class: "conn" },
+      el("h3", {}, `${title} `, el("span", { class: "badge" + (k.set ? " good" : ""), text: k.set ? "Key set" : "No key" })),
+      el("p", { text: what }),
+      el("p", { class: "hint", text: k.set ? `${SOURCES[k.source] || ""}. ${cost}` : `${where} ${cost}` }),
+      keyrow, actions,
+      s.canSaveKeys ? el("span", {}) : el("p", { class: "hint", text: "Saving keys from here works on Windows. On this system, set the key as a computer setting instead (see the user guide)." }));
+  };
+  body.append(row("kie", "Pictures (Kie.ai)", "AI pictures behind your scenes, made by Google's Imagen through Kie.ai.", "Create a key in your Kie.ai account (kie.ai, API Key page), then paste it here.", "About $0.02 per picture, always asked first."));
+  body.append(row("openai", "Voices (OpenAI)", "More natural voiceovers. The free Windows voices need no key.", "Create a key in your OpenAI account (platform.openai.com, API keys), then paste it here.", "About $0.002 for a 15 second video, always asked first."));
+
+  // The spending limit
+  const cap = el("input", { type: "number", min: "0.5", max: "100", step: "0.5", value: String(s.capUsd), "aria-label": "Spending limit in dollars", class: "capnum" });
+  const capSave = el("button", { class: "btn small", type: "button", text: "Save limit" });
+  capSave.addEventListener("click", async () => { try { await api("/api/settings/cap", { usd: Number(cap.value) }); setMsg("Spending limit saved.", "ok"); await renderSettings(); } catch (e) { setMsg(e.message, "error"); } });
+  body.append(el("section", { class: "conn" },
+    el("h3", {}, "Spending limit"),
+    el("p", { class: "hint", text: `Paid AI stops when the total reaches this. Used so far: $${s.spentUsd.toFixed(2)}.` }),
+    el("div", { class: "keyrow" }, el("span", { text: "$" }), cap, capSave)));
+}
+
+async function openSettings() {
+  setMsg("");
+  try { await renderSettings(); } catch (e) { setMsg(e.message, "error"); }
+  const d = $("settings"); if (!d.open) d.showModal();
+}
+
 function init() {
   segmented($("len"), LENGTHS.map((n) => [n, `${n} s`]), state.seconds, (v) => (state.seconds = v));
   segmented($("shape"), SHAPES, state.shape, (v) => { state.shape = v; });
@@ -342,6 +410,9 @@ function init() {
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && state.plan && !state.busy && $("studio").hidden === false) { e.preventDefault(); render("draft"); } });
   $("final").addEventListener("click", () => render("final"));
   $("add").addEventListener("click", () => { if (state.plan.scenes.length >= 12) return; state.plan.scenes.push({ headline: "New scene", sub: "", seconds: 3 }); drawScenes(); touch(); });
+  $("gear").addEventListener("click", openSettings);
+  $("aiLink").addEventListener("click", openSettings);
+  $("settingsDone").addEventListener("click", () => $("settings").close());
   $("again").addEventListener("click", () => { if (state.dirty && !confirm("Start over? Your changes will be lost.")) return; $("studio").hidden = true; $("start").hidden = false; $("make").disabled = false; $("startnote").textContent = ""; $("video").removeAttribute("src"); state.plan = null; state.id = null; drawRecent(); });
   $("reveal").addEventListener("click", () => state.last && api("/api/reveal", { url: state.last }).catch(() => {}));
   api("/api/status").then((s) => {

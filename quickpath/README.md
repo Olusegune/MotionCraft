@@ -53,13 +53,13 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-93 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
+103 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
 the server's refusals, awkward text and extremes on the real EffectCraft, and fuzzing of every file reader. The tests that need EffectCraft, ffmpeg or Windows
 voices report as skipped (never passed) when those are missing.
 
 Other checks: `node scripts/drive.cjs <QuickPath.exe>` drives the installed app end to end; `node scripts/a11y.cjs <QuickPath.exe>` runs an accessibility audit (axe-core); `node scripts/keyboard.cjs <QuickPath.exe>` checks keyboard-only use.
 
-Documents: `docs/USER_GUIDE.md` (how to use it) and `docs/QA.md` (test strategy, results, bugs found, security review, manual test script, release checklist).
+Documents: `docs/USER_GUIDE.md` (how to use it), `docs/SETUP_KEYS.md` (AI and keys), `docs/ROADMAP.md` (what is next) and `docs/QA.md` (test strategy, results, bugs found, security review, manual test script, release checklist).
 
 ## How it looks
 
@@ -120,10 +120,17 @@ in and out and dips under each voice line. Volume is Soft, Medium or Loud.
 
 Voice and music are ordinary audio layers in `video.ecproj`, so they stay editable in EffectCraft. With no voice and no music chosen, the movie has no audio track.
 
+## Settings: where keys go
+
+Press the sliders button at the top right. Paste a Kie.ai or OpenAI key, press Save key, then Check it works (a free question to the provider: your credit balance, or the model list).
+Keys go to Windows Credential Manager under `QuickPath/kie` and `QuickPath/openai`, are handed over on standard input (never the command line), and are never shown or returned again:
+the window only says whether a key is set and where it comes from. Remove deletes QuickPath's own entry and never touches MotionCraft's. The same window shows whether Ollama was found
+and sets the spending limit. Step by step: `docs/SETUP_KEYS.md`. What is planned next: `docs/ROADMAP.md`.
+
 ## Money and keys
 
-AI pictures use your Kie.ai account. The key is found, in this order: the `KIE_API_KEY` environment variable; Windows Credential Manager entry
-`QuickPath/kie`; or, on Windows, the key you already saved in MotionCraft. It is never shown to the page, never written to disk or a log, and sent
+AI pictures use your Kie.ai account. The key is found, in this order: the `KIE_API_KEY` environment variable; the key saved from Settings (Windows Credential Manager entry
+`QuickPath/kie`); or, on Windows, the key you already saved in MotionCraft. It is never shown to the page, never written to disk or a log, and sent
 only to Kie.ai. Every picture is counted in `spend.jsonl` in your QuickPath folder, and new pictures stop at a limit of $5 (change it with
 `QUICKPATH_SPEND_CAP_USD`). The price is an estimate (about $0.02), because Kie.ai does not publish one through its API. Results are only fetched
 from https addresses, and only accepted if the bytes really are a picture.

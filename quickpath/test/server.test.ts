@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { solidPng } from "./png.ts";
 import { writeWav } from "../src/wav.ts";
+import { MemoryStore, setStore } from "../src/keys.ts";
 
 process.env.QUICKPATH_HOME = mkdtempSync(join(tmpdir(), "qp-"));
 process.env.KIE_API_KEY = "test-key-0123456789abcdef";
@@ -14,6 +15,10 @@ const fake = createServer((req, res) => {
   const addr = fake.address() as { port: number };
   const send = (o: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
   req.resume();
+  if (req.url?.endsWith("/chat/credit") || req.url?.endsWith("/models")) {
+    if ((req.headers.authorization ?? "").includes("badkey")) { res.writeHead(401, { "content-type": "application/json" }); return res.end(JSON.stringify({ code: 401, msg: "bad key" })); }
+    return send(req.url.endsWith("/models") ? { data: [] } : { code: 200, data: 1234 });
+  }
   if (req.url?.endsWith("/audio/speech")) { res.writeHead(200, { "content-type": "audio/wav" }); return res.end(writeWav(new Float32Array(11025), new Float32Array(11025), 22050)); }
   if (req.url?.endsWith("/jobs/createTask")) return send({ code: 200, data: { taskId: "t-1" } });
   if (req.url?.includes("/jobs/recordInfo")) return send({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: [`http://127.0.0.1:${addr.port}/img.png`] }) } });
@@ -308,4 +313,123 @@ test("two renders requested at the same moment are queued one after the other, a
   assert.equal(ja.frames, 180);
   assert.equal(jb.frames, 180);
   assert.equal((await call("GET", ja.url, { headers: { range: "bytes=0-9" } })).status, 206);
+});
+
+
+// ---- Settings: keys are saved, checked and removed from the page, and never come back out ----
+const settingsGet = async () => JSON.parse((await call("GET", "/api/settings")).text);
+const post = (path: string, obj: unknown) => call("POST", path, { body: JSON.stringify(obj) });
+
+async function withMemoryKeys<T>(fn: (store: MemoryStore) => Promise<T>): Promise<T> {
+  const saved = { kie: process.env.KIE_API_KEY, openai: process.env.OPENAI_API_KEY };
+  delete process.env.KIE_API_KEY; delete process.env.OPENAI_API_KEY;
+  const store = new MemoryStore();
+  setStore(store);
+  try { return await fn(store); }
+  finally { process.env.KIE_API_KEY = saved.kie; process.env.OPENAI_API_KEY = saved.openai; setStore(new MemoryStore()); }
+}
+
+test("Settings shows whether a key is set and where it comes from, and never the key", async () => {
+  const text = (await call("GET", "/api/settings")).text;
+  const v = JSON.parse(text);
+  assert.equal(v.keys.kie.set, true);
+  assert.equal(v.keys.kie.source, "env");
+  assert.ok(!text.includes(process.env.KIE_API_KEY as string) && !text.includes(process.env.OPENAI_API_KEY as string), "no key in the answer");
+  assert.equal(typeof v.capUsd, "number");
+  assert.equal(typeof v.spentUsd, "number");
+  assert.equal(typeof v.ollama.found, "boolean");
+});
+
+test("a key pasted into Settings is saved to the key store, trimmed, and never echoed; removing it removes only that", async () => {
+  await withMemoryKeys(async (store) => {
+    assert.equal((await settingsGet()).keys.kie.set, false);
+    const key = "kie_test_0123456789abcdef0123";
+    const saved = await post("/api/settings/key", { provider: "kie", key: `  ${key}\n` });
+    assert.equal(saved.status, 200, saved.text);
+    assert.ok(!saved.text.includes(key), "the answer never contains the key");
+    const view = JSON.parse(saved.text);
+    assert.deepEqual(view.keys.kie, { set: true, source: "saved" });
+    assert.equal(view.keys.openai.set, false);
+    assert.equal(store.items.get("QuickPath/kie"), key, "saved under QuickPath's own name, trimmed");
+    assert.ok(!(await call("GET", "/api/settings")).text.includes(key));
+    store.items.set("kie-api-key.motioncraft", "motioncraft_key_0123456789abcdef");
+    const gone = JSON.parse((await post("/api/settings/key/remove", { provider: "kie" })).text);
+    assert.equal(store.items.has("QuickPath/kie"), false);
+    assert.equal(store.items.get("kie-api-key.motioncraft"), "motioncraft_key_0123456789abcdef", "MotionCraft's own entry is never touched");
+    assert.deepEqual(gone.keys.kie, { set: true, source: "motioncraft" }, "and it is still found as a fallback");
+  });
+});
+
+test("keys that cannot be keys are refused with a plain message and nothing is stored", async () => {
+  await withMemoryKeys(async (store) => {
+    for (const bad of ["", "short", "has spaces in the middle of it 0123456789", "line1\nline2_0123456789abcdef", "x'; calc #0123456789abcdef", "a".repeat(300), "<script>alert(1)</script>0123", "key with \u0000 nul 0123456789abcdef"]) {
+      const r = await post("/api/settings/key", { provider: "kie", key: bad });
+      assert.equal(r.status, 400, JSON.stringify(bad));
+      assert.match(JSON.parse(r.text).error, /does not look like a key/);
+    }
+    assert.equal((await post("/api/settings/key", { provider: "evil", key: "kie_test_0123456789abcdef0123" })).status, 400);
+    assert.equal((await post("/api/settings/key/remove", { provider: "../x" })).status, 400);
+    assert.equal(store.items.size, 0, "nothing was stored");
+  });
+});
+
+test("a key set another way (a setting) is reported as such, and removing the saved one leaves it working", async () => {
+  await withMemoryKeys(async (store) => {
+    process.env.OPENAI_API_KEY = "env_openai_0123456789abcdef";
+    setStore(store);
+    await post("/api/settings/key", { provider: "openai", key: "saved_openai_0123456789abcdef" });
+    assert.equal((await settingsGet()).keys.openai.source, "env", "a setting wins over a saved key");
+    await post("/api/settings/key/remove", { provider: "openai" });
+    assert.deepEqual((await settingsGet()).keys.openai, { set: true, source: "env" });
+  });
+});
+
+test("Check key asks the provider a free question: works, wrong key, no key", async () => {
+  await withMemoryKeys(async () => {
+    assert.equal(JSON.parse((await post("/api/settings/check", { provider: "kie" })).text).ok, false);
+    await post("/api/settings/key", { provider: "kie", key: "kie_test_0123456789abcdef0123" });
+    const good = JSON.parse((await post("/api/settings/check", { provider: "kie" })).text);
+    assert.equal(good.ok, true);
+    assert.match(good.message, /Credits left: 1234/);
+    await post("/api/settings/key", { provider: "openai", key: "openai_badkey_0123456789abcdef" });
+    const bad = JSON.parse((await post("/api/settings/check", { provider: "openai" })).text);
+    assert.equal(bad.ok, false);
+    assert.match(bad.message, /did not accept this key/);
+    assert.ok(!JSON.stringify(bad).includes("badkey_0123"), "the key is not repeated back");
+  });
+});
+
+test("the spending limit can be changed in Settings, applies to the next quote, and rejects silly numbers", async () => {
+  try {
+    const set = await post("/api/settings/cap", { usd: 12.5 });
+    assert.equal(set.status, 200);
+    assert.equal(JSON.parse(set.text).capUsd, 12.5);
+    const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "A limit test video", seconds: 10 }) })).text);
+    const q = JSON.parse((await post("/api/ai/quote", { id, shape: "16:9", headline: "x", sub: "", idea: "y" })).text);
+    assert.equal(q.capUsd, 12.5, "the quote shows the new limit");
+    for (const bad of [0, 0.1, -3, 101, 1e9, "abc", null, NaN, "5; drop"]) assert.equal((await post("/api/settings/cap", { usd: bad })).status, 400, String(bad));
+    assert.equal((await settingsGet()).capUsd, 12.5, "a refused value changes nothing");
+    await post("/api/settings/cap", { usd: 0.5 });
+    const refused = await post("/api/ai/quote", { id, shape: "16:9", headline: "x", sub: "", idea: "y" });
+    assert.equal(refused.status, 200, "0.50 still allows one 2-cent picture if little is spent");
+  } finally { await post("/api/settings/cap", { usd: 5 }); }
+});
+
+test("the Settings screen: a gear button and a window exist, key boxes are password fields that do not autofill, and no key is ever kept on the page", async () => {
+  const html = (await call("GET", "/")).text, js = (await call("GET", "/app.js")).text;
+  assert.match(html, /id="gear"/);
+  assert.match(html, /<dialog id="settings"/);
+  assert.match(html, /aria-label="Settings and connections"/);
+  assert.match(js, /type: "password", autocomplete: "off", spellcheck: "false"/, "key boxes hide what is typed and are not remembered by the browser");
+  assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/.test(js), "the page script builds nothing from strings of HTML");
+  assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie/.test(js), "nothing is kept in the browser");
+  assert.match(js, /const key = input\.value; input\.value = ""/, "the box is emptied before the key is sent");
+  assert.ok(!/console\.(log|info|debug)/.test(js), "nothing is logged by the page");
+});
+
+test("the server never writes a key to a file or a log, and never returns one", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("../src/server.ts", import.meta.url), "utf-8") + (await import("node:fs")).readFileSync(new URL("../src/keys.ts", import.meta.url), "utf-8");
+  assert.ok(!/console\.(log|error|warn|info)\([^)]*key/i.test(src), "no key is logged");
+  assert.ok(!/writeFileSync\([^)]*key/i.test(src), "no key is written to a file");
+  assert.match(src, /stdio: \["pipe", "pipe", "ignore"\]/, "the key goes to Windows on standard input, not the command line");
 });

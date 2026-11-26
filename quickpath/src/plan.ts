@@ -65,7 +65,7 @@ export function cleanModelPlan(raw: unknown, seconds: number): Plan | null {
   return { title: tidy(o.title, 40) || scenes[0].headline, look, scenes: scenes.map((s, i) => ({ ...s, seconds: secs[i] })), source: "model" };
 }
 
-async function pickModel(base: string): Promise<string | null> {
+export async function pickModel(base: string = "http://127.0.0.1:11434"): Promise<string | null> {
   try {
     const r = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(2000) });
     const names: string[] = ((await r.json()) as { models?: { name: string }[] }).models?.map((m) => m.name) ?? [];

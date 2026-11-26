@@ -16,7 +16,7 @@ async function main() {
   ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && waiting.has(d.id)) { waiting.get(d.id)(d); waiting.delete(d.id); } };
   const call = (method, params = {}) => new Promise((res) => { const id = ++n; waiting.set(id, res); ws.send(JSON.stringify({ id, method, params })); });
   const ev = async (expression) => { const r = await call("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }); if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 300)); return r.result.result.value; };
-  const key = async (k, code, vk, shift = false) => { for (const type of ["keyDown", "keyUp"]) await call("Input.dispatchKeyEvent", { type, key: k, code, windowsVirtualKeyCode: vk, modifiers: shift ? 8 : 0 }); await sleep(30); };
+  const key = async (k, code, vk, shift = false) => { for (const type of ["keyDown", "keyUp"]) await call("Input.dispatchKeyEvent", { type, key: k, code, windowsVirtualKeyCode: vk, modifiers: shift ? 8 : 0, ...(k === "Enter" && type === "keyDown" ? { text: String.fromCharCode(13) } : {}) }); await sleep(30); };
 
   const describe = `(() => {
     const e = document.activeElement; if (!e || e === document.body) return null;
@@ -60,8 +60,21 @@ async function main() {
   await key("Escape", "Escape", 27);
   await sleep(300);
   const closed = !(await ev("document.getElementById('spend').open"));
+  // the settings window: opens from the gear with the keyboard, keeps focus inside, shows a focus ring on every key box and button, closes with Escape
+  await ev("document.getElementById('gear').focus(); 0");
+  await key("Enter", "Enter", 13);
+  await sleep(2500);
+  const setOpen = await ev("document.getElementById('settings').open");
+  const setSeen = new Map();
+  for (let i = 0; i < 14; i++) { await key("Tab", "Tab", 9); const d = await ev(describe); if (d) setSeen.set(d.name + "#" + i, d); }
+  const setInside = await ev("document.getElementById('settings').contains(document.activeElement)");
+  const setNoRing = [...setSeen.values()].filter((d) => !d.ring).map((d) => d.name);
+  await key("Escape", "Escape", 27);
+  await sleep(300);
+  const setClosed = !(await ev("document.getElementById('settings').open"));
+  console.log(JSON.stringify({ settings: { opened: setOpen, focusStaysInside: setInside, noFocusRing: setNoRing, escapeCloses: setClosed } }));
   console.log(JSON.stringify({ results, dialog: { opened, focusStartsInside: inside, focusStaysInside: trapped, escapeCloses: closed } }, null, 1));
-  const bad = results.some((r) => r.reached < r.controls || r.noFocusRing.length) || !(opened && trapped && closed);
+  const bad = results.some((r) => r.reached < r.controls || r.noFocusRing.length) || !(opened && trapped && closed) || !(setOpen && setInside && setClosed && !setNoRing.length);
   ws.close(); child.kill();
   if (bad) process.exitCode = 1;
 }

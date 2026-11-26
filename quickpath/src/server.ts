@@ -9,11 +9,12 @@ import { fileURLToPath } from "node:url";
 import { EffectCraft, EngineError } from "./ec.ts";
 import { buildComposition, renderVideo } from "./build.ts";
 import { LOOKS, lookById } from "./looks.ts";
-import { clamp, makePlan, type Plan, type Shape } from "./plan.ts";
+import { clamp, makePlan, pickModel, type Plan, type Shape } from "./plan.ts";
 import { imageInfo, MAX_PICTURE_BYTES, MEDIA_NAME } from "./images.ts";
 import { looksLikeMp4, MAX_CLIP_BYTES, mp4Info } from "./mp4.ts";
 import { generatePicture, picturePrompt, Spend, SpendRefused } from "./ai.ts";
-import { kieKey, providerKey } from "./keys.ts";
+import { canSaveKeys, keyStatus, kieKey, PROVIDERS, providerKey, removeKey, saveKey, type Provider } from "./keys.ts";
+import { effectiveCap, saveCap } from "./settings.ts";
 import { MOODS } from "./music.ts";
 import { resolveSound, SoundRefused, type Level } from "./sound.ts";
 import { makeOpenAILines, openAIMissing, OPENAI_VOICES, spokenText, VOICE_CHOICE, windowsVoices } from "./voice.ts";
@@ -76,6 +77,33 @@ export async function removeProject(id: string): Promise<"recycled" | "deleted">
   }
   rmSync(dir, { recursive: true, force: true });
   return "deleted";
+}
+
+/** What Settings shows. Whether each key is set and where it comes from, never the key. */
+async function settingsView() {
+  const keys: Record<string, { set: boolean; source: string | null }> = {};
+  for (const p of PROVIDERS) keys[p] = await keyStatus(p);
+  const model = await pickModel(process.env.QUICKPATH_OLLAMA_BASE ?? "http://127.0.0.1:11434");
+  return { keys, canSaveKeys: canSaveKeys(), ollama: { found: !!model, model }, capUsd: effectiveCap(HOME), spentUsd: new Spend(join(HOME, "spend.jsonl")).spent() };
+}
+
+/** Asks the provider a free question to see whether the saved key works (Kie.ai: the credit balance; OpenAI: the model list). Nothing is made or charged. */
+async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> {
+  const key = await providerKey(p);
+  if (!key) return { ok: false, message: "No key is saved yet." };
+  const url = p === "kie" ? `${process.env.QUICKPATH_KIE_BASE ?? "https://api.kie.ai/api/v1"}/chat/credit` : `${process.env.QUICKPATH_OPENAI_BASE ?? "https://api.openai.com/v1"}/models`;
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) });
+    if (r.status === 401 || r.status === 403) return { ok: false, message: "The provider did not accept this key. Copy it again from your account page." };
+    if (!r.ok) return { ok: false, message: `The provider answered with an error (${r.status}). Try again in a moment.` };
+    if (p === "kie") {
+      const j = (await r.json().catch(() => ({}))) as { code?: number; data?: unknown };
+      if (typeof j.code === "number" && j.code !== 200) return { ok: false, message: j.code === 401 ? "The provider did not accept this key." : "The provider could not check this key right now." };
+      const n = typeof j.data === "number" ? j.data : Number(j.data);
+      return { ok: true, message: Number.isFinite(n) ? `The key works. Credits left: ${n}.` : "The key works." };
+    }
+    return { ok: true, message: "The key works." };
+  } catch { return { ok: false, message: "Could not reach the provider. Check your internet connection." }; }
 }
 
 /** Checks and trims a plan from the page: the page is never trusted. */
@@ -161,7 +189,7 @@ function openFolder(path: string) {
 
 export function start(port = Number(process.env.PORT ?? 4177)) {
   mkdirSync(join(HOME, "projects"), { recursive: true });
-  const spend = new Spend(join(HOME, "spend.jsonl"));
+  const spend = new Spend(join(HOME, "spend.jsonl"), () => effectiveCap(HOME));
   const server = createServer(async (req, res) => {
     try {
       const addr = server.address();
@@ -187,6 +215,34 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       if (req.method === "POST" && url.pathname === "/api/project/remove") {
         const b = await readJson(req);
         return send(res, 200, { how: await removeProject(String(b.id ?? "")) });
+      }
+      if (req.method === "GET" && url.pathname === "/api/settings") {
+        return send(res, 200, await settingsView());
+      }
+      if (req.method === "POST" && url.pathname === "/api/settings/key") {
+        const b = await readJson(req);
+        const p = String(b.provider ?? "") as Provider;
+        if (!PROVIDERS.includes(p)) throw new Refused("Unknown provider.");
+        try { await saveKey(p, String(b.key ?? "")); } catch (e) { throw new Refused((e as Error).message); }
+        return send(res, 200, await settingsView());
+      }
+      if (req.method === "POST" && url.pathname === "/api/settings/key/remove") {
+        const b = await readJson(req);
+        const p = String(b.provider ?? "") as Provider;
+        if (!PROVIDERS.includes(p)) throw new Refused("Unknown provider.");
+        await removeKey(p);
+        return send(res, 200, await settingsView());
+      }
+      if (req.method === "POST" && url.pathname === "/api/settings/check") {
+        const b = await readJson(req);
+        const p = String(b.provider ?? "") as Provider;
+        if (!PROVIDERS.includes(p)) throw new Refused("Unknown provider.");
+        return send(res, 200, await checkKey(p));
+      }
+      if (req.method === "POST" && url.pathname === "/api/settings/cap") {
+        const b = await readJson(req);
+        try { saveCap(HOME, b.usd); } catch (e) { throw new Refused((e as Error).message); }
+        return send(res, 200, await settingsView());
       }
       if (req.method === "POST" && url.pathname === "/api/plan") {
         const b = await readJson(req);
