@@ -40,11 +40,16 @@ jobs:
         with: { node-version: 24, cache: npm, cache-dependency-path: quickpath/package-lock.json }
       - run: npm ci
       # Signing happens only when the secrets exist (see quickpath/docs/SIGNING.md); without them the build is unsigned, as before.
-      - run: ${{ matrix.command }}
+      - name: Build
+        shell: bash
+        run: |
+          # GitHub passes a missing secret as an empty string, which the builder would read as a file name: unset what is empty, and build unsigned when there is no certificate
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do if [ -z "${!v}" ]; then unset "$v"; fi; done
+          if [ -z "${CSC_LINK:-}" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; echo "No signing certificate: building unsigned"; fi
+          ${{ matrix.command }}
         env:
           CSC_LINK: ${{ matrix.name == 'windows' && secrets.WIN_CSC_LINK || secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ matrix.name == 'windows' && secrets.WIN_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ ((matrix.name == 'windows' && secrets.WIN_CSC_LINK == '') || (matrix.name == 'macos' && secrets.MAC_CSC_LINK == '')) && 'false' || 'true' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
