@@ -3,7 +3,7 @@
 Quality assurance for QuickPath (branch `claude/quick-path`). It says what was tested, how, what was found, and what has not been checked.
 Read it with `README.md` (what the app does) and `docs/USER_GUIDE.md` (how to use it).
 
-Status in one line: **103 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
+Status in one line: **110 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
 script (section 6) is ready for a person to run on a clean PC and a Mac. Not signed. The Mac build has never been run.**
 
 ## 1. Scope

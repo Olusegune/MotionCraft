@@ -28,11 +28,12 @@ async function main() {
   await snap("start");
   out.title = await ev("document.title");
   out.engine = await ev("document.getElementById('engine').textContent");
+  if (process.env.SHAPE) { await ev(`(() => { const b = Array.from(document.querySelectorAll('#shape button')).find((x) => x.getAttribute('aria-label').endsWith(', ${process.env.SHAPE}')); b.click(); return 0; })()`); out.shapeChosen = process.env.SHAPE; }
   await ev("document.getElementById('idea').value = 'Ember, a small coffee brand. Warm mornings start slowly. Wake up slowly.'; document.getElementById('make').click(); 0");
   for (let i = 0; i < 40; i++) { await sleep(1000); if (await ev("document.getElementById('status').textContent.startsWith('Ready')")) break; }
   out.status = await ev("document.getElementById('status').textContent");
   out.scenes = await ev("document.querySelectorAll('.scene').length");
-  out.video = await ev("(() => { const v = document.getElementById('video'); return { w: v.videoWidth, h: v.videoHeight, d: v.duration }; })()");
+  out.video = await ev("(() => { const v = document.getElementById('video'); const r = document.getElementById('screen').getBoundingClientRect(); return { w: v.videoWidth, h: v.videoHeight, d: v.duration, screenRatio: Math.round(r.width / r.height * 100) / 100 }; })()");
   await ev("(() => { const v = document.getElementById('video'); v.currentTime = 5.2; return 0; })()");
   await sleep(1500);
   await snap("studio");

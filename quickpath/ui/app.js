@@ -53,7 +53,7 @@ function setBusy(on, text = "") {
 // The first frame is only background (the words fade in), so a fresh video waits a moment in, where the words are.
 $("video").addEventListener("loadedmetadata", (e) => { const v = e.target; if (v.currentTime === 0 && v.duration > 3) v.currentTime = 1.2; });
 
-function shapeClass() { const sc = $("screen"), r = ratioOf(state.shape); sc.className = "screen" + (r < 1.5 ? " tall" : ""); sc.style.aspectRatio = state.shape.replace(":", " / "); }
+function shapeClass() { const sc = $("screen"), r = ratioOf(state.shape); sc.className = "screen" + (r < 1.5 ? " tall" : ""); sc.style.aspectRatio = state.shape === "21:9" ? "2560 / 1080" : state.shape.replace(":", " / "); }       // 21:9 is the 2560 by 1080 ultrawide frame, a hair wider than 21 to 9: the screen matches the video exactly
 
 function drawScenes() {
   const ol = $("scenes"); ol.textContent = "";
