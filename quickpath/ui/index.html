@@ -60,6 +60,22 @@
     </aside>
   </section>
 </main>
+<dialog id="spend" aria-labelledby="spendTitle">
+  <form method="dialog">
+    <h2 id="spendTitle">Make a picture with AI?</h2>
+    <dl class="facts">
+      <dt>For</dt><dd id="spendWhat"></dd>
+      <dt>Model</dt><dd id="spendModel"></dd>
+      <dt>Cost</dt><dd id="spendPrice"></dd>
+    </dl>
+    <p class="hint" id="spendLimit"></p>
+    <label for="spendPrompt" class="hint">The words sent to the model. You can change them.</label>
+    <textarea id="spendPrompt" rows="6" maxlength="900"></textarea>
+    <p class="hint">Nothing is sent until you press Confirm. This pays for one picture.</p>
+    <p id="spendErr" class="error" role="alert"></p>
+    <div class="row end"><button class="btn" value="cancel" formnovalidate>Cancel</button><button id="spendConfirm" class="btn primary" value="confirm">Confirm and make the picture</button></div>
+  </form>
+</dialog>
 <script src="app.js"></script>
 </body>
 </html>

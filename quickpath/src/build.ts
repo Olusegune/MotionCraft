@@ -5,7 +5,8 @@ import { join } from "node:path";
 import type { EffectCraft } from "./ec.ts";
 import { lookById, type Rgb } from "./looks.ts";
 import { SIZES, type Plan, type Shape } from "./plan.ts";
-import { imageInfo, PICTURE_NAME } from "./images.ts";
+import { imageInfo, MEDIA_NAME } from "./images.ts";
+import { mp4Info } from "./mp4.ts";
 
 /** Breaks text into lines of at most `max` characters, at spaces, then evens the lines out so no single word is left alone. */
 export function wrapText(text: string, max: number): string[] {
@@ -84,22 +85,33 @@ async function text(ec: EffectCraft, name: string, value: string, size: number, 
   return layer;
 }
 
-/** A scene's own picture, filling the frame (never stretched), with a slow push-in and a dark veil so the words stay readable. */
-async function picture(ec: EffectCraft, dir: string, name: string, scene: number, t0: number, t1: number, width: number, height: number): Promise<boolean> {
-  if (!PICTURE_NAME.test(name)) return false;
+/** A scene's own picture or clip, filling the frame (never stretched), under a dark veil so the words stay readable. A picture pushes in slowly;
+ * a clip plays from the start of its scene, and is trimmed if it is longer than the scene or holds its last frame if shorter. */
+async function media(ec: EffectCraft, dir: string, name: string, scene: number, t0: number, t1: number, width: number, height: number): Promise<boolean> {
+  if (!MEDIA_NAME.test(name)) return false;
   const file = join(dir, "assets", name);
-  let info;
-  try { info = imageInfo(readFileSync(file)); } catch { return false; }
+  let bytes: Buffer;
+  try { bytes = readFileSync(file); } catch { return false; }
+  const clip = name.endsWith(".mp4");
+  const info = clip ? mp4Info(bytes) : imageInfo(bytes);
   if (!info) return false;
   const imp = await ec.run<{ items?: number[]; errors?: unknown[] }>("file.import", { paths: [file] });
   if (imp?.errors?.length || !imp?.items?.length) return false;
   const { layer } = await ec.run<{ layer: number }>("layer.addItem", { item: imp.items[0] });
-  await ec.run("layer.rename", { layer, name: `Scene ${scene} picture` });
-  await ec.run("layer.timing", { layers: [layer], in: t0, out: t1 });
+  await ec.run("layer.rename", { layer, name: `Scene ${scene} ${clip ? "clip" : "picture"}` });
   const cover = Math.max(width / info.width, height / info.height) * 100;
   const key = (time: number, v: number) => ec.run("prop.addKey", { layer, path: "transform/scale", time: r4(time), value: [r4(v), r4(v), 100] });
-  await key(t0, cover);
-  await key(Math.max(t1 - 0.04, t0), cover * 1.07);
+  if (clip) {
+    const natural = (info as { seconds: number }).seconds, window = t1 - t0;
+    if (natural > window + 0.05) await ec.run("layer.timing", { layers: [layer], out: r4(window) });          // trim first, so sliding never runs off the end
+    if (t0 > 0.001) await ec.run("layer.timing", { layers: [layer], delta: r4(t0) });                         // slide: in, out and the clip's own start move together
+    if (natural < window - 0.05) await ec.run("layer.timing", { layers: [layer], out: r4(t1) });              // shorter than the scene: hold the last frame
+    await ec.run("prop.set", { layer, path: "transform/scale", value: [r4(cover), r4(cover), 100] });
+  } else {
+    await ec.run("layer.timing", { layers: [layer], in: t0, out: t1 });
+    await key(t0, cover);
+    await key(Math.max(t1 - 0.04, t0), cover * 1.07);
+  }
   const veil = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${scene} veil`, size: [width, height], fill: [0, 0, 0], position: [width / 2, height / 2] });
   await ec.run("layer.setTransform", { layers: [veil.layer], prop: "opacity", value: 45 });
   await ec.run("layer.timing", { layers: [veil.layer], in: t0, out: t1 });
@@ -122,7 +134,7 @@ export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape
     const lay = layoutScene(s.headline, s.sub, width, height);
     const bg = await ec.run<{ layer: number }>("layer.newSolid", { name: `Scene ${n} background`, color: i % 2 ? look.bg2 : look.bg });
     await ec.run("layer.timing", { layers: [bg.layer], in: t0, out: t1 });
-    const pictured = s.picture ? await picture(ec, dir, s.picture, n, t0, t1, width, height) : false;
+    const pictured = s.picture ? await media(ec, dir, s.picture, n, t0, t1, width, height) : false;
     const ink: Rgb = pictured ? [1, 1, 1] : look.text;
     const bar = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${n} accent`, size: [lay.barW, lay.barH], fill: look.accent, position: [width / 2, lay.barY] });
     await ec.run("layer.timing", { layers: [bar.layer], in: t0, out: t1 });

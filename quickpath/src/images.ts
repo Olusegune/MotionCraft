@@ -1,8 +1,9 @@
 // Reads just enough of a picture file to trust it: its real type (from its first bytes, never its name) and its size.
-export type ImageInfo = { ext: "png" | "jpg"; width: number; height: number };
+export type ImageInfo = { ext: "png" | "jpg" | "webp"; width: number; height: number };
 
-/** Names the server gives pictures: 12 random hex characters and the real extension. */
-export const PICTURE_NAME = /^[a-f0-9]{12}\.(?:png|jpg)$/;
+/** Names the server gives pictures and clips: 12 random hex characters and the real extension. */
+export const MEDIA_NAME = /^[a-f0-9]{12}\.(?:png|jpg|webp|mp4)$/;
+export const PICTURE_NAME = /^[a-f0-9]{12}\.(?:png|jpg|webp)$/;
 export const MAX_PICTURE_BYTES = 12 * 1024 * 1024;
 export const MAX_PICTURE_SIDE = 12000;
 
@@ -21,6 +22,17 @@ export function imageInfo(b: Buffer): ImageInfo | null {
         return ok({ ext: "jpg", height: b.readUInt16BE(i + 5), width: b.readUInt16BE(i + 7) });
       }
       i += 2 + len;
+    }
+  }
+  if (b.length > 30 && b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP") {
+    const kind = b.toString("ascii", 12, 16);
+    if (kind === "VP8X") return ok({ ext: "webp", width: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), height: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)) });
+    if (kind === "VP8L" && b[20] === 0x2f) {
+      const v = b.readUInt32LE(21);
+      return ok({ ext: "webp", width: (v & 0x3fff) + 1, height: ((v >> 14) & 0x3fff) + 1 });
+    }
+    if (kind === "VP8 " && b[23] === 0x9d && b[24] === 0x01 && b[25] === 0x2a) {
+      return ok({ ext: "webp", width: b.readUInt16LE(26) & 0x3fff, height: b.readUInt16LE(28) & 0x3fff });
     }
   }
   return null;

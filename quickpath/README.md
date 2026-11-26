@@ -35,7 +35,13 @@ It builds a 15 second video in about 12 ms and renders the half-size draft in ab
 
 ## What it makes
 
-Each scene can also have your own PNG or JPEG picture behind the words (up to 12 MB). It fills the frame, pushes in slowly, and sits under a dark veil so the words stay readable.
+Each scene can also have a picture or a clip behind the words, from three places:
+
+- **Your own PNG or JPEG** (up to 12 MB).
+- **Your own MP4 clip** (up to 150 MB, under ten minutes). It plays from the start of its scene; a clip longer than the scene is trimmed, a shorter one holds its last frame.
+- **A picture made by AI** (Google Imagen 4 Fast through Kie.ai). Press **Make a picture** and a window shows the model, an estimated price, how much you have already spent, and the exact words that will be sent (you can change them). Nothing is sent until you press Confirm, and one confirmation pays for one picture.
+
+A picture or clip fills the frame and sits under a dark veil so the words stay readable.
 
 Every scene is a background colour, a short accent line, a headline and an optional small line, each fading and sliding in and out.
 The text is native EffectCraft text, so it stays editable when you open `video.ecproj`. Six looks (Midnight, Sunrise, Paper, Forest,
@@ -47,9 +53,10 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-26 tests: the planning, the layout (text must fit the frame in all three shapes), picture detection, the server's refusals (including every kind of
-bad upload), and four that build and render real videos in EffectCraft, one of them checking a pixel of the person's own picture (skipped, and reported
-as skipped, if EffectCraft is not installed).
+41 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
+(no credit, bad key, refused prompt, slow, not a picture, non-https address), the server's refusals (every kind of bad upload), and five that build and render real
+videos in EffectCraft and check pixels: your picture shows, a short clip holds its last frame, a long clip is trimmed (skipped, and reported as skipped, if
+EffectCraft or ffmpeg is not installed).
 
 ## Safety
 
@@ -59,9 +66,18 @@ Folder names are random 12-character hex strings and media paths must match that
 served. An uploaded picture is accepted only as PNG or JPEG judged by its own first bytes (never its name or header), capped at 12 MB and 12000 pixels
 a side, and stored under a name the server makes. EffectCraft is started with `shell: false` and confined to the one project folder.
 
+## Money and keys
+
+AI pictures use your Kie.ai account. The key is found, in this order: the `KIE_API_KEY` environment variable; Windows Credential Manager entry
+`QuickPath/kie`; or, on Windows, the key you already saved in MotionCraft. It is never shown to the page, never written to disk or a log, and sent
+only to Kie.ai. Every picture is counted in `spend.jsonl` in your QuickPath folder, and new pictures stop at a limit of $5 (change it with
+`QUICKPATH_SPEND_CAP_USD`). The price is an estimate (about $0.02), because Kie.ai does not publish one through its API. Results are only fetched
+from https addresses, and only accepted if the bytes really are a picture.
+
 ## Not done yet
 
-- Video clips in scenes, and AI-made pictures (the main app has both).
+- AI video clips, voiceover and music (the main app has them).
+- Checking an AI picture for stray lettering and trying again (the prompt asks for none and sends a negative prompt, and the first real picture had none).
 - Music, voiceover, and the editor hand-offs (After Effects, Resolve) beyond opening `video.ecproj` in EffectCraft.
 - A desktop installer. Today it is a command and a browser tab; wrapping it in a window is a later step.
 - Mac and Linux: the code is not Windows-specific, but only Windows has been run.

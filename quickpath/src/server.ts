@@ -10,7 +10,10 @@ import { EffectCraft, EngineError } from "./ec.ts";
 import { buildComposition, renderVideo } from "./build.ts";
 import { LOOKS, lookById } from "./looks.ts";
 import { clamp, makePlan, type Plan, type Shape } from "./plan.ts";
-import { imageInfo, MAX_PICTURE_BYTES, PICTURE_NAME } from "./images.ts";
+import { imageInfo, MAX_PICTURE_BYTES, MEDIA_NAME } from "./images.ts";
+import { looksLikeMp4, MAX_CLIP_BYTES, mp4Info } from "./mp4.ts";
+import { generatePicture, picturePrompt, Spend, SpendRefused } from "./ai.ts";
+import { kieKey } from "./keys.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const UI = resolve(HERE, "..", "ui");
@@ -23,7 +26,7 @@ const CANDIDATES = [
 ].filter(Boolean);
 const cliPath = () => CANDIDATES.find((p) => existsSync(p)) ?? "";
 
-const MIME: Record<string, string> = { ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
+const MIME: Record<string, string> = { ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
 const SHAPES: Shape[] = ["16:9", "9:16", "1:1"];
 
 class Refused extends Error {}
@@ -32,7 +35,7 @@ class Refused extends Error {}
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && PICTURE_NAME.test(s.picture) ? { picture: s.picture } : {}) }));
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}) }));
   if (scenes.some((s: { headline: string }) => !s.headline)) throw new Refused("Every scene needs some words.");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
@@ -102,6 +105,7 @@ function openFolder(path: string) {
 
 export function start(port = Number(process.env.PORT ?? 4177)) {
   mkdirSync(join(HOME, "projects"), { recursive: true });
+  const spend = new Spend(join(HOME, "spend.jsonl"));
   const server = createServer(async (req, res) => {
     try {
       const addr = server.address();
@@ -132,14 +136,48 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const id = url.searchParams.get("id") ?? "";
         if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first, then add a picture.");
         const type = String(req.headers["content-type"] ?? "").split(";")[0].trim();
-        if (type !== "image/png" && type !== "image/jpeg") throw new Refused("Use a PNG or JPEG picture.");
-        const body = await readBody(req, MAX_PICTURE_BYTES);
-        const info = imageInfo(body);                       // the file's own bytes decide, not its name or the header
-        if (!info) throw new Refused("That does not look like a PNG or JPEG picture, or it is too large.");
-        const name = `${randomBytes(6).toString("hex")}.${info.ext}`;
+        if (type !== "image/png" && type !== "image/jpeg" && type !== "video/mp4") throw new Refused("Use a PNG or JPEG picture, or an MP4 clip.");
+        const clip = type === "video/mp4";
+        const body = await readBody(req, clip ? MAX_CLIP_BYTES : MAX_PICTURE_BYTES);
+        let ext: string, width: number, height: number, seconds: number | undefined;
+        if (clip) {                                         // the file's own bytes decide, not its name or the header
+          const m = looksLikeMp4(body) ? mp4Info(body) : null;
+          if (!m) throw new Refused("That does not look like an MP4 clip that can be read.");
+          if (m.seconds > 600) throw new Refused("Use a clip under ten minutes.");
+          ext = "mp4"; width = m.width; height = m.height; seconds = m.seconds;
+        } else {
+          const info = imageInfo(body);
+          if (!info || info.ext === "webp") throw new Refused("That does not look like a PNG or JPEG picture, or it is too large.");
+          ext = info.ext; width = info.width; height = info.height;
+        }
+        const name = `${randomBytes(6).toString("hex")}.${ext}`;
         mkdirSync(join(HOME, "projects", id, "assets"), { recursive: true });
         writeFileSync(join(HOME, "projects", id, "assets", name), body, { flag: "wx" });
-        return send(res, 200, { name, width: info.width, height: info.height, url: `/media/${id}/assets/${name}` });
+        return send(res, 200, { name, width, height, seconds, url: `/media/${id}/assets/${name}` });
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/quote") {
+        const b = await readJson(req);
+        const id = String(b.id ?? "");
+        if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first.");
+        const shape: Shape = SHAPES.includes(b.shape) ? b.shape : "16:9";
+        const typed = String(b.prompt ?? "").replace(/\s+/g, " ").trim().slice(0, 900);
+        const prompt = typed || picturePrompt(String(b.headline ?? "").slice(0, 90), String(b.sub ?? "").slice(0, 120), String(b.idea ?? "").slice(0, 300), shape);
+        if (!(await kieKey())) throw new Refused("No Kie.ai key was found. Save one in Windows Credential Manager as QuickPath/kie, or set KIE_API_KEY, and try again.");
+        return send(res, 200, spend.quote(id, prompt, shape));
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/picture") {
+        const b = await readJson(req);
+        const id = String(b.id ?? ""), prompt = String(b.prompt ?? "");
+        if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first.");
+        const held = spend.redeem(String(b.token ?? ""), id, prompt);          // one confirmation buys one picture
+        const key = await kieKey();
+        if (!key) throw new Refused("No Kie.ai key was found.");
+        const out = await generatePicture(prompt, held.shape, key, { base: process.env.QUICKPATH_KIE_BASE, allowLocalHttp: !!process.env.QUICKPATH_KIE_BASE });
+        spend.record(id, 0.02, "picture");
+        const name = `${randomBytes(6).toString("hex")}.${out.info.ext}`;
+        mkdirSync(join(HOME, "projects", id, "assets"), { recursive: true });
+        writeFileSync(join(HOME, "projects", id, "assets", name), out.bytes, { flag: "wx" });
+        return send(res, 200, { name, width: out.info.width, height: out.info.height, url: `/media/${id}/assets/${name}`, spentUsd: spend.spent() });
       }
       if (req.method === "POST" && url.pathname === "/api/reveal") {
         const b = await readJson(req);
@@ -148,7 +186,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         openFolder(join(HOME, "projects", m[1], m[2]));
         return send(res, 200, { ok: true });
       }
-      const pic = /^\/media\/([a-f0-9]{12})\/assets\/([a-f0-9]{12}\.(?:png|jpg))$/.exec(url.pathname);
+      const pic = /^\/media\/([a-f0-9]{12})\/assets\/([a-f0-9]{12}\.(?:png|jpg|webp|mp4))$/.exec(url.pathname);
       if (req.method === "GET" && pic) return serveFile(req, res, join(HOME, "projects", pic[1], "assets", pic[2]));
       const media = /^\/media\/([a-f0-9]{12})\/([\w.-]+\.mp4)$/.exec(url.pathname);
       if (req.method === "GET" && media) return serveFile(req, res, join(HOME, "projects", media[1], media[2]));
@@ -160,7 +198,8 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       send(res, 405, { error: "Not allowed." });
     } catch (e) {
-      const known = e instanceof Refused || e instanceof EngineError;
+      const msg = (e as Error).message ?? "";
+      const known = e instanceof Refused || e instanceof EngineError || e instanceof SpendRefused || /^(Kie\.ai|The picture|What came back|Your Kie)/.test(msg);
       send(res, known ? 400 : 500, { error: known ? (e as Error).message : "Something went wrong. Try again." });
     }
   });

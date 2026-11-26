@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { solidPng } from "./png.ts";
+import { execFileSync } from "node:child_process";
+import { copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EffectCraft } from "../src/ec.ts";
@@ -47,6 +49,35 @@ test("a scene with the person's own picture builds, shows the picture, and rende
     const still = await ec.still(built.comp, 1.0, 320);
     const png = PNG_PIXEL(still, 8, 8);                    // top-left corner: the green picture under a 45% black veil
     assert.ok(png.g > png.r + 20 && png.g > png.b + 20, `the picture shows, got ${JSON.stringify(png)}`);
+    const frames = await renderVideo(ec, built.comp, join(dir, "d.mp4"), "draft");
+    assert.equal(frames, Math.round(built.total * 30));
+  } finally { ec.stop(); }
+});
+
+const ffmpegOk = (() => { try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return true; } catch { return false; } })();
+
+test("clips build: one shorter than its scene holds its last frame, one longer is trimmed, both start with their scene", { skip: have && ffmpegOk ? false : "EffectCraft or ffmpeg missing: NOT CHECKED" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "qp-real-clip-"));
+  mkdirSync(join(dir, "assets"), { recursive: true });
+  const src = join(dir, "src.mp4");
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=0xC81E1E:size=320x180:duration=1.5:rate=30", "-pix_fmt", "yuv420p", src]);
+  copyFileSync(src, join(dir, "assets", "aaaaaaaaaaaa.mp4"));       // 1.5 s: shorter than its 3.8 s scene
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=0x1EC81E:size=320x180:duration=8:rate=30", "-pix_fmt", "yuv420p", join(dir, "assets", "bbbbbbbbbbbb.mp4")]);   // 8 s: longer than its scene
+  const ec = new EffectCraft(cli, [dir]);
+  try {
+    await ec.start();
+    const plan = planFromWords("One scene with a short clip. Another scene with a long clip.", 8);
+    assert.equal(plan.scenes.length, 2);
+    plan.scenes[0].picture = "aaaaaaaaaaaa.mp4";
+    plan.scenes[1].picture = "bbbbbbbbbbbb.mp4";
+    const built = await buildComposition(ec, plan, "16:9", dir);
+    const t0 = plan.scenes[0].seconds;
+    const red = PNG_PIXEL(await ec.still(built.comp, t0 - 0.5, 320), 8, 8);        // late in scene 1, long after its 1.5 s clip ended: the last frame is held
+    assert.ok(red.r > red.g + 20 && red.r > red.b + 20, `held red frame, got ${JSON.stringify(red)}`);
+    const green = PNG_PIXEL(await ec.still(built.comp, t0 + 0.6, 320), 8, 8);      // just into scene 2: the long clip has started, from its own first frame
+    assert.ok(green.g > green.r + 20 && green.g > green.b + 20, `green clip, got ${JSON.stringify(green)}`);
+    const end = PNG_PIXEL(await ec.still(built.comp, built.total - 0.3, 320), 8, 8);
+    assert.ok(end.g > end.r + 20, `still green at the end, got ${JSON.stringify(end)}`);
     const frames = await renderVideo(ec, built.comp, join(dir, "d.mp4"), "draft");
     assert.equal(frames, Math.round(built.total * 30));
   } finally { ec.stop(); }

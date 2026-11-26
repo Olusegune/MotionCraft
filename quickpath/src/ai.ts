@@ -1,0 +1,109 @@
+// AI pictures through Kie.ai (an opt-in aggregator that serves Google's Imagen). Nothing is sent until the person confirms a quote:
+// a quote is one-time, expires, and is tied to the exact prompt and project it was made for. A spend ledger caps the total.
+import { randomBytes } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname } from "node:path";
+import type { Shape } from "./plan.ts";
+import { imageInfo, MAX_PICTURE_BYTES, type ImageInfo } from "./images.ts";
+
+export const MODEL = "google/imagen4-fast";
+export const PROVIDER = "Kie.ai";
+/** Kie.ai does not publish a price through its API, so this is an estimate, and the confirmation says so. */
+export const ESTIMATE_USD = 0.02;
+export const QUOTE_SECONDS = 300;
+export const NO_LETTERING = "A purely visual still image with no lettering, words, numbers, symbols, logos or watermarks anywhere in it.";
+const ASPECT: Record<Shape, string> = { "16:9": "16:9", "9:16": "9:16", "1:1": "1:1" };
+
+export class SpendRefused extends Error {}
+
+export type Quote = { token: string; provider: string; model: string; estimateUsd: number; note: string; prompt: string; spentUsd: number; capUsd: number };
+
+type Held = { project: string; prompt: string; shape: Shape; expires: number };
+
+export class Spend {
+  private held = new Map<string, Held>();
+  private ledger: string;
+  private cap: number;
+  private now: () => number;
+
+  constructor(ledger: string, capUsd = Number(process.env.QUICKPATH_SPEND_CAP_USD ?? 5), now: () => number = Date.now) {
+    this.ledger = ledger; this.cap = capUsd; this.now = now;
+  }
+
+  spent(): number {
+    if (!existsSync(this.ledger)) return 0;
+    let n = 0;
+    for (const line of readFileSync(this.ledger, "utf-8").split("\n")) {
+      try { n += Number(JSON.parse(line).usd) || 0; } catch { /* a half-written line counts for nothing */ }
+    }
+    return Math.round(n * 1000) / 1000;
+  }
+
+  /** Makes a quote the person must confirm. Refused when the cap would be passed. */
+  quote(project: string, prompt: string, shape: Shape): Quote {
+    const spentUsd = this.spent();
+    if (spentUsd + ESTIMATE_USD > this.cap) throw new SpendRefused(`This would pass your spending limit of $${this.cap.toFixed(2)} (about $${spentUsd.toFixed(2)} used so far).`);
+    const token = randomBytes(16).toString("hex");
+    for (const [k, v] of this.held) if (v.expires < this.now()) this.held.delete(k);
+    this.held.set(token, { project, prompt, shape, expires: this.now() + QUOTE_SECONDS * 1000 });
+    return { token, provider: PROVIDER, model: MODEL, estimateUsd: ESTIMATE_USD, note: "An estimate: Kie.ai does not publish an exact price.", prompt, spentUsd, capUsd: this.cap };
+  }
+
+  /** Uses the quote up. It works once, for the project and prompt it was made for, before it expires. */
+  redeem(token: string, project: string, prompt: string): Held {
+    const h = this.held.get(token);
+    this.held.delete(token);
+    if (!h || h.expires < this.now()) throw new SpendRefused("That confirmation has run out. Ask again.");
+    if (h.project !== project || h.prompt !== prompt) throw new SpendRefused("That confirmation was for something else.");
+    return h;
+  }
+
+  record(project: string, usd: number, what: string): void {
+    mkdirSync(dirname(this.ledger), { recursive: true });
+    appendFileSync(this.ledger, JSON.stringify({ at: new Date(this.now()).toISOString(), project, usd, what, provider: PROVIDER, model: MODEL }) + "\n");
+  }
+}
+
+/** The prompt for a scene: the look of the piece, what the scene says, and an explicit ban on lettering. */
+export function picturePrompt(headline: string, sub: string, idea: string, shape: Shape): string {
+  const orient = shape === "9:16" ? "vertical" : shape === "1:1" ? "square" : "wide";
+  const about = idea.replace(/\s+/g, " ").trim().slice(0, 200);
+  return `${NO_LETTERING} A ${orient}, cinematic, softly lit photograph that suits this moment of a short video: ${headline.slice(0, 90)}${sub ? ` (${sub.slice(0, 90)})` : ""}. ${about ? `The video is about: ${about}.` : ""} Generous empty space in the middle for text.`.slice(0, 700);
+}
+
+type Fetch = typeof fetch;
+
+/** Makes one picture and returns its bytes. `fetchImpl` and `base` are for tests; polling stops after `timeoutMs`. */
+export async function generatePicture(prompt: string, shape: Shape, key: string, opts: { fetchImpl?: Fetch; base?: string; pollMs?: number; timeoutMs?: number; allowLocalHttp?: boolean } = {}): Promise<{ bytes: Buffer; info: ImageInfo }> {
+  const f = opts.fetchImpl ?? fetch;
+  const base = opts.base ?? "https://api.kie.ai/api/v1";
+  const headers = { Authorization: `Bearer ${key}`, "content-type": "application/json" };
+  const made = await f(`${base}/jobs/createTask`, { method: "POST", headers, signal: AbortSignal.timeout(30_000), body: JSON.stringify({ model: MODEL, input: { prompt, negative_prompt: "text, letters, words, numbers, logo, watermark, caption", aspect_ratio: ASPECT[shape], num_images: 1 } }) });
+  const j = (await made.json().catch(() => ({}))) as { code?: number; msg?: string; data?: { taskId?: string } };
+  const task = j.data?.taskId;
+  if (!made.ok || (j.code !== undefined && j.code !== 200) || !task) {
+    const refused = typeof j.code === "number" && j.code >= 400 && j.code < 500 && ![401, 402, 403, 429].includes(j.code);
+    throw new Error(refused ? `Kie.ai refused this request, so nothing was charged: ${j.msg || "invalid input"}` : j.code === 401 || j.code === 403 ? "Kie.ai did not accept the key." : j.code === 402 ? "Your Kie.ai account is out of credit." : j.msg || "Kie.ai did not start the picture.");
+  }
+  const until = Date.now() + (opts.timeoutMs ?? 120_000);
+  for (;;) {
+    await new Promise((r) => setTimeout(r, opts.pollMs ?? 2000));
+    const r = await f(`${base}/jobs/recordInfo?taskId=${encodeURIComponent(task)}`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(30_000) });
+    const d = ((await r.json().catch(() => ({}))) as { data?: { state?: string; resultJson?: string; failMsg?: string } }).data ?? {};
+    if (d.state === "fail") throw new Error(d.failMsg || "Kie.ai could not make this picture.");
+    if (d.state === "success") {
+      let urls: unknown[] = [];
+      try { urls = (JSON.parse(d.resultJson ?? "{}") as { resultUrls?: unknown[] }).resultUrls ?? []; } catch { /* handled below */ }
+      const url = urls.find((u): u is string => typeof u === "string" && (u.startsWith("https://") || (opts.allowLocalHttp === true && u.startsWith("http://127.0.0.1"))));
+      if (!url) throw new Error("Kie.ai finished but sent no picture.");
+      const img = await f(url, { signal: AbortSignal.timeout(60_000) });
+      const declared = Number(img.headers.get("content-length") ?? 0);
+      if (!img.ok || declared > MAX_PICTURE_BYTES) throw new Error("The picture could not be downloaded.");
+      const bytes = Buffer.from(await img.arrayBuffer());
+      const info = bytes.length <= MAX_PICTURE_BYTES ? imageInfo(bytes) : null;
+      if (!info) throw new Error("What came back was not a usable picture.");
+      return { bytes, info };
+    }
+    if (Date.now() > until) throw new Error("Kie.ai is taking too long. It may still charge for this picture: check your Kie.ai usage.");
+  }
+}

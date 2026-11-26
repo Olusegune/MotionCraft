@@ -1,16 +1,28 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { request } from "node:http";
+import { createServer, request } from "node:http";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { solidPng } from "./png.ts";
 
 process.env.QUICKPATH_HOME = mkdtempSync(join(tmpdir(), "qp-"));
+process.env.KIE_API_KEY = "test-key-0123456789abcdef";            // found first, so the real Credential Manager is never read in tests
+const fake = createServer((req, res) => {
+  const addr = fake.address() as { port: number };
+  const send = (o: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
+  req.resume();
+  if (req.url?.endsWith("/jobs/createTask")) return send({ code: 200, data: { taskId: "t-1" } });
+  if (req.url?.includes("/jobs/recordInfo")) return send({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: [`http://127.0.0.1:${addr.port}/img.png`] }) } });
+  res.writeHead(200, { "content-type": "image/png" }); res.end(solidPng(48, 27, [20, 120, 200]));
+});
+await new Promise<void>((r) => fake.listen(0, "127.0.0.1", r));
+process.env.QUICKPATH_KIE_BASE = `http://127.0.0.1:${(fake.address() as { port: number }).port}`;
 const { start } = await import("../src/server.ts");
 const server = start(0);
 await new Promise((r) => server.once("listening", r));
 const port = (server.address() as { port: number }).port;
-after(() => server.close());
+after(() => { server.close(); fake.close(); });
 
 function call(method: string, path: string, opts: { host?: string; origin?: string; body?: string; headers?: Record<string, string> } = {}) {
   return new Promise<{ status: number; text: string }>((resolve, reject) => {
@@ -58,7 +70,6 @@ test("an invalid plan is refused before anything is started", async () => {
   assert.equal(r.status, 400);
 });
 
-import { solidPng } from "./png.ts";
 
 function upload(id: string, type: string, body: Buffer) {
   return new Promise<{ status: number; json: any }>((resolve, reject) => {
@@ -94,4 +105,50 @@ test("a picture over the size limit is refused before it is read", async () => {
   const r = await upload(id, "image/png", Buffer.alloc(12 * 1024 * 1024 + 10, 1));
   assert.equal(r.status, 400);
   assert.match(r.json.error, /too big/);
+});
+
+
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+function rawUpload(id: string, type: string, body: Buffer) { return upload(id, type, body); }
+
+test("a clip can be added: read from its own boxes, stored under a random name, and served with ranges", { skip: (() => { try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return false; } catch { return "ffmpeg not installed: NOT CHECKED"; } })() }, async () => {
+  const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "A clip on a scene", seconds: 10 }) })).text);
+  const dir = mkdtempSync(join(tmpdir(), "qp-c-"));
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=160x90:rate=30", "-pix_fmt", "yuv420p", join(dir, "c.mp4")]);
+  const ok = await rawUpload(id, "video/mp4", readFileSync(join(dir, "c.mp4")));
+  assert.equal(ok.status, 200);
+  assert.match(ok.json.name, /^[a-f0-9]{12}\.mp4$/);
+  assert.equal(ok.json.width, 160);
+  const ranged = await call("GET", ok.json.url, { headers: { range: "bytes=0-99" } });
+  assert.equal(ranged.status, 206);
+});
+
+test("clips that are not clips are refused", async () => {
+  const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "Bad clip tests", seconds: 10 }) })).text);
+  assert.equal((await rawUpload(id, "video/mp4", Buffer.from("this is not a movie at all, just text"))).status, 400);
+  assert.equal((await rawUpload(id, "video/mp4", solidPng(8, 8, [0, 0, 0]))).status, 400);
+  assert.equal((await rawUpload(id, "video/webm", Buffer.alloc(100))).status, 400);
+});
+
+test("AI pictures: no confirmation, no picture. One confirmation buys one picture, saved under a random name, and is counted.", async () => {
+  const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "A picture made by a model", seconds: 10 }) })).text);
+  const without = await call("POST", "/api/ai/picture", { body: JSON.stringify({ id, token: "0".repeat(32), prompt: "x" }) });
+  assert.equal(without.status, 400);
+  const q = JSON.parse((await call("POST", "/api/ai/quote", { body: JSON.stringify({ id, shape: "16:9", headline: "Steam rising", sub: "", idea: "coffee" }) })).text);
+  assert.match(q.token, /^[a-f0-9]{32}$/);
+  assert.equal(q.estimateUsd, 0.02);
+  assert.ok(q.prompt.includes("Steam rising"));
+  const wrongWords = await call("POST", "/api/ai/picture", { body: JSON.stringify({ id, token: q.token, prompt: "something else" }) });
+  assert.equal(wrongWords.status, 400, "a quote made for other words is refused");
+  const q2 = JSON.parse((await call("POST", "/api/ai/quote", { body: JSON.stringify({ id, shape: "16:9", headline: "Steam rising", sub: "", idea: "coffee" }) })).text);
+  const made = await call("POST", "/api/ai/picture", { body: JSON.stringify({ id, token: q2.token, prompt: q2.prompt }) });
+  assert.equal(made.status, 200, made.text);
+  const out = JSON.parse(made.text);
+  assert.match(out.name, /^[a-f0-9]{12}\.png$/);
+  assert.ok(out.spentUsd >= 0.02);
+  const again = await call("POST", "/api/ai/picture", { body: JSON.stringify({ id, token: q2.token, prompt: q2.prompt }) });
+  assert.equal(again.status, 400, "the confirmation is used up");
+  assert.equal((await call("GET", out.url)).status, 200);
 });

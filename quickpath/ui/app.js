@@ -1,7 +1,8 @@
 "use strict";
 // One page, no framework. User text only ever goes in through textContent or .value, never innerHTML.
 const $ = (id) => document.getElementById(id);
-const state = { plan: null, shape: "16:9", seconds: 15, id: null, busy: false, dirty: false, last: null, looks: [] };
+const state = { plan: null, shape: "16:9", seconds: 15, id: null, busy: false, dirty: false, last: null, looks: [], idea: "" };
+const MB = 1024 * 1024;
 
 const LENGTHS = [10, 15, 30, 60];
 const SHAPES = [["16:9", "Wide"], ["9:16", "Tall"], ["1:1", "Square"]];
@@ -56,34 +57,73 @@ function drawScenes() {
     h.addEventListener("input", () => { s.headline = h.value; touch(); });
     const sub = document.createElement("input"); sub.value = s.sub; sub.maxLength = 120; sub.placeholder = "Small line (optional)"; sub.setAttribute("aria-label", `Scene ${i + 1} small line`);
     sub.addEventListener("input", () => { s.sub = sub.value; touch(); });
-    li.append(top, h, sub, pictureRow(s, i)); ol.appendChild(li);
+    li.append(top, h, sub, mediaRow(s, i)); ol.appendChild(li);
   });
 }
 
-function pictureRow(s, i) {
+function mediaRow(s, i) {
   const row = document.createElement("div"); row.className = "pic";
   if (s.picture && state.id) {
-    const img = document.createElement("img"); img.alt = `Scene ${i + 1} picture`; img.src = `/media/${state.id}/assets/${s.picture}`;
-    const rm = document.createElement("button"); rm.type = "button"; rm.className = "btn quiet small"; rm.textContent = "Remove picture";
+    const src = `/media/${state.id}/assets/${s.picture}`;
+    const isClip = s.picture.endsWith(".mp4");
+    const thumb = document.createElement(isClip ? "video" : "img");
+    if (isClip) { thumb.muted = true; thumb.preload = "metadata"; thumb.src = src + "#t=0.5"; } else { thumb.src = src; thumb.alt = `Scene ${i + 1} picture`; }
+    const rm = document.createElement("button"); rm.type = "button"; rm.className = "btn quiet small"; rm.textContent = isClip ? "Remove clip" : "Remove picture";
     rm.addEventListener("click", () => { delete s.picture; drawScenes(); touch(); });
-    row.append(img, rm); return row;
+    row.append(thumb, rm); return row;
   }
   const label = document.createElement("label"); label.className = "btn quiet small";
-  label.textContent = "Add your picture";
-  const input = document.createElement("input"); input.type = "file"; input.accept = "image/png,image/jpeg"; input.className = "visually-hidden";
-  input.setAttribute("aria-label", `Add a picture to scene ${i + 1}`);
+  label.textContent = "Add picture or clip";
+  const input = document.createElement("input"); input.type = "file"; input.accept = "image/png,image/jpeg,video/mp4"; input.className = "visually-hidden";
+  input.setAttribute("aria-label", `Add a picture or clip to scene ${i + 1}`);
   input.addEventListener("change", async () => {
     const f = input.files && input.files[0]; if (!f) return;
-    if (f.size > 12 * 1024 * 1024) { say("That picture is over 12 MB. Try a smaller one.", "error"); return; }
-    say("Adding the picture…");
+    const clip = f.type === "video/mp4";
+    if (f.size > (clip ? 150 : 12) * MB) { say(`That file is over ${clip ? 150 : 12} MB. Try a smaller one.`, "error"); return; }
+    say(clip ? "Adding the clip…" : "Adding the picture…");
     try {
       const r = await fetch(`/api/upload?id=${encodeURIComponent(state.id)}`, { method: "POST", headers: { "content-type": f.type }, body: f });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error || "Could not add that picture.");
+      if (!r.ok) throw new Error(j.error || "Could not add that file.");
       s.picture = j.name; drawScenes(); touch();
     } catch (e) { say(e.message, "error"); }
   });
-  label.appendChild(input); row.appendChild(label); return row;
+  label.appendChild(input);
+  const ai = document.createElement("button"); ai.type = "button"; ai.className = "btn quiet small"; ai.textContent = "Make a picture";
+  ai.addEventListener("click", () => askPicture(s, i));
+  row.append(label, ai); return row;
+}
+
+// Nothing is spent until the person presses Confirm: the quote shows the model, the provider, an estimate and the exact words sent.
+async function askPicture(s, i) {
+  say("");
+  let quote;
+  try { quote = await api("/api/ai/quote", { id: state.id, shape: state.shape, headline: s.headline, sub: s.sub, idea: state.idea }); }
+  catch (e) { say(e.message, "error"); return; }
+  const dlg = $("spend");
+  $("spendWhat").textContent = `Scene ${i + 1}`;
+  $("spendModel").textContent = `${quote.model} via ${quote.provider}`;
+  $("spendPrice").textContent = `About $${quote.estimateUsd.toFixed(2)}. ${quote.note}`;
+  $("spendLimit").textContent = `Used so far: $${quote.spentUsd.toFixed(2)} of your $${quote.capUsd.toFixed(2)} limit.`;
+  $("spendPrompt").value = quote.prompt;
+  $("spendPrompt").dataset.orig = quote.prompt;
+  $("spendErr").textContent = "";
+  dlg.dataset.token = quote.token;
+  dlg.returnValue = "";
+  dlg.onclose = async () => {
+    if (dlg.returnValue !== "confirm") return;
+    let token = dlg.dataset.token, prompt = $("spendPrompt").dataset.orig;
+    const edited = $("spendPrompt").value.replace(/\s+/g, " ").trim();
+    try {
+      // Edited words need their own confirmation, so a new quote is made for exactly those words.
+      if (edited && edited !== prompt) { const q2 = await api("/api/ai/quote", { id: state.id, shape: state.shape, prompt: edited }); token = q2.token; prompt = q2.prompt; }
+      setBusy(true, "Making the picture…");
+      const out = await api("/api/ai/picture", { id: state.id, token, prompt });
+      s.picture = out.name; setBusy(false); drawScenes(); touch();
+      say(`Picture added. Used so far: $${out.spentUsd.toFixed(2)}. Press Update video to see it.`, "ok");
+    } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); }
+  };
+  dlg.showModal();
 }
 
 function drawLooks() {
@@ -129,7 +169,7 @@ async function make() {
   $("make").disabled = true; $("startnote").textContent = "Writing the scenes…";
   try {
     state.plan = await api("/api/plan", { idea, seconds: state.seconds });
-    state.id = state.plan.id; state.dirty = false;
+    state.idea = idea; state.id = state.plan.id; state.dirty = false;
     $("start").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
     await render("draft");
   } catch (e) { $("startnote").textContent = e.message; $("make").disabled = false; }
