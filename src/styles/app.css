@@ -614,3 +614,17 @@ button.chip:focus-visible { outline: 2px solid var(--mc-accent); outline-offset:
 .lockbar { position: sticky; top: 0; z-index: 5; border-color: var(--mc-accent); }
 .lockbar .btn { background: var(--mc-accent); color: var(--mc-on-accent); border-color: var(--mc-accent); font-weight: 600; }
 button:disabled, select:disabled, input:disabled { cursor: not-allowed; }
+
+/* Narrow windows: the header gives up labels, never buttons. Search becomes an icon, the save status a tick with a tooltip. */
+.header .header-actions { flex-shrink: 0; display: flex; gap: 8px; }
+@media (max-width: 1280px) {
+  .header .search-btn .search-label, .header .search-btn .kbd { display: none; }
+  .header .search-btn { flex: 0 0 40px; min-width: 40px; justify-content: center; padding: 0; }
+  .header .status { font-size: 0; gap: 0; }
+  .header .proj-name { max-width: 150px; }
+  .header .engine-chip:not(.warn) .chip-text { display: none; }
+}
+@media (max-width: 1100px) {
+  .header .mode-wrap > svg, .header .mode-chip { display: none; }
+  .header .proj-name { max-width: 110px; }
+}

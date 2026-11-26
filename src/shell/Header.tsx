@@ -32,7 +32,7 @@ export function Header({ project, stage, save, now, engine, onSetMode, onHome, o
         <>
           <span className="sep" aria-hidden="true" />
           <span className="proj-name" title={project.name}>{project.name}</span>
-          <span className={`status save-${save.kind}`} role="status">
+          <span className={`status save-${save.kind}`} role="status" title={saveText(save, now)}>
             {save.kind === "saving" ? <Loader2 size={16} className="spin" aria-hidden="true" /> : save.kind === "error" ? <TriangleAlert size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}
             {saveText(save, now)}
           </span>
@@ -70,8 +70,8 @@ export function EngineChip({ engine, onClick }: { engine: EngineStatus | null; o
     engine.state === "version-mismatch" ? `EffectCraft ${engine.version} (pin ${engine.pinned})` : "EffectCraft not found";
   const bad = engine && engine.state !== "connected";
   return (
-    <button className={`chip${bad ? " warn" : ""}`} onClick={onClick} aria-label={`Engine status: ${text}`}>
-      {bad ? <TriangleAlert size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}{text}
+    <button className={`chip engine-chip${bad ? " warn" : ""}`} onClick={onClick} aria-label={`Engine status: ${text}`} title={text}>
+      {bad ? <TriangleAlert size={16} aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}<span className="chip-text">{text}</span>
     </button>
   );
 }

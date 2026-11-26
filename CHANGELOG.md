@@ -13,6 +13,7 @@ The first version meant for people who are not the builder. Everything below 0.2
 - **Hand-off** to After Effects (.aep), DaVinci Resolve and Final Cut (FCPXML), Premiere (XML), OpenTimelineIO and EDL. The DaVinci Resolve import was checked in Resolve Studio 21.
 - **Fonts**: the brief's fonts are found, checked for video licensing and used.
 - **First-run tour, automatic updates, art-style presets, your own images and video** as picture sources.
+- **Small windows**: at 1100 px wide the header gives up labels (search becomes an icon, the save status a tick, the engine badge a tick) so Review changes and Build preview are never cut off.
 - **Polish**: dark thin scrollbars, a header that never wraps, friendly dates, plain wording in Review, a clearer New project dialog, one control to set rights for all imported files, a pinned and brighter Unlock bar on approved stages, square previews with no glow, and a clearer empty Build screen.
 
 ### Fixed from the first test on a real PC
