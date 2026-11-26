@@ -155,7 +155,7 @@ html, body { overflow: hidden; }      /* the page never scrolls: every screen sc
 .engine-down { border: 1px solid var(--mc-warning); border-radius: var(--mc-r-card); padding: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 70ch; }
 
 /* viewer */
-.viewer-surround { background: var(--mc-bg-viewer); border-radius: var(--mc-r-panel); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.viewer-surround { background: var(--mc-bg-viewer); border-radius: 4px; padding: 6px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .viewer { width: min(100%, 64vh, 720px); background: var(--mc-bg-app); border-radius: 4px; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--mc-text-2); }
 .viewer-meta { color: var(--mc-text-2); font-size: 13px; }
 .strip { border-top: 1px solid var(--mc-divider); padding: 8px 20px 12px; min-height: 96px; max-height: 120px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
@@ -296,7 +296,7 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .main:has(.studio) { overflow: hidden; display: flex; flex-direction: column; padding: 0 14px 10px; }
 .studio { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
 .studio > .player.fill { flex: 1; min-height: 0; }
-.studio > .timeline-dock { flex: none; max-height: 34%; overflow: auto; }
+.studio > .timeline-dock { flex: none; max-height: 27%; overflow: auto; }
 .studio-divider { flex: none; height: 12px; margin: -5px 0; cursor: row-resize; display: grid; place-items: center; touch-action: none; position: relative; z-index: 1; }
 .studio-divider span { width: 44px; height: 4px; border-radius: 2px; background: var(--mc-control-border); transition: background 0.12s; }
 .studio-divider:hover span, .studio-divider:focus-visible span { background: var(--mc-accent); }
@@ -305,7 +305,7 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .center:has(.studio) .page-head { padding-bottom: 0; }
 .player.fill { gap: 8px; min-height: 0; }
 .player.fill .stage { flex: 1; min-height: 0; width: 100%; container-type: size; display: grid; place-items: center; position: relative; background: transparent; padding: 0; }
-.player.fill .player-screen { width: min(100cqw, calc(100cqh * var(--ar, 1.7778))); max-width: none; position: relative; border-radius: 10px; box-shadow: 0 10px 34px color-mix(in srgb, var(--mc-bg-app) 75%, transparent); }
+.player.fill .player-screen { width: min(100cqw, calc(100cqh * var(--ar, 1.7778))); max-width: none; position: relative; border-radius: 2px; box-shadow: none; }
 .player.fill .stage-meta { position: absolute; left: 12px; top: 12px; margin: 0; padding: 3px 10px; border-radius: 999px; font-size: 12px; background: color-mix(in srgb, var(--mc-bg-app) 70%, transparent); color: var(--mc-text); pointer-events: none; }
 .transport.glass { flex-wrap: nowrap; align-self: stretch; align-items: center; justify-content: flex-start; gap: 10px; padding: 4px 6px; border: 0; border-radius: 0; background: transparent; }
 .ruler.slim { flex: 1 1 auto; min-width: 140px; height: 28px; background: none; border: 0; border-radius: 0; overflow: visible; }
@@ -482,7 +482,7 @@ html.narrow .stagebar { flex-wrap: wrap; }
 .rail, .inspector, .side-rail { background: var(--mc-glass); backdrop-filter: blur(14px) saturate(1.2); border-color: var(--mc-glass-edge); }
 .btn.primary:not(:disabled) { box-shadow: 0 0 0 1px var(--mc-glow-cyan-strong), 0 6px 24px -6px var(--mc-glow-cyan-strong); transition: box-shadow var(--mc-t-panel), transform var(--mc-t-panel); }
 .btn.primary:not(:disabled):hover { box-shadow: 0 0 0 1px var(--mc-accent), 0 10px 32px -6px var(--mc-glow-cyan-strong); transform: translateY(-1px); }
-.viewer, .player { box-shadow: 0 24px 64px -24px var(--mc-glow-cyan), 0 0 0 1px var(--mc-glass-edge); }
+.viewer, .player { box-shadow: none; }
 .project-card { transition: transform var(--mc-t-panel), border-color var(--mc-t-panel), box-shadow var(--mc-t-panel); }
 .project-card:hover { transform: translateY(-2px); box-shadow: 0 18px 40px -20px var(--mc-glow-cyan-strong); }
 .project-card .poster { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: calc(var(--mc-r-card) - 4px); overflow: hidden; background: var(--mc-bg-raised); display: grid; place-items: center; }
@@ -609,3 +609,8 @@ button.chip:focus-visible { outline: 2px solid var(--mc-accent); outline-offset:
 .handoff > * + * { margin-top: 10px; }
 .handoff p { line-height: 1.5; }
 .handoff + section { margin-top: 20px; }
+
+/* Approved stages: the unlock bar stays in view and reads as the way forward, disabled controls say so. */
+.lockbar { position: sticky; top: 0; z-index: 5; border-color: var(--mc-accent); }
+.lockbar .btn { background: var(--mc-accent); color: var(--mc-on-accent); border-color: var(--mc-accent); font-weight: 600; }
+button:disabled, select:disabled, input:disabled { cursor: not-allowed; }

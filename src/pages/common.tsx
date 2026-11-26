@@ -18,7 +18,7 @@ export function LockBar({ gate, kind }: { gate: GateId; kind: RevisionRecord["ki
   return (
     <div className="lockbar" role="note">
       <LockKeyhole size={18} strokeWidth={1.75} aria-hidden="true" />
-      <span>Approved at Gate {gate} ({GATE_NAME[gate].approves}). Unlock to edit; this creates a revision.</span>
+      <span>Approved at Gate {gate} ({GATE_NAME[gate].approves}), so editing is paused. Unlock to make changes; it is saved as a revision.</span>
       <button className="btn" onClick={() => unlockGate(gate, kind)}>Unlock to edit</button>
     </div>
   );
