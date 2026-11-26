@@ -54,17 +54,18 @@ let queue: Promise<unknown> = Promise.resolve();
 const serial = <T>(job: () => Promise<T>): Promise<T> => { const r = queue.then(job, job); queue = r.catch(() => undefined); return r; };
 
 async function render(planIn: unknown, shapeIn: unknown, quality: "draft" | "final", idIn?: unknown) {
-  const cli = cliPath();
-  if (!cli) throw new Refused("EffectCraft was not found. Install EffectCraft 0.24.1, or set EFFECTCRAFT_CLI to its effectcraft-cli program.");
+  // The checks that need no engine come first, so a plain problem (a bad plan, a paid voice not made yet) is named even where EffectCraft is missing.
   const plan = checkPlan(planIn);
   const shape: Shape = SHAPES.includes(shapeIn as Shape) ? (shapeIn as Shape) : "16:9";
   const id = typeof idIn === "string" && /^[a-f0-9]{12}$/.test(idIn) ? idIn : randomBytes(6).toString("hex");
   const dir = join(HOME, "projects", id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "plan.json"), JSON.stringify({ plan, shape }, null, 2));
+  const resolved = await resolveSound(dir, plan);          // scenes are lengthened to fit their voice; refused if a paid voice was not made yet
+  const cli = cliPath();
+  if (!cli) throw new Refused("EffectCraft was not found. Install EffectCraft 0.24.1, or set EFFECTCRAFT_CLI to its effectcraft-cli program.");
   const ec = new EffectCraft(cli, [dir]);
   try {
-    const resolved = await resolveSound(dir, plan);          // scenes are lengthened to fit their voice; refused if a paid voice was not made yet
     await ec.start();
     const built = await buildComposition(ec, resolved.plan, shape, dir, resolved.sound);
     const file = quality === "draft" ? "draft.mp4" : `final-${Date.now()}.mp4`;
