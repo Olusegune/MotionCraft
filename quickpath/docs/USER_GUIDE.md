@@ -27,6 +27,9 @@ On the right, every scene has its own box.
 
 After any change, press **Update video** (or Ctrl+Enter). It takes a few seconds.
 
+Under the video, the **timeline** shows your scenes, each as wide as it is long. A line moves along it as the video plays and the scene being played lights up (in the list too).
+Click a scene on the timeline to jump to it.
+
 ## Pictures and clips
 
 Each scene can have something behind its words.

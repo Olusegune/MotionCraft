@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>QuickPath</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
 <header class="top">
   <span class="mark" aria-hidden="true"></span>
   <h1>QuickPath</h1>
@@ -15,24 +18,28 @@
 </header>
 
 <main>
-  <section id="start" class="card start" aria-labelledby="q">
-    <h2 id="q">What is your video about?</h2>
-    <p class="muted">A sentence or a paragraph is plenty. The words you write become the words on screen.</p>
-    <label class="visually-hidden" for="idea">Your idea</label>
-    <textarea id="idea" rows="4" maxlength="3000" placeholder="e.g. A 15 second teaser for Ember, a small coffee brand. Warm mornings start slowly. Wake up slowly."></textarea>
-    <div class="examples" role="group" aria-label="Examples">
-      <button type="button" class="chip" data-ex="Introducing Lumen, the desk lamp that follows the sun. Soft light from morning to night. Pre-order today.">Product teaser</button>
-      <button type="button" class="chip" data-ex="You are invited. Our spring open house. Saturday 12 April, 2 pm, at the garden studio. Bring a friend.">Event invite</button>
-      <button type="button" class="chip" data-ex="Three habits that make you calmer. Breathe before you reply. Walk after lunch. Switch off one hour before bed.">Explain an idea</button>
+  <section id="start" class="hero" aria-labelledby="q">
+    <p class="eyebrow">Idea <span aria-hidden="true">&rarr;</span><span class="visually-hidden">to</span> video</p>
+    <h2 id="q">What is your <em>video</em> about?</h2>
+    <p class="lead">A sentence or a paragraph is plenty. The words you write become the words on screen.</p>
+    <div class="composer">
+      <label class="visually-hidden" for="idea">Your idea</label>
+      <textarea id="idea" rows="4" maxlength="3000" placeholder="e.g. A 15 second teaser for Ember, a small coffee brand. Warm mornings start slowly. Wake up slowly."></textarea>
+      <div class="examples" role="group" aria-label="Examples">
+        <span class="hint">Try</span>
+        <button type="button" class="chip" data-ex="Introducing Lumen, the desk lamp that follows the sun. Soft light from morning to night. Pre-order today.">Product teaser</button>
+        <button type="button" class="chip" data-ex="You are invited. Our spring open house. Saturday 12 April, 2 pm, at the garden studio. Bring a friend.">Event invite</button>
+        <button type="button" class="chip" data-ex="Three habits that make you calmer. Breathe before you reply. Walk after lunch. Switch off one hour before bed.">Explain an idea</button>
+      </div>
+      <div class="pickers">
+        <fieldset><legend>Length</legend>
+          <div class="seg" id="len" role="radiogroup" aria-label="Length"></div></fieldset>
+        <fieldset><legend>Shape</legend>
+          <div class="seg" id="shape" role="radiogroup" aria-label="Shape"></div></fieldset>
+        <div class="go"><button id="make" class="btn primary big" type="button">Make my video</button></div>
+      </div>
+      <p id="startnote" class="note" role="status"></p>
     </div>
-    <div class="pickers">
-      <fieldset><legend>Length</legend>
-        <div class="seg" id="len" role="radiogroup" aria-label="Length"></div></fieldset>
-      <fieldset><legend>Shape</legend>
-        <div class="seg" id="shape" role="radiogroup" aria-label="Shape"></div></fieldset>
-    </div>
-    <div class="row"><button id="make" class="btn primary big" type="button">Make my video</button>
-      <span id="startnote" class="muted" role="status"></span></div>
   </section>
 
   <section id="recent" class="recent" hidden aria-labelledby="rh">
@@ -44,6 +51,7 @@
     <div class="stage">
       <div class="screen" id="screen"><div class="empty" id="empty"><span class="spin" aria-hidden="true"></span><span id="busy">Making your video…</span></div>
         <video id="video" controls playsinline hidden></video></div>
+      <div class="timeline" id="timeline" role="group" aria-label="Scenes in time"></div>
       <p id="status" class="muted" role="status" aria-live="polite"></p>
       <div class="row" id="done" hidden>
         <span class="muted" id="path"></span>

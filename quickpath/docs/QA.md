@@ -3,7 +3,7 @@
 Quality assurance for QuickPath (branch `claude/quick-path`). It says what was tested, how, what was found, and what has not been checked.
 Read it with `README.md` (what the app does) and `docs/USER_GUIDE.md` (how to use it).
 
-Status in one line: **82 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
+Status in one line: **85 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
 script (section 6) is ready for a person to run on a clean PC and a Mac. Not signed. The Mac build has never been run.**
 
 ## 1. Scope
@@ -28,7 +28,7 @@ Out of scope here: EffectCraft itself (a separate product, pinned to 0.24.1), Ol
 |---|---|---|
 | Unit | Pure functions: planning, text wrapping and fitting, layout, music levels, name and voice-choice checks, file readers (`plan`, `images`, `mp4`, `sound`) | 27 |
 | Fake provider | A fake Kie.ai and OpenAI answer every case: success, bad key, no credit, refused prompt, slow, not a picture, non-https address (`ai`, plus the voice cases in `sound` and `server`) | 7 |
-| Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal | 18 |
+| Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal, the strict page policy | 21 |
 | Real engine | The real EffectCraft builds and renders; pixels and audio of the result are checked | 6 + 18 |
 | Fuzz | Seeded random and corrupted bytes at every file reader, random JSON at the plan checker, random text at the layout and planner | 6 |
 | Page | Driven through the real desktop window (Chromium debug port); accessibility with axe-core in three states | scripts, not in `npm test` |
@@ -37,7 +37,7 @@ Out of scope here: EffectCraft itself (a separate product, pinned to 0.24.1), Ol
 Run the automated tests with `npm test` (about 40 s on the owner's PC). Tests that need EffectCraft, ffmpeg or Windows voices say "skipped: NOT CHECKED" when
 they are missing. A skip is never reported as a pass.
 
-Per file: `plan` 10, `ai` 7, `images` 5, `mp4` 3, `sound` 9, `server` 18, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 82.
+Per file: `plan` 10, `ai` 7, `images` 5, `mp4` 3, `sound` 9, `server` 21, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 85.
 
 ## 4. What the tests prove, by feature
 
@@ -74,7 +74,9 @@ Found by testing, fixed, and now covered by a test.
 | 7 | Hidden items (spinner, "Show in folder") still showed because a style overrode `hidden` | live use | one rule for `[hidden]` |
 | 8 | Accent line missing: EffectCraft's solid layer does not take a size | real engine | uses a rectangle shape |
 | 9 | Headlines wrapped leaving single words alone on a line | live use | even line breaks |
-| 10 | The first fuzz run failed on impossible input (my test built objects JSON cannot make) | fuzz test | the fuzzer now produces real JSON; not a product bug |
+| 10 | The "Your videos" list stayed visible above the studio after making a new video | live use, after the redesign | hidden whenever the studio opens, with a test that checks both ways in |
+| 11 | The sticky action buttons were see-through, so scene text showed behind them | screenshot of the real window | solid bar |
+| 12 | The first fuzz run failed on impossible input (my test built objects JSON cannot make) | fuzz test | the fuzzer now produces real JSON; not a product bug |
 
 Open, known, not fixed:
 
@@ -104,6 +106,7 @@ secret scan (`rafter secrets`) found nothing.
 | Provider answers | A hostile or odd answer | only https addresses followed; size checks; the bytes must really be a picture or sound | `ai`, `sound` |
 | Windows voices | Command injection through the voice name or words | the voice name must be one of the installed voices; words travel in a file, never in a command; `shell: false` | `sound`, `server` |
 | EffectCraft | Reading or writing elsewhere | started with `shell: false`, confined to the one project folder; text that looks like a path is neutralised | `edge.real` |
+| The page itself | Script or style injected into it, or a request to another site | a strict Content-Security-Policy on every response (own files only; no inline script or style, no outside addresses, no framing, no plugins); the page has no inline script, style or handlers, and the tests check that | `server` |
 | Desktop window | The page reaching the system | only QuickPath's own page can load; no new windows; no Node access in the page; every browser permission refused | scripted drive |
 | Removing a video | Deleting the wrong folder | only folders with a `plan.json`, only by exact id; Recycle Bin on Windows | `server` |
 
@@ -151,7 +154,7 @@ Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**
 
 | Item | State |
 |---|---|
-| Automated tests (82) pass | done |
+| Automated tests (85) pass | done |
 | CI green on Windows, macOS, Linux | done |
 | Accessibility audit | done, 0 violations |
 | Fuzz and edge-case tests | done |

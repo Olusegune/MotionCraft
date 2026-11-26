@@ -266,3 +266,34 @@ test("removing a video: only real QuickPath videos, only by exact id, and the fo
     assert.ok((await import("node:fs")).existsSync(join(process.env.QUICKPATH_HOME as string, "projects", "777777777777")));
   } finally { delete process.env.QUICKPATH_DELETE; }
 });
+
+test("every response carries a strict content-security-policy, and the bundled fonts are served", async () => {
+  for (const path of ["/", "/api/status", "/style.css", "/fonts/inter-latin-400-normal.woff2"]) {
+    const r = await new Promise<{ status: number; csp: string; type: string }>((resolve, reject) => {
+      const req = request({ host: "127.0.0.1", port, method: "GET", path, headers: { host: `127.0.0.1:${port}` } }, (res) => { res.resume(); res.on("end", () => resolve({ status: res.statusCode ?? 0, csp: String(res.headers["content-security-policy"] ?? ""), type: String(res.headers["content-type"] ?? "") })); });
+      req.on("error", reject); req.end();
+    });
+    assert.equal(r.status, 200, path);
+    assert.match(r.csp, /default-src 'self'/, path);
+    assert.match(r.csp, /object-src 'none'/);
+    assert.match(r.csp, /frame-ancestors 'none'/);
+    assert.ok(!/unsafe-inline|unsafe-eval|\*/.test(r.csp), "no loose rules: " + r.csp);
+    if (path.endsWith(".woff2")) assert.equal(r.type, "font/woff2");
+  }
+});
+
+test("the page itself uses no inline script or style, so the strict policy cannot break it", async () => {
+  const html = (await call("GET", "/")).text;
+  assert.ok(!/<script(?![^>]*\bsrc=)/i.test(html), "no inline script");
+  assert.ok(!/\sstyle\s*=/i.test(html), "no inline style attribute");
+  assert.ok(!/\son\w+\s*=/i.test(html), "no inline event handler");
+  assert.ok(!/<style/i.test(html), "no style block");
+  assert.ok(!/https?:\/\//i.test(html.replace(/http:\/\/www\.w3\.org/g, "")), "no outside address in the page");
+});
+
+test("the page script hides the video list whenever the studio opens, from a new video or a saved one", async () => {
+  const js = (await call("GET", "/app.js")).text;
+  const opens = js.split(String.fromCharCode(10)).filter((l) => l.includes('$("studio").hidden = false'));
+  assert.ok(opens.length >= 2, "two ways into the studio");
+  for (const l of opens) assert.ok(l.includes('$("recent").hidden = true'), "hides the list: " + l.trim().slice(0, 80));
+});

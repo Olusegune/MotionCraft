@@ -41,13 +41,13 @@ function shapeClass() { $("screen").className = "screen" + (state.shape === "9:1
 function drawScenes() {
   const ol = $("scenes"); ol.textContent = "";
   state.plan.scenes.forEach((s, i) => {
-    const li = document.createElement("li"); li.className = "scene";
+    const li = document.createElement("li"); li.className = "scene"; li.dataset.i = String(i);
     const top = document.createElement("div"); top.className = "top2";
     const n = document.createElement("span"); n.textContent = `Scene ${i + 1}`;
     const g = document.createElement("span"); g.className = "grow";
     const sec = document.createElement("input"); sec.type = "number"; sec.min = "1.5"; sec.max = "30"; sec.step = "0.5"; sec.value = String(s.seconds);
     sec.setAttribute("aria-label", `Scene ${i + 1} seconds`);
-    sec.addEventListener("input", () => { s.seconds = Math.min(30, Math.max(1.5, Number(sec.value) || 3)); touch(); });
+    sec.addEventListener("input", () => { s.seconds = Math.min(30, Math.max(1.5, Number(sec.value) || 3)); touch(); drawTimeline(); });
     const u = document.createElement("span"); u.textContent = "s";
     const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "×"; del.setAttribute("aria-label", `Remove scene ${i + 1}`);
     del.disabled = state.plan.scenes.length <= 1;
@@ -65,7 +65,41 @@ function drawScenes() {
     }
     li.append(mediaRow(s, i)); ol.appendChild(li);
   });
+  drawTimeline();
 }
+
+// The scenes laid out in time under the video: each block as wide as its scene is long, a line that moves with the video, and the scene being played lit up.
+function drawTimeline() {
+  const tl = $("timeline"); tl.textContent = "";
+  if (!state.plan) return;
+  state.plan.scenes.forEach((s, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.style.flex = `${s.seconds} 1 0`;
+    b.textContent = String(i + 1); b.title = `Scene ${i + 1}: ${s.headline} (${s.seconds} s)`; b.setAttribute("aria-label", `Go to scene ${i + 1}, ${s.seconds} seconds`);
+    b.addEventListener("click", () => {
+      const at = state.plan.scenes.slice(0, i).reduce((n, x) => n + x.seconds, 0) + 1.2;       // a moment in, where the words are
+      const v = $("video"); if (v.src) v.currentTime = Math.min(at, v.duration || at);
+      const card = document.querySelector(`.scene[data-i="${i}"] input[aria-label$="headline"]`); if (card) card.focus({ preventScroll: false });
+    });
+    tl.appendChild(b);
+  });
+  const ph = document.createElement("div"); ph.className = "playhead"; ph.hidden = true; ph.setAttribute("aria-hidden", "true"); tl.appendChild(ph);
+  markPlaying();
+}
+
+function markPlaying() {
+  if (!state.plan) return;
+  const v = $("video"), total = state.plan.scenes.reduce((n, x) => n + x.seconds, 0);
+  const t = v.src && !v.hidden ? v.currentTime : -1;
+  let acc = 0, now = -1;
+  state.plan.scenes.forEach((s, i) => { if (t >= acc && t < acc + s.seconds) now = i; acc += s.seconds; });
+  document.querySelectorAll("#timeline button").forEach((b, i) => b.classList.toggle("on", i === now));
+  document.querySelectorAll(".scene").forEach((c, i) => c.classList.toggle("on", i === now));
+  const tl = $("timeline"), ph = tl.querySelector(".playhead");
+  if (ph) { ph.hidden = t < 0; if (t >= 0) { const w = tl.clientWidth - 8; ph.style.left = `${4 + Math.min(1, t / total) * w}px`; } }
+}
+$("video").addEventListener("timeupdate", markPlaying);
+$("video").addEventListener("seeked", markPlaying);
+$("video").addEventListener("loadeddata", markPlaying);
 
 function mediaRow(s, i) {
   const row = document.createElement("div"); row.className = "pic";
@@ -202,7 +236,7 @@ async function make() {
   try {
     state.plan = await api("/api/plan", { idea, seconds: state.seconds });
     state.idea = idea; state.id = state.plan.id; state.dirty = false; state.musicFile = null; $("voice").value = ""; $("music").value = ""; $("musicOpts").hidden = true; $("musicFileLabel").hidden = true;
-    $("start").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
+    $("start").hidden = true; $("recent").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
     await render("draft");
   } catch (e) { $("startnote").textContent = e.message; $("make").disabled = false; }
 }
@@ -256,10 +290,18 @@ async function drawRecent() {
   for (const p of list.slice(0, 9)) {
     const li = document.createElement("li");
     const b = document.createElement("button"); b.type = "button"; b.className = "vid";
-    const t = document.createElement("strong"); t.textContent = p.title || "Untitled";
+    const look = state.looks.find((l) => l.id === p.look) || state.looks[0];
+    const rgb = (c) => `rgb(${c.map((x) => Math.round(x * 255)).join(",")})`;
+    const poster = document.createElement("div"); poster.className = "vid-poster";
+    if (look) { poster.style.background = rgb(look.bg); poster.style.color = rgb(look.text); }
+    const bar = document.createElement("i"); if (look) bar.style.background = rgb(look.accent);
+    const t = document.createElement("b"); t.textContent = p.title || "Untitled";
+    poster.append(bar, t);
+    const meta = document.createElement("div"); meta.className = "vid-meta";
     const m = document.createElement("span"); m.textContent = `${p.scenes} scene${p.scenes === 1 ? "" : "s"} · ${p.seconds} s · ${p.shape}`;
     const w = document.createElement("span"); w.textContent = `${when(p.updated)}${p.hasFinal ? " · saved" : ""}`;
-    b.append(t, m, w);
+    meta.append(m, w);
+    b.append(poster, meta);
     b.addEventListener("click", () => openProject(p.id));
     const x = document.createElement("button"); x.type = "button"; x.className = "vid-x"; x.textContent = "\u00d7"; x.setAttribute("aria-label", `Remove ${p.title || "this video"}`); x.title = "Remove this video";
     x.addEventListener("click", async () => {
@@ -301,14 +343,14 @@ function init() {
   $("add").addEventListener("click", () => { if (state.plan.scenes.length >= 12) return; state.plan.scenes.push({ headline: "New scene", sub: "", seconds: 3 }); drawScenes(); touch(); });
   $("again").addEventListener("click", () => { if (state.dirty && !confirm("Start over? Your changes will be lost.")) return; $("studio").hidden = true; $("start").hidden = false; $("make").disabled = false; $("startnote").textContent = ""; $("video").removeAttribute("src"); state.plan = null; state.id = null; drawRecent(); });
   $("reveal").addEventListener("click", () => state.last && api("/api/reveal", { url: state.last }).catch(() => {}));
-  drawRecent();
   api("/api/status").then((s) => {
     state.looks = s.looks; state.recycles = !!s.recycles;
     fillSound(s);
+    drawRecent();
     const e = $("engine");
     e.textContent = s.engine ? "EffectCraft ready" : "EffectCraft not found";
     e.className = "engine" + (s.engine ? "" : " bad");
     if (!s.engine) $("startnote").textContent = "EffectCraft 0.24.1 is needed to make videos. Install it, then reload this page.";
-  }).catch(() => {});
+  }).catch(() => { drawRecent(); });
 }
 init();

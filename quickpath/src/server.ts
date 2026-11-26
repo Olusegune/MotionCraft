@@ -30,7 +30,7 @@ const CANDIDATES = [
 ].filter(Boolean);
 const cliPath = () => CANDIDATES.find((p) => existsSync(p)) ?? "";
 
-const MIME: Record<string, string> = { ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
+const MIME: Record<string, string> = { ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
 const SHAPES: Shape[] = ["16:9", "9:16", "1:1"];
 
 class Refused extends Error {}
@@ -46,7 +46,7 @@ function readProject(id: string): { plan: Plan; shape: Shape } | null {
 /** The most recent videos, newest first: enough to show a card and reopen it. */
 export function listProjects(limit = 12) {
   const root = join(HOME, "projects");
-  const out: { id: string; title: string; shape: Shape; scenes: number; seconds: number; updated: string; hasFinal: boolean }[] = [];
+  const out: { id: string; title: string; look: string; shape: Shape; scenes: number; seconds: number; updated: string; hasFinal: boolean }[] = [];
   let ids: string[] = [];
   try { ids = readdirSync(root).filter((x) => /^[a-f0-9]{12}$/.test(x)); } catch { return out; }
   for (const id of ids) {
@@ -57,7 +57,7 @@ export function listProjects(limit = 12) {
     if (!p) continue;
     let hasFinal = false;
     try { hasFinal = readdirSync(join(root, id)).some((f) => f.startsWith("final-") && f.endsWith(".mp4")); } catch { /* none */ }
-    out.push({ id, title: p.plan.title, shape: p.shape, scenes: p.plan.scenes.length, seconds: Math.round(p.plan.scenes.reduce((n, x) => n + x.seconds, 0) * 10) / 10, updated: mtime.toISOString(), hasFinal });
+    out.push({ id, title: p.plan.title, look: p.plan.look, shape: p.shape, scenes: p.plan.scenes.length, seconds: Math.round(p.plan.scenes.reduce((n, x) => n + x.seconds, 0) * 10) / 10, updated: mtime.toISOString(), hasFinal });
   }
   return out.sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, limit);
 }
@@ -117,9 +117,12 @@ async function render(planIn: unknown, shapeIn: unknown, quality: "draft" | "fin
   } finally { ec.stop(); }
 }
 
+/** What the page may do: load only its own files, run only its own script, talk only to this server. No framing, no plugins, no other base address. */
+export const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+
 function send(res: ServerResponse, status: number, body: unknown, type = "application/json; charset=utf-8") {
   const data = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
-  res.writeHead(status, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" });
+  res.writeHead(status, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "content-security-policy": CSP });
   res.end(data);
 }
 
@@ -147,7 +150,7 @@ function serveFile(req: IncomingMessage, res: ServerResponse, file: string) {
     res.writeHead(206, { "content-type": type, "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${st.size}`, "content-length": end - start + 1 });
     return createReadStream(file, { start, end }).pipe(res);
   }
-  res.writeHead(200, { "content-type": type, "content-length": st.size, "accept-ranges": "bytes", "cache-control": type === "video/mp4" ? "no-store" : "no-cache", "x-content-type-options": "nosniff" });
+  res.writeHead(200, { "content-type": type, "content-length": st.size, "accept-ranges": "bytes", "cache-control": type === "video/mp4" ? "no-store" : "no-cache", "x-content-type-options": "nosniff", "content-security-policy": CSP });
   createReadStream(file).pipe(res);
 }
 
