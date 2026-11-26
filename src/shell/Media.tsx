@@ -4,7 +4,7 @@ import type { AssetReference } from "../types";
 import { getApi } from "../lib/api";
 import { useApp } from "../ctx";
 import { nowIso } from "../lib/project";
-import { RIGHTS, setRights, type Rights } from "../lib/rights";
+import { RIGHTS, needsRights, setRights, type Rights } from "../lib/rights";
 
 const cache = new Map<string, string>();
 
@@ -122,7 +122,20 @@ export function MediaWall({ assets, selected, onPick, empty }: { assets: AssetRe
   const { projectPath, update } = useApp();
   if (!assets.length) return <p className="empty-note">{empty}</p>;
   const rate = (id: string, r: string) => update((p) => ({ ...p, assets: (p.assets ?? []).map((x) => (x.id === id ? setRights(x, (r || undefined) as Rights | undefined) : x)), updatedAt: nowIso() }));
+  const unsure = assets.filter(needsRights);
+  const rateAll = (r: string) => {
+    if (!r) return;
+    const ids = new Set(unsure.map((x) => x.id));
+    update((p) => ({ ...p, assets: (p.assets ?? []).map((x) => (ids.has(x.id) ? setRights(x, r as Rights) : x)), updatedAt: nowIso() }));
+  };
   return (
+    <>
+    {unsure.length > 1 && (
+      <label className="wall-bulk"><span>{unsure.length} imported files have no rights set. Set them all at once:</span>
+        <select value="" aria-label="Rights for all unconfirmed files" onChange={(e) => rateAll(e.target.value)}>
+          <option value="">Choose…</option>
+          {RIGHTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+        </select></label>)}
     <ul className="wall" aria-label="Media">
       {assets.map((a) => (
         <li key={a.id} className={selected?.includes(a.id) ? "on" : ""}>
@@ -138,5 +151,6 @@ export function MediaWall({ assets, selected, onPick, empty }: { assets: AssetRe
         </li>
       ))}
     </ul>
+    </>
   );
 }

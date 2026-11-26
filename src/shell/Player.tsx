@@ -74,7 +74,7 @@ export const Player = forwardRef<PlayerHandle, {
               onLoadedMetadata={(e) => setLen(e.currentTarget.duration || duration)} onPlay={() => setPlaying(true)}
               onPause={() => { setPlaying(false); if (video.current) setT(video.current.currentTime); }}
               onEnded={() => setPlaying(false)} onSeeked={() => video.current && setT(video.current.currentTime)} />
-          ) : <div className="viewer-empty"><p className="strong">No preview movie yet</p><p>{emptyText ?? "Press Build preview to render a draft you can play and scrub."}</p></div>}
+          ) : <div className="viewer-empty"><p className="strong">{emptyText ? "Ready when you are" : "No preview movie yet"}</p><p>{emptyText ?? "Press Build preview to render a draft you can play and scrub."}</p></div>}
           {fill && <p className={`viewer-meta stage-meta${stale ? "" : " visually-hidden"}`} role="status">{meta}</p>}
         </div>
                 {!fill && <p className="viewer-meta" role="status">{meta}</p>}
