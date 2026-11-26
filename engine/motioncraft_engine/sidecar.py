@@ -849,12 +849,51 @@ class Service:
                 self.key_out(made[first:], str(it["key"]))
         a = self._need()
         a.execute([Command(id="layer.arrange", params={"layers": made, "to": "back"})], actor=USER)
-        comp = a.inspect().comp(None)
-        bg = [l.id for l in comp.layers if l.kind == "Solid" and "background" in l.name.lower() and l.id not in made]
-        if bg:
-            a.execute([Command(id="layer.arrange", params={"layers": bg, "to": "back"})], actor=USER)
+        self._settle_back(made)
         a.save()
         return {"placed": made, **self._snapshot()}
+
+    BACKDROP = "Backdrop"
+
+    def _settle_back(self, made: list[int]) -> None:
+        """Puts the back of the stack in order: the backdrop (what shows through keyed clips) just behind the scene pictures, and any solid called
+        Background behind the backdrop, so neither hides the other."""
+        a = self._need()
+        comp = a.inspect().comp(None)
+        drops = [l.id for l in comp.layers if l.name == self.BACKDROP and l.id not in made]
+        bg = [l.id for l in comp.layers if l.kind == "Solid" and "background" in l.name.lower() and l.id not in made and l.id not in drops]
+        if drops:
+            a.execute([Command(id="layer.arrange", params={"layers": drops, "to": "back"})], actor=USER)
+        if bg:
+            a.execute([Command(id="layer.arrange", params={"layers": bg, "to": "back"})], actor=USER)
+
+    def set_backdrop(self, kind: str = "colour", color: list[float] | None = None, rel: str | None = None) -> dict:
+        """Chooses what shows behind keyed (green or blue screen) clips: `colour` (a flat colour), `picture` (a picture or video from the media wall, covering
+        the whole film and looping if a clip) or `none`. It is one layer named Backdrop, replaced each time, sitting behind the scene pictures."""
+        if kind not in ("none", "colour", "picture"):
+            raise AdapterError("The background is a colour, a picture or video, or none.")
+        a = self._need()
+        comp = a.inspect().comp(None)
+        old = [l.id for l in comp.layers if l.name == self.BACKDROP]
+        if old:
+            a.execute([Command(id="edit.clear", params={"layers": old})], actor=USER)
+        made: list[int] = []
+        if kind == "colour":
+            if not isinstance(color, list) or len(color) != 3:
+                raise AdapterError("Give the colour as three numbers from 0 to 1.")
+            made = [self.add_solid(name=self.BACKDROP, color=color)["layer"]]
+        elif kind == "picture":
+            if not rel:
+                raise AdapterError("Choose a picture or video.")
+            made = list(self.place_pictures([{"rel": rel, "t_in": 0.0, "t_out": float(comp.duration), "loop": True}])["placed"])
+            a.execute([Command(id="layer.setTransform", params={"layers": made, "prop": "opacity", "value": 100})], actor=USER)
+            for lid in made:
+                a.execute([Command(id="layer.rename", params={"layer": lid, "name": self.BACKDROP})], actor=USER)
+        if made:
+            a.execute([Command(id="layer.arrange", params={"layers": made, "to": "back"})], actor=USER)
+        self._settle_back([])
+        a.save()
+        return {"backdrop": made, **self._snapshot()}
 
     def _frame_picture(self, lid: int, f: Path, t0: float, t1: float) -> None:
         """Fits a scene picture to the whole frame (covering it, never stretched), dims it so text on top stays readable, and gives it a slow push-in

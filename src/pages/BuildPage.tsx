@@ -13,6 +13,7 @@ import { AddLayerPanel, AudioPanel, PrimitivesPanel, type AudioInfo, type Write 
 import { usePreviewMovie } from "./build/usePreview";
 import { BuilderPanel } from "./build/BuilderPanel";
 import { ScenePictures } from "./build/ScenePictures";
+import { BackdropPanel } from "./build/Backdrop";
 import { audioToAdd, scenePictureItems } from "../lib/makeIt";
 import { voiceItems } from "../lib/voice";
 import { getQaPins, subscribeQaPins } from "../lib/qaPins";
@@ -268,10 +269,11 @@ export function BuildPage(f: FrameProps) {
       <PrimitivesPanel write={write} selected={sel} locked={selLocked} playhead={playhead} disabled={writesOff} onApplied={() => undefined} />
       <AudioPanel write={write} disabled={writesOff} info={audio} onInfo={setAudio} onStructure={setStructure} layers={layers.map((l) => ({ id: l.id, name: l.name }))} />
       <ScenePictures write={write} disabled={writesOff} />
+      <BackdropPanel write={write} disabled={writesOff} />
       <BuilderPanel write={write} disabled={writesOff} afterBuild={async () => {
         let note = 0;
         const items = scenePictureItems(project);
-        if (items.length) { const r = await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}) })) }); if (r) note = items.length; }
+        if (items.length) { const r = await write("scene pictures", "place_pictures", { items: items.map(({ rel, t_in, t_out, loop, key }) => ({ rel, t_in, t_out, ...(loop ? { loop } : {}), ...(key ? { key } : {}) })) }); if (r) note = items.length; }
         for (const rel of audioToAdd(project, layers.map((l) => l.name))) await write("add audio", "add_media", { rel });      // the sound goes in with the layers, so the render is not silent
         const vo = voiceItems(project);
         if (vo.length && await write("voiceovers", "place_audio", { items: vo.map(({ rel, t_in }) => ({ rel, t_in })) })) {       // each voiceover starts at its scene

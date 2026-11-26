@@ -231,6 +231,10 @@ The screen (RGB 23, 157, 41) becomes the background behind it (RGB 244, 4, 221) 
 
 What to know: use blue when the subject is green. Pictures made with an image model can have an uneven screen; the key copes with small variations, not with a patterned background.
 
+### Choosing what shows behind a green screen clip
+
+Build has **Background behind green screen clips**: a flat colour (white, black, grey, warm paper, sky, navy, or magenta to check the key), a picture or video from the media wall, or nothing. It is one layer called **Backdrop**, replaced each time, kept above a Background solid and below the scene pictures, so placing scene pictures again never buries it. Real-engine test: a keyed green screen picture shows white, then a blue picture, then the dark solid again, with the subject staying red. Also fixed: **Build** now keys green screen clips when it places the scene pictures (the key was only applied by the Scene pictures button).
+
 ## 13. Work on it in After Effects, DaVinci Resolve or Premiere
 
 Deliver has **Work on it in another editor**. Choose the editor and press **Prepare files**. Everything is written into the project's `exports` folder, one new folder per hand-off (nothing is sent anywhere, nothing costs money):
