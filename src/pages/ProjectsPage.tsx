@@ -1,3 +1,4 @@
+import { friendlyWhen } from "../lib/when";
 import { useEffect, useState } from "react";
 import { FilePlus2 } from "lucide-react";
 import type { Deliverable, MotionProject, ProjectSummary } from "../types";
@@ -71,7 +72,7 @@ function ProjectCard({ p, onOpen }: { p: ProjectSummary; onOpen: (p: ProjectSumm
     <button className="project-card" onClick={() => onOpen(p)}>
       <span className="poster" aria-hidden="true">{info?.poster ? <img src={info.poster} alt="" /> : <span className="poster-title" data-title={p.name} />}</span>
       <span className="strong">{p.name}</span>
-      <span className="muted">{info?.meta ? `${info.meta} · ` : ""}Edited {new Date(p.updatedAt).toLocaleString()}</span>
+      <span className="muted">{info?.meta ? `${info.meta} · ` : ""}Edited {friendlyWhen(p.updatedAt)}</span>
     </button>
   );
 }
@@ -96,7 +97,7 @@ function NewProject({ onClose, onCreate }: { onClose: () => void; onCreate: (nam
   return (
     <Sheet title="New project" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={bad || busy} onClick={submit}>Create project</button></>}>
       <div className="stack">
-        <label className="field"><span className="field-label">Name</span><input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void submit(); }} /></label>
+        <label className="field"><span className="field-label">Name</span><input value={name} maxLength={80} placeholder="e.g. Spring launch teaser" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void submit(); }} /></label>
         <div className="row">
           <label className="field"><span className="field-label">Aspect and size</span><select value={ai} onChange={(e) => setAi(Number(e.target.value))}>{ASPECTS.map((a, i) => { const z = sizeFor(a.aspect, scale); return <option key={a.aspect} value={i}>{a.aspect}  ({z.width} × {z.height})</option>; })}</select></label>
           <label className="field"><span className="field-label">Resolution</span><select value={res} onChange={(e) => setRes(e.target.value)}>{RESOLUTIONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label>
@@ -107,6 +108,7 @@ function NewProject({ onClose, onCreate }: { onClose: () => void; onCreate: (nam
           <label className="check"><input type="checkbox" checked={alpha} onChange={(e) => setAlpha(e.target.checked)} />Needs transparency (alpha)</label>
         </div>
         <p className="muted">Colour settings follow what the connected engine supports. They are chosen when the composition is created.</p>
+        {bad && <p className="why">{!name.trim() ? "Give the project a name to continue." : "Duration is between 1 and 3600 seconds."}</p>}
         {err && <p className="error-text" role="alert">{err}</p>}
       </div>
     </Sheet>

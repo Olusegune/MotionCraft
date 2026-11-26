@@ -1,3 +1,4 @@
+import { friendlyWhen } from "../../lib/when";
 import { useEffect, useRef, useState } from "react";
 import { GitCompare, History, RotateCcw, Save } from "lucide-react";
 import { useApp } from "../../ctx";
@@ -55,7 +56,7 @@ export function HistoryPanel({ disabledReason }: { disabledReason?: string }) {
         <ol className="plain history">
           {revs.map((r) => (
             <li key={r.id}>
-              <span className="mono">{new Date(r.at).toLocaleString()}</span> <span className="badge">{ACTOR[r.actor]}</span> {r.summary}
+              <span className="mono">{friendlyWhen(r.at)}</span> <span className="badge">{ACTOR[r.actor]}</span> {r.summary}
               {(r.snapshot || r.before) && (
                 <div className="row-actions">
                   {r.snapshot && <button className="btn quiet" disabled={!!disabledReason} aria-label={`Compare ${r.summary} with now`} onClick={() => setCompare({ rev: r, which: "after" })}><GitCompare size={16} aria-hidden="true" />Compare</button>}

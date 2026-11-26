@@ -93,7 +93,7 @@ export function QaPanel({ disabledReason }: { disabledReason?: string }) {
   const raised = open.length;
   return (
     <Fold title="Technical findings" defaultOpen meta={<span className="count">{r ? `${raised} raised` : "not run"}</span>}>
-      <p className="muted">Deterministic checks (tier 1). Each finding shows where it is, the evidence, the likely cause and what to do. A check that could not run says so; it is never counted as a pass.</p>
+      <p className="muted">Automatic checks for missing files, text that is too small or off the edge, silent audio and more. Each problem says where it is and what to do. A check that could not run says so; it is never counted as a pass.</p>
       <div className="row-actions">
         <button className="btn" disabled={!!disabledReason || st.busy} onClick={() => void run()}><Play size={16} aria-hidden="true" />{st.busy ? "Checking…" : r ? "Run checks again" : "Run checks"}</button>
         {fixable.length > 1 && <button className="btn primary" disabled={st.busy || !!disabledReason} onClick={() => void fixAll()}><Wrench size={16} aria-hidden="true" />Fix all {fixable.length} safe issues</button>}

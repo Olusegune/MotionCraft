@@ -593,3 +593,17 @@ button.chip:focus-visible { outline: 2px solid var(--mc-accent); outline-offset:
 
 /* Hand-off to another editor */
 .handoff { margin-top: 12px; }
+
+/* UX polish: calm scrollbars, a header that never wraps, roomier hand-off */
+* { scrollbar-width: thin; scrollbar-color: var(--mc-control-border) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--mc-control-border); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--mc-text-3); background-clip: content-box; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+.header { gap: 12px; }
+.header .status, .header .chip, .header .segmented button { white-space: nowrap; flex-shrink: 0; }
+.header .proj-name { flex: 0 1 auto; min-width: 72px; max-width: 240px; }
+.header .search-btn { flex: 0 1 220px; min-width: 40px; }
+.handoff > * + * { margin-top: 10px; }
+.handoff p { line-height: 1.5; }
+.handoff + section { margin-top: 20px; }
