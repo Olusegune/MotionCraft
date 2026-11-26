@@ -3,7 +3,7 @@
 Quality assurance for QuickPath (branch `claude/quick-path`). It says what was tested, how, what was found, and what has not been checked.
 Read it with `README.md` (what the app does) and `docs/USER_GUIDE.md` (how to use it).
 
-Status in one line: **85 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
+Status in one line: **93 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
 script (section 6) is ready for a person to run on a clean PC and a Mac. Not signed. The Mac build has never been run.**
 
 ## 1. Scope
@@ -27,17 +27,17 @@ Out of scope here: EffectCraft itself (a separate product, pinned to 0.24.1), Ol
 | Layer | Method | Count |
 |---|---|---|
 | Unit | Pure functions: planning, text wrapping and fitting, layout, music levels, name and voice-choice checks, file readers (`plan`, `images`, `mp4`, `sound`) | 27 |
-| Fake provider | A fake Kie.ai and OpenAI answer every case: success, bad key, no credit, refused prompt, slow, not a picture, non-https address (`ai`, plus the voice cases in `sound` and `server`) | 7 |
+| Fake provider | A fake Kie.ai, OpenAI and Ollama answer every case: success, bad key, no credit, refused prompt, slow, never answers, not JSON, wrong shape, one scene, connection reset, only picture models installed, non-https address (`ai`, `planner`, plus the voice cases in `sound` and `server`) | 14 |
 | Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal, the strict page policy | 21 |
 | Real engine | The real EffectCraft builds and renders; pixels and audio of the result are checked | 6 + 18 |
 | Fuzz | Seeded random and corrupted bytes at every file reader, random JSON at the plan checker, random text at the layout and planner | 6 |
-| Page | Driven through the real desktop window (Chromium debug port); accessibility with axe-core in three states | scripts, not in `npm test` |
+| Page | Driven through the real desktop window (Chromium debug port): end to end (`drive.cjs`), accessibility with axe-core in three states (`a11y.cjs`), keyboard-only use (`keyboard.cjs`), screenshots at 1280, 1000 and 760 px wide with a check for sideways scrolling | scripts, not in `npm test` |
 | Manual | Section 6 | 30 steps |
 
 Run the automated tests with `npm test` (about 40 s on the owner's PC). Tests that need EffectCraft, ffmpeg or Windows voices say "skipped: NOT CHECKED" when
 they are missing. A skip is never reported as a pass.
 
-Per file: `plan` 10, `ai` 7, `images` 5, `mp4` 3, `sound` 9, `server` 21, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 85.
+Per file: `plan` 10, `ai` 8, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `server` 22, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 93.
 
 ## 4. What the tests prove, by feature
 
@@ -58,6 +58,10 @@ Per file: `plan` 10, `ai` 7, `images` 5, `mp4` 3, `sound` 9, `server` 21, `engin
 | Reopen and remove saved videos; hand-edited and corrupt plans are re-checked or left out | `server` | pass |
 | Desktop app: opens, makes a video, one window only, quits cleanly, page has no Node access | scripted drive of the installed app | pass |
 | Accessibility (WCAG 2 A/AA, 2.1 A/AA, best practice) | axe-core: start screen, studio, confirmation window | 0 violations in each |
+| Keyboard only: every control reachable with Tab (30 on the start screen, 40 in the studio), a visible focus ring on each, the confirmation window keeps focus inside and closes with Escape | `keyboard.cjs` against the installed app | pass |
+| Narrow windows: no sideways scrolling at 1000 and 760 px | `drive.cjs` | pass |
+| A local model that never answers, errors, or talks around its JSON: planning finishes with the idea's own words | `planner` | pass |
+| Two renders requested at once are queued and both finish | `server` against the real engine | pass |
 
 ## 5. Bugs found by this QA
 
@@ -76,7 +80,10 @@ Found by testing, fixed, and now covered by a test.
 | 9 | Headlines wrapped leaving single words alone on a line | live use | even line breaks |
 | 10 | The "Your videos" list stayed visible above the studio after making a new video | live use, after the redesign | hidden whenever the studio opens, with a test that checks both ways in |
 | 11 | The sticky action buttons were see-through, so scene text showed behind them | screenshot of the real window | solid bar |
-| 12 | The first fuzz run failed on impossible input (my test built objects JSON cannot make) | fuzz test | the fuzzer now produces real JSON; not a product bug |
+| 12 | The words sent to the AI had a doubled full stop ("Wake up slowly..") | the confirmation window screenshot | punctuation tidied; test added |
+| 13 | The text box and the video had no focus ring of their own; Tab showed nothing clear there | keyboard script | outline on the composer and the video |
+| 14 | A local model that hangs made people wait 45 seconds | planner test | 25 seconds, and a hint on the page after 7 |
+| 15 | The first fuzz run failed on impossible input (my test built objects JSON cannot make) | fuzz test | the fuzzer now produces real JSON; not a product bug |
 
 Open, known, not fixed:
 
@@ -154,7 +161,7 @@ Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**
 
 | Item | State |
 |---|---|
-| Automated tests (85) pass | done |
+| Automated tests (93) pass | done |
 | CI green on Windows, macOS, Linux | done |
 | Accessibility audit | done, 0 violations |
 | Fuzz and edge-case tests | done |

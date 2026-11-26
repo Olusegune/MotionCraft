@@ -70,8 +70,9 @@ export class Spend {
 /** The prompt for a scene: the look of the piece, what the scene says, and an explicit ban on lettering. */
 export function picturePrompt(headline: string, sub: string, idea: string, shape: Shape): string {
   const orient = shape === "9:16" ? "vertical" : shape === "1:1" ? "square" : "wide";
-  const about = idea.replace(/\s+/g, " ").trim().slice(0, 200);
-  return `${NO_LETTERING} A ${orient}, cinematic, softly lit photograph that suits this moment of a short video: ${headline.slice(0, 90)}${sub ? ` (${sub.slice(0, 90)})` : ""}. ${about ? `The video is about: ${about}.` : ""} Generous empty space in the middle for text.`.slice(0, 700);
+  const about = idea.replace(/\s+/g, " ").trim().slice(0, 200).replace(/[\s.!?,;:]+$/, "");        // no doubled full stops where the idea already ends in one
+  const scene = `${headline.slice(0, 90).replace(/[\s.!?,;:]+$/, "")}${sub ? ` (${sub.slice(0, 90).replace(/[\s.!?,;:]+$/, "")})` : ""}`;
+  return `${NO_LETTERING} A ${orient}, cinematic, softly lit photograph that suits this moment of a short video: ${scene}. ${about ? `The video is about: ${about}.` : ""} Generous empty space in the middle for text.`.slice(0, 700);
 }
 
 type Fetch = typeof fetch;

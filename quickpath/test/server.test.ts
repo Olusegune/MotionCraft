@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, request } from "node:http";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { solidPng } from "./png.ts";
@@ -296,4 +296,16 @@ test("the page script hides the video list whenever the studio opens, from a new
   const opens = js.split(String.fromCharCode(10)).filter((l) => l.includes('$("studio").hidden = false'));
   assert.ok(opens.length >= 2, "two ways into the studio");
   for (const l of opens) assert.ok(l.includes('$("recent").hidden = true'), "hides the list: " + l.trim().slice(0, 80));
+});
+
+test("two renders requested at the same moment are queued one after the other, and both finish", { skip: existsSync(process.env.EFFECTCRAFT_CLI ?? "C:/Program Files/EffectCraft/effectcraft-cli.exe") ? false : "EffectCraft not installed: NOT CHECKED" }, async () => {
+  const mk = (title: string) => JSON.stringify({ plan: { title, look: "ocean", source: "words", scenes: [{ headline: title, sub: "", seconds: 3 }, { headline: "And more", sub: "", seconds: 3 }] }, shape: "16:9", quality: "draft" });
+  const [a, b] = await Promise.all([call("POST", "/api/render", { body: mk("First at once") }), call("POST", "/api/render", { body: mk("Second at once") })]);
+  assert.equal(a.status, 200, a.text);
+  assert.equal(b.status, 200, b.text);
+  const ja = JSON.parse(a.text), jb = JSON.parse(b.text);
+  assert.notEqual(ja.id, jb.id);
+  assert.equal(ja.frames, 180);
+  assert.equal(jb.frames, 180);
+  assert.equal((await call("GET", ja.url, { headers: { range: "bytes=0-9" } })).status, 206);
 });

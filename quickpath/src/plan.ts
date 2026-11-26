@@ -75,7 +75,7 @@ async function pickModel(base: string): Promise<string | null> {
 }
 
 /** Asks a local model for the scenes. Resolves to null on any trouble (not running, slow, odd answer): the caller then uses the words. */
-export async function planWithModel(idea: string, seconds: number, base = "http://127.0.0.1:11434", timeoutMs = 45_000): Promise<Plan | null> {
+export async function planWithModel(idea: string, seconds: number, base = "http://127.0.0.1:11434", timeoutMs = 25_000): Promise<Plan | null> {
   const model = await pickModel(base);
   if (!model) return null;
   const n = sceneCount(seconds);
@@ -97,9 +97,9 @@ export async function planWithModel(idea: string, seconds: number, base = "http:
 }
 
 /** The plan for an idea: the model's when there is one, else the idea's own words. Always returns something. */
-export async function makePlan(idea: string, seconds: number, ollama?: string): Promise<Plan> {
+export async function makePlan(idea: string, seconds: number, ollama?: string, timeoutMs?: number): Promise<Plan> {
   const secs = clamp(Math.round(seconds), 6, 120);
-  const p = (await planWithModel(idea, secs, ollama)) ?? planFromWords(idea, secs);
+  const p = (await planWithModel(idea, secs, ollama, timeoutMs)) ?? planFromWords(idea, secs);
   if (!p.look) p.look = suggestLook(idea).id;
   p.look = lookById(p.look).id;
   return p;

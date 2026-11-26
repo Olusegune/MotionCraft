@@ -72,7 +72,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 28px 28px 60px; }
   background: linear-gradient(var(--glass), var(--glass)) padding-box, linear-gradient(135deg, rgba(103, 232, 249, 0.45), rgba(155, 140, 255, 0.22) 45%, rgba(255, 200, 87, 0.4)) border-box;
   -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8), 0 0 80px -30px rgba(155, 140, 255, 0.35); transition: box-shadow 0.3s var(--ease); }
-.composer:focus-within { box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8), 0 0 90px -20px rgba(103, 232, 249, 0.45); }
+.composer:focus-within { outline: 2px solid rgba(103, 232, 249, 0.8); outline-offset: 3px; box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8), 0 0 90px -20px rgba(103, 232, 249, 0.45); }
 .composer textarea { background: transparent; border: 0; padding: 4px 2px; font-size: 18px; min-height: 112px; resize: vertical; }
 .composer textarea:focus, .composer textarea:focus-visible { outline: none; box-shadow: none; }
 .examples { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 4px; }
@@ -91,6 +91,7 @@ select option { background: #151925; color: var(--ink); }
 textarea:hover, input:hover, select:hover { border-color: var(--edge-strong); }
 textarea:focus, input:focus, select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.2); }
 button:focus-visible, label.btn:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
+video:focus-visible { outline: 2px solid var(--cyan); outline-offset: -3px; }
 fieldset { border: 0; padding: 0; margin: 0; }
 legend { color: var(--ink3); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 7px; padding: 0; }
 

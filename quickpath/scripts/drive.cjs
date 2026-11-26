@@ -36,6 +36,19 @@ async function main() {
   await ev("(() => { const v = document.getElementById('video'); v.currentTime = 5.2; return 0; })()");
   await sleep(1500);
   await snap("studio");
+  // the confirmation window (opening it sends nothing: only pressing Confirm does) and narrower windows
+  await ev("(() => { const b = Array.from(document.querySelectorAll('.pic button')).find((x) => x.textContent === 'Make a picture'); if (b) b.click(); return 0; })()");
+  await sleep(2500);
+  out.dialogOpen = await ev("document.getElementById('spend').open");
+  await snap("dialog");
+  await ev("(() => { const d = document.getElementById('spend'); if (d.open) d.close('cancel'); return 0; })()");
+  for (const w of [1000, 760]) {
+    await call("Emulation.setDeviceMetricsOverride", { width: w, height: 800, deviceScaleFactor: 1, mobile: false });
+    await sleep(800);
+    out["overflow" + w] = await ev("document.documentElement.scrollWidth > innerWidth + 1");
+    await snap("studio-" + w);
+  }
+  await call("Emulation.clearDeviceMetricsOverride");
   out.escapeTest = await ev("(() => { try { return typeof require + '/' + typeof process; } catch (e) { return 'blocked'; } })()");
   console.log(JSON.stringify(out, null, 1));
   ws.close();

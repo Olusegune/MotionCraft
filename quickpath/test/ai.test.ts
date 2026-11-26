@@ -96,3 +96,9 @@ test("only https result addresses are followed", async () => {
   assert.equal(k.calls.filter((c) => c.url.startsWith("http://169") || c.url.startsWith("file:")).length, 0);
   void readFileSync;
 });
+
+test("the picture prompt reads cleanly: no doubled full stops or stray punctuation", () => {
+  const p = picturePrompt("Wake up slowly.", "start now!", "A coffee brand. Warm mornings. Wake up slowly.", "16:9");
+  assert.ok(!/[.!?]\s*[.!?]/.test(p.slice(NO_LETTERING.length)), "no doubled stops: " + p);
+  assert.ok(p.includes("Wake up slowly (start now)") && p.includes("Warm mornings. Wake up slowly."));
+});

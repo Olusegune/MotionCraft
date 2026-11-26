@@ -53,11 +53,11 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-85 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
+93 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
 the server's refusals, awkward text and extremes on the real EffectCraft, and fuzzing of every file reader. The tests that need EffectCraft, ffmpeg or Windows
 voices report as skipped (never passed) when those are missing.
 
-Other checks: `node scripts/drive.cjs <QuickPath.exe>` drives the installed app end to end; `node scripts/a11y.cjs <QuickPath.exe>` runs an accessibility audit (axe-core).
+Other checks: `node scripts/drive.cjs <QuickPath.exe>` drives the installed app end to end; `node scripts/a11y.cjs <QuickPath.exe>` runs an accessibility audit (axe-core); `node scripts/keyboard.cjs <QuickPath.exe>` checks keyboard-only use.
 
 Documents: `docs/USER_GUIDE.md` (how to use it) and `docs/QA.md` (test strategy, results, bugs found, security review, manual test script, release checklist).
 

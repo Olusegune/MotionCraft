@@ -233,12 +233,13 @@ async function make() {
   if (idea.length < 3) { $("startnote").textContent = "Tell me a little about your video first."; $("idea").focus(); return; }
   $("startnote").textContent = "";
   $("make").disabled = true; $("startnote").textContent = "Writing the scenes…";
+  const slow = setTimeout(() => { $("startnote").textContent = "Still writing. A model on your computer can take a moment; if it takes too long, your own words are used."; }, 7000);
   try {
     state.plan = await api("/api/plan", { idea, seconds: state.seconds });
     state.idea = idea; state.id = state.plan.id; state.dirty = false; state.musicFile = null; $("voice").value = ""; $("music").value = ""; $("musicOpts").hidden = true; $("musicFileLabel").hidden = true;
     $("start").hidden = true; $("recent").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
     await render("draft");
-  } catch (e) { $("startnote").textContent = e.message; $("make").disabled = false; }
+  } catch (e) { $("startnote").textContent = e.message; $("make").disabled = false; } finally { clearTimeout(slow); }
 }
 
 function fillSound(s) {
