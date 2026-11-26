@@ -224,6 +224,8 @@ class Jobs:
                 out.write_bytes(res["data"])
             else:
                 out = self.net.download(res["url"], dest, stem, kind, headers=res.get("headers"))
+            if kind != "video":
+                out = normalise_picture(out)
             cost = res.get("cost")
             est = job["estimate"]
             prov = {"actor": actor, "prompt": prompt, "provider": provider, "model": model, "at": datetime.now(timezone.utc).isoformat(),
@@ -256,3 +258,20 @@ class Jobs:
             raise JobRefused("Unknown job.")
         job["cancel"] = True
         return self.public(job)
+
+
+def normalise_picture(path: Path) -> Path:
+    """A WebP picture becomes a PNG: After Effects, Premiere and Resolve do not all read WebP, and a hand-off must not depend on that.
+    The original is removed once the PNG is written; if the file cannot be read as a picture it is left exactly as it was."""
+    if path.suffix.lower() != ".webp":
+        return path
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            im.load()
+            png = path.with_suffix(".png")
+            im.save(png, "PNG")
+    except Exception:  # noqa: BLE001 - an unreadable file stays as downloaded
+        return path
+    path.unlink(missing_ok=True)
+    return png

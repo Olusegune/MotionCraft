@@ -32,9 +32,22 @@ export function suggestLook(p: Pick<MotionProject, "intent"> & { brief?: { text?
 
 const PACE = ["a very slow, still pace", "a slow, calm pace", "a steady pace", "a lively pace", "a fast, driving pace"];
 
-function planFor(b: Beat): string {
+/** Scenes a brief lists in its own words ("Three scenes: steam rising, a pour into a cup, the logo with the line X."), in order. */
+export function listedScenes(text: string): string[] {
+  const m = /\bscenes?\s*:\s*([^.\n]+)/i.exec(text);
+  if (!m) return [];
+  const items = m[1].split(/\s*(?:,|;|\bthen\b)\s*/i).map((x) => x.replace(/^and\s+/i, '').trim()).filter((x) => x.length > 2);
+  return items.length >= 2 ? items.map((x) => x.charAt(0).toUpperCase() + x.slice(1)) : [];
+}
+
+/** A plan with no script row to read: the scene the brief lists for this position, else the brief's own first sentence with the scene's feeling. Never just the emotion word. */
+function planFor(b: Beat, i: number, n: number, listed: string[], brief: string): string {
   const len = Math.max(0, b.endSec - b.startSec);
-  return `${b.primary || "This scene"} (${len % 1 ? len.toFixed(1) : len} seconds): one clear idea on screen, set up in the first second and held with room to breathe.`;
+  const secs = `${len % 1 ? len.toFixed(1) : len} seconds`;
+  if (listed.length) return `${listed[Math.min(listed.length - 1, Math.floor((i * listed.length) / Math.max(1, n)))]}. ${secs}, feeling ${b.primary || "calm"}.`;
+  const sentence = brief.trim().split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) ?? "";
+  const first = sentence.includes("|") ? "" : sentence;      // a script table row is not a sentence
+  return `${first ? `${first} ` : ""}A ${secs} moment that feels ${b.primary || "calm"}: one clear idea on screen, held with room to breathe.`;
 }
 
 /** One plan and one motion note per scene that has none yet, written from the scene's own name, length and energy. Never overwrites what a person wrote. */
@@ -42,12 +55,13 @@ export function fillTreatment(p: MotionProject): MotionProject {
   const treatment = { ...p.treatment };
   const segs = parseTimedScript(`${p.brief.text}
 ${p.brief.script ?? ""}`, p.brief.deliverables[0]?.durationSec);
-  for (const b of p.intent.arc) {
+  const listed = listedScenes(p.brief.text);
+  for (const [i, b] of p.intent.arc.entries()) {
     const cur = treatment[b.beatId];
     if ((cur?.plan ?? "").trim()) continue;
     const mid = (b.startSec + b.endSec) / 2;
     const seg = segs.find((x) => mid >= x.start && mid < x.end);              // what the script itself says happens in this scene
-    treatment[b.beatId] = { ...cur, plan: seg?.visual ? `${seg.visual}${seg.onScreen ? ` On screen: ${seg.onScreen}` : ""}` : planFor(b), motion: cur?.motion?.trim() ? cur.motion : `${PACE[b.energy - 1]}, building to intensity ${b.intensity} of 5` };
+    treatment[b.beatId] = { ...cur, plan: seg?.visual ? `${seg.visual}${seg.onScreen ? ` On screen: ${seg.onScreen}` : ""}` : planFor(b, i, p.intent.arc.length, listed, p.brief.text), motion: cur?.motion?.trim() ? cur.motion : `${PACE[b.energy - 1]}, building to intensity ${b.intensity} of 5` };
   }
   return { ...p, treatment };
 }

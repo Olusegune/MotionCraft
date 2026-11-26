@@ -34,3 +34,11 @@ describe("retry when lettering is found", () => {
     expect(shouldRetry(undefined, 2, null)).toBe(false);
   });
 });
+
+import { listedScenes } from "../lib/makeIt";
+describe("scenes the brief lists", () => {
+  it("reads 'Three scenes: a, b, c.' in order and ignores briefs that list none", () => {
+    expect(listedScenes("A teaser. Three scenes: steam rising, a pour into a cup, the logo with the line Wake up slowly.")).toEqual(["Steam rising", "A pour into a cup", "The logo with the line Wake up slowly"]);
+    expect(listedScenes("Just a calm film about the sea.")).toEqual([]);
+  });
+});

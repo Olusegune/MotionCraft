@@ -128,3 +128,14 @@ Result: 2560 × 1080, 24 fps H.264, 90.0 s, with stereo AAC sound; QA 0 errors, 
 31. **Known limit**: generated screens are not studio screens. The key removes the screen; scenery the model adds stays.
 30. **A keyed clip had nothing to show through to except the dark Background solid, and Build forgot the key.** Added the background picker (colour, picture or video, or none) as one Backdrop layer, and Build's place-pictures step now passes the key.
 31. **UX pass (screens reviewed in the built app):** bright white native scrollbars on the beat strip and notes row, a Build header that wrapped (project name cut, Saved text on two lines), cramped Hand-off and Render queue spacing, raw machine dates on project cards and history, jargon in the Review panel ("tier 1"), and a New project dialog with an empty name box and a silent disabled button. Fixed: dark thin scrollbars everywhere, a header that no longer wraps, spacing, "Today, 5:10 PM" dates, plain wording, a placeholder and the reason beside the button.
+
+## 32. First-run test on the owner's PC (installed build, local Ollama, real paid picture)
+
+Found and fixed:
+- "Make it" hung for over two minutes with a local reasoning model (qwen3:8b): the model thinks before it answers. Ollama calls now ask for no thinking (about 4 s), and the page falls back to the plain draft after 90 s with a message.
+- Scene plans were the emotion word plus filler ("calm: one clear idea..."), so the picture model drew the word "Calm". Plans now use the scenes the brief lists ("Three scenes: a, b, c"), else the brief's first sentence.
+- Generated pictures were saved as .webp, which After Effects refuses (the .aep step correctly refused to write a broken file). They are now converted to PNG when they arrive.
+
+Checked and working: install, launch, new project, Make it, approve, one paid picture through the spend sheet (Kie.ai imagen4-fast), place picture, preview, QA checks, final H.264 render (1920x1080, 30 fps, 15 s), FCPXML export.
+
+Not checked: After Effects and DaVinci Resolve are not installed on this PC, so the .aep and FCPXML were written but not opened. The image model still sometimes draws the brand name; the spend sheet's retry option exists for it.

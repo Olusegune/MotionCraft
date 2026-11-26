@@ -87,7 +87,18 @@ export function BriefPage(f: FrameProps) {
       if (!info.local && !confirmed) { setMk({ busy: false, notes: [], ask: { provider, model, label: info.label } }); return; }
       const params: Record<string, unknown> = { provider, model, brief: project.brief.text, script: project.brief.script ?? "", duration_sec: d.durationSec, offline };
       if (!info.local) params.spend_token = await api.confirmSpend(provider, model);   // only reachable from the confirm click
-      const r = await api.engine<{ intent: typeof project.intent; warnings: string[] }>("director_intent", params, "", enginePath);
+      // A model that is slow or stuck must never leave the button spinning: after 90 s the draft is made from the brief's own words.
+      const slow = Symbol("slow");
+      const raced = await Promise.race([
+        api.engine<{ intent: typeof project.intent; warnings: string[] }>("director_intent", params, "", enginePath),
+        new Promise<typeof slow>((res) => setTimeout(() => res(slow), 90_000)),
+      ]);
+      if (raced === slow) {
+        applyDraft(offlineIntent(project));
+        setMk({ busy: false, notes: [`${info.label} took too long to answer, so this draft comes from the words in your brief. Try a smaller or faster model in Settings.`], review: true });
+        return;
+      }
+      const r = raced;
       applyDraft({ ...r.intent, arc: reconcileArc(r.intent.arc, `${project.brief.text}
 ${project.brief.script ?? ""}`, d.durationSec) });
       setMk({ busy: false, notes: r.warnings, review: true });

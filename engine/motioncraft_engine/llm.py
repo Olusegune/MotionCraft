@@ -191,6 +191,9 @@ class Llm:
             body: dict[str, Any] = {"model": model, "messages": msgs}
             if fmt:
                 body["response_format"] = fmt
+            if provider == "ollama":
+                # Thinking models (qwen3, deepseek-r1) otherwise spend minutes "reasoning" before the JSON; a draft does not need it.
+                body["reasoning_effort"] = "none"
             r = net.json("POST", url, headers=headers, body=body, timeout=180)
             try:
                 return json_text(r["choices"][0]["message"]["content"] or "") if schema else re.sub(r"<think>.*?</think>", "", r["choices"][0]["message"]["content"] or "", flags=re.S).strip(), r.get("usage") or {}

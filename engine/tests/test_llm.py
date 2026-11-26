@@ -152,3 +152,14 @@ def test_sidecar_exposes_the_methods(tmp_path):
     assert svc.handle("llm_status", {"offline": True})["ready"] is True   # local stays available offline
     svc.handle("llm_set", {"provider": "openai", "model": "gpt-x"})
     assert svc.handle("llm_status", {"offline": True})["ready"] is False
+
+
+def test_ollama_is_told_not_to_think_and_other_providers_are_not(tmp_path, server):
+    m = Llm(tmp_path / "llm.json")
+    m.save("ollama", "qwen3:8b", server)
+    m.complete(provider="ollama", model="qwen3:8b", messages=[{"role": "user", "content": "hi"}], schema=SCHEMA, offline=True)
+    assert [c[3] for c in Fake.calls if c[0] == "POST"][0]["reasoning_effort"] == "none"
+    Fake.calls.clear()
+    m.save("inkling", "i-1", server)
+    m.complete(provider="inkling", model="i-1", messages=[{"role": "user", "content": "hi"}], schema=SCHEMA, offline=True)
+    assert "reasoning_effort" not in [c[3] for c in Fake.calls if c[0] == "POST"][0]

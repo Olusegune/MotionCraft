@@ -31,7 +31,7 @@ describe("Make it: a look and a plan proposed from the intent", () => {
     p.intent.arc = [beat("a", 0, 2.5, "curiosity", 2), beat("b", 2.5, 10, "awe", 5)];
     p.treatment = { b: { plan: "My own plan", motion: "" } };
     const q = fillTreatment(p);
-    expect(q.treatment.a.plan).toMatch(/^curiosity \(2\.5 seconds\)/);
+    expect(q.treatment.a.plan).toMatch(/^A 2\.5 seconds moment that feels curiosity/);
     expect(q.treatment.a.motion).toMatch(/slow, calm pace/);
     expect(q.treatment.b.plan).toBe("My own plan");
     expect(fillTreatment(q)).toEqual(q);                                   // running it again changes nothing
@@ -67,6 +67,6 @@ describe("Make it: a look and a plan proposed from the intent", () => {
     const q = fillTreatment(p);
     expect(q.treatment.a.plan).toBe("A tiny white point emerges from black. On screen: BEYOND");
     expect(q.treatment.b.plan).toBe("The point expands into a sphere.");
-    expect(q.treatment.c.plan).toMatch(/^peace \(5 seconds\)/);
+    expect(q.treatment.c.plan).toMatch(/A 5 seconds moment that feels peace/);
   });
 });
