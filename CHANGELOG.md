@@ -1,8 +1,32 @@
 # Changelog
 
-What people see, newest first. Version numbers are the app's; the work below is on branch `feat/macos-native` and is still labelled 0.1.5.
+What people see, newest first. Version numbers are the app's.
 
-## Unreleased (after 0.1.5)
+## 0.2.0 (release candidate)
+
+The first version meant for people who are not the builder. Everything below 0.2.0 in this file is what it grew from.
+
+### New since 0.1.5
+- **Green screen**: make or import a subject on a flat green or blue screen, key it out in EffectCraft, and put any colour, picture or video behind it.
+- **Voiceover** for any scene (OpenAI or Google, official APIs, confirmed before any spend), placed at the start of the scene.
+- **Image to video** from a scene's picture, and more image and video models (Kie.ai and fal as opt-in providers next to the official ones).
+- **Hand-off** to After Effects (.aep), DaVinci Resolve and Final Cut (FCPXML), Premiere (XML), OpenTimelineIO and EDL. The DaVinci Resolve import was checked in Resolve Studio 21.
+- **Fonts**: the brief's fonts are found, checked for video licensing and used.
+- **First-run tour, automatic updates, art-style presets, your own images and video** as picture sources.
+- **Polish**: dark thin scrollbars, a header that never wraps, friendly dates, plain wording in Review, a clearer New project dialog, one control to set rights for all imported files, a pinned and brighter Unlock bar on approved stages, square previews with no glow, and a clearer empty Build screen.
+
+### Fixed from the first test on a real PC
+- **Make it** no longer hangs with a local reasoning model (Ollama qwen3, deepseek-r1): thinking is switched off for the draft, and after 90 seconds the draft is made from the brief's own words.
+- **Scene plans** follow the scenes your brief lists, so a picture model no longer draws the word "Calm".
+- **Generated pictures** are saved as PNG, not WebP, so After Effects and other editors can carry them.
+- Keyed clips stay keyed after Build.
+
+### Known limits
+- Not signed: Windows shows an unknown-publisher warning, and Macs need right-click, Open until the app is notarised.
+- The installer has been run on one Windows PC; the Mac builds have not been run on a Mac; the After Effects file has not been opened in After Effects.
+- Picture models sometimes draw the brand name; the spend sheet can try again when it sees lettering.
+
+## Between 0.1.5 and 0.2.0
 
 ### New (this round)
 - **Make it**: one button on Brief. The Director drafts the intent, a look and a plan for every scene are proposed, you review once, and Build starts planning.

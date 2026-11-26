@@ -194,7 +194,7 @@ export function BuildPage(f: FrameProps) {
       {err && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {err}</p>}
       {movie.status.state === "error" && <p className="error-text" role="alert"><TriangleAlert size={16} aria-hidden="true" /> {movie.status.message}</p>}
       <Player ref={player} fill aspectLabel={d.aspect} src={movie.url} fps={d.fps} duration={d.durationSec} aspect={`${d.width} / ${d.height}`} stale={movie.stale} markers={markers} peaks={audio?.peaks}
-        onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Add a layer, then press Build preview."} />
+        onTime={setPlayhead} emptyText={movie.status.state === "rendering" ? `Rendering… ${Math.round((now - movie.status.since) / 1000)} s elapsed.` : layers.length ? "Press Build preview to render a draft you can play and scrub." : "Nothing is in the composition yet. On the right, open Scene pictures and press Put pictures and voiceovers in place, or open Builder and press Plan with Builder. Then press Build preview."} />
       {tlOpen && <div className="studio-divider" role="separator" aria-orientation="horizontal" aria-label="Resize preview and timeline" tabIndex={0}
         aria-valuenow={Math.round(dockNow())} aria-valuemin={120} title="Drag to resize. Up and Down arrows on it also work; double-click to reset."
         onPointerDown={startDividerDrag} onKeyDown={dividerKey} onDoubleClick={() => setDock(null)}><span aria-hidden="true" /></div>}
