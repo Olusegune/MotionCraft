@@ -56,8 +56,34 @@ function drawScenes() {
     h.addEventListener("input", () => { s.headline = h.value; touch(); });
     const sub = document.createElement("input"); sub.value = s.sub; sub.maxLength = 120; sub.placeholder = "Small line (optional)"; sub.setAttribute("aria-label", `Scene ${i + 1} small line`);
     sub.addEventListener("input", () => { s.sub = sub.value; touch(); });
-    li.append(top, h, sub); ol.appendChild(li);
+    li.append(top, h, sub, pictureRow(s, i)); ol.appendChild(li);
   });
+}
+
+function pictureRow(s, i) {
+  const row = document.createElement("div"); row.className = "pic";
+  if (s.picture && state.id) {
+    const img = document.createElement("img"); img.alt = `Scene ${i + 1} picture`; img.src = `/media/${state.id}/assets/${s.picture}`;
+    const rm = document.createElement("button"); rm.type = "button"; rm.className = "btn quiet small"; rm.textContent = "Remove picture";
+    rm.addEventListener("click", () => { delete s.picture; drawScenes(); touch(); });
+    row.append(img, rm); return row;
+  }
+  const label = document.createElement("label"); label.className = "btn quiet small";
+  label.textContent = "Add your picture";
+  const input = document.createElement("input"); input.type = "file"; input.accept = "image/png,image/jpeg"; input.className = "visually-hidden";
+  input.setAttribute("aria-label", `Add a picture to scene ${i + 1}`);
+  input.addEventListener("change", async () => {
+    const f = input.files && input.files[0]; if (!f) return;
+    if (f.size > 12 * 1024 * 1024) { say("That picture is over 12 MB. Try a smaller one.", "error"); return; }
+    say("Adding the picture…");
+    try {
+      const r = await fetch(`/api/upload?id=${encodeURIComponent(state.id)}`, { method: "POST", headers: { "content-type": f.type }, body: f });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not add that picture.");
+      s.picture = j.name; drawScenes(); touch();
+    } catch (e) { say(e.message, "error"); }
+  });
+  label.appendChild(input); row.appendChild(label); return row;
 }
 
 function drawLooks() {
@@ -103,7 +129,7 @@ async function make() {
   $("make").disabled = true; $("startnote").textContent = "Writing the scenes…";
   try {
     state.plan = await api("/api/plan", { idea, seconds: state.seconds });
-    state.id = null; state.dirty = false;
+    state.id = state.plan.id; state.dirty = false;
     $("start").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
     await render("draft");
   } catch (e) { $("startnote").textContent = e.message; $("make").disabled = false; }

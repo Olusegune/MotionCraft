@@ -1,10 +1,11 @@
 // Turns a plan into an EffectCraft composition and renders it. Every scene is a background, an accent line, a headline and a sub line,
 // each fading and sliding in and out. Text stays native and editable in EffectCraft.
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { EffectCraft } from "./ec.ts";
 import { lookById, type Rgb } from "./looks.ts";
 import { SIZES, type Plan, type Shape } from "./plan.ts";
+import { imageInfo, PICTURE_NAME } from "./images.ts";
 
 /** Breaks text into lines of at most `max` characters, at spaces, then evens the lines out so no single word is left alone. */
 export function wrapText(text: string, max: number): string[] {
@@ -83,6 +84,28 @@ async function text(ec: EffectCraft, name: string, value: string, size: number, 
   return layer;
 }
 
+/** A scene's own picture, filling the frame (never stretched), with a slow push-in and a dark veil so the words stay readable. */
+async function picture(ec: EffectCraft, dir: string, name: string, scene: number, t0: number, t1: number, width: number, height: number): Promise<boolean> {
+  if (!PICTURE_NAME.test(name)) return false;
+  const file = join(dir, "assets", name);
+  let info;
+  try { info = imageInfo(readFileSync(file)); } catch { return false; }
+  if (!info) return false;
+  const imp = await ec.run<{ items?: number[]; errors?: unknown[] }>("file.import", { paths: [file] });
+  if (imp?.errors?.length || !imp?.items?.length) return false;
+  const { layer } = await ec.run<{ layer: number }>("layer.addItem", { item: imp.items[0] });
+  await ec.run("layer.rename", { layer, name: `Scene ${scene} picture` });
+  await ec.run("layer.timing", { layers: [layer], in: t0, out: t1 });
+  const cover = Math.max(width / info.width, height / info.height) * 100;
+  const key = (time: number, v: number) => ec.run("prop.addKey", { layer, path: "transform/scale", time: r4(time), value: [r4(v), r4(v), 100] });
+  await key(t0, cover);
+  await key(Math.max(t1 - 0.04, t0), cover * 1.07);
+  const veil = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${scene} veil`, size: [width, height], fill: [0, 0, 0], position: [width / 2, height / 2] });
+  await ec.run("layer.setTransform", { layers: [veil.layer], prop: "opacity", value: 45 });
+  await ec.run("layer.timing", { layers: [veil.layer], in: t0, out: t1 });
+  return true;
+}
+
 /** Builds the composition for a plan in the project folder and saves it. */
 export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape, dir: string): Promise<Built> {
   const { width, height } = SIZES[shape];
@@ -99,10 +122,12 @@ export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape
     const lay = layoutScene(s.headline, s.sub, width, height);
     const bg = await ec.run<{ layer: number }>("layer.newSolid", { name: `Scene ${n} background`, color: i % 2 ? look.bg2 : look.bg });
     await ec.run("layer.timing", { layers: [bg.layer], in: t0, out: t1 });
+    const pictured = s.picture ? await picture(ec, dir, s.picture, n, t0, t1, width, height) : false;
+    const ink: Rgb = pictured ? [1, 1, 1] : look.text;
     const bar = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${n} accent`, size: [lay.barW, lay.barH], fill: look.accent, position: [width / 2, lay.barY] });
     await ec.run("layer.timing", { layers: [bar.layer], in: t0, out: t1 });
     await fadeSlide(ec, bar.layer, t0, t1, width / 2, lay.barY, 18);
-    const head = await text(ec, `Scene ${n} headline`, lay.headline, lay.headSize, width / 2, lay.headY, look.text);
+    const head = await text(ec, `Scene ${n} headline`, lay.headline, lay.headSize, width / 2, lay.headY, ink);
     await ec.run("layer.timing", { layers: [head], in: t0 + 0.05, out: t1 });
     await fadeSlide(ec, head, t0 + 0.05, t1, width / 2, lay.headY, 36);
     if (lay.sub) {

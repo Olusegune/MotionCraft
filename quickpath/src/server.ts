@@ -10,6 +10,7 @@ import { EffectCraft, EngineError } from "./ec.ts";
 import { buildComposition, renderVideo } from "./build.ts";
 import { LOOKS, lookById } from "./looks.ts";
 import { clamp, makePlan, type Plan, type Shape } from "./plan.ts";
+import { imageInfo, MAX_PICTURE_BYTES, PICTURE_NAME } from "./images.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const UI = resolve(HERE, "..", "ui");
@@ -22,7 +23,7 @@ const CANDIDATES = [
 ].filter(Boolean);
 const cliPath = () => CANDIDATES.find((p) => existsSync(p)) ?? "";
 
-const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
+const MIME: Record<string, string> = { ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
 const SHAPES: Shape[] = ["16:9", "9:16", "1:1"];
 
 class Refused extends Error {}
@@ -31,7 +32,7 @@ class Refused extends Error {}
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30) }));
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && PICTURE_NAME.test(s.picture) ? { picture: s.picture } : {}) }));
   if (scenes.some((s: { headline: string }) => !s.headline)) throw new Refused("Every scene needs some words.");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
@@ -66,11 +67,17 @@ function send(res: ServerResponse, status: number, body: unknown, type = "applic
   res.end(data);
 }
 
-async function readJson(req: IncomingMessage): Promise<any> {
+async function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
+  const declared = Number(req.headers["content-length"] ?? 0);
+  if (declared > max) throw new Refused("That request is too big.");
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const c of req) { size += (c as Buffer).length; if (size > 64 * 1024) throw new Refused("That request is too big."); chunks.push(c as Buffer); }
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf-8") || "{}"); } catch { throw new Refused("That request was not understood."); }
+  for await (const c of req) { size += (c as Buffer).length; if (size > max) throw new Refused("That request is too big."); chunks.push(c as Buffer); }
+  return Buffer.concat(chunks);
+}
+
+async function readJson(req: IncomingMessage): Promise<any> {
+  try { return JSON.parse((await readBody(req, 64 * 1024)).toString("utf-8") || "{}"); } catch (e) { if (e instanceof Refused) throw e; throw new Refused("That request was not understood."); }
 }
 
 function serveFile(req: IncomingMessage, res: ServerResponse, file: string) {
@@ -112,12 +119,27 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const b = await readJson(req);
         const idea = String(b.idea ?? "").trim().slice(0, 3000);
         if (idea.length < 3) throw new Refused("Tell me a little about your video first.");
-        return send(res, 200, await makePlan(idea, Number(b.seconds) || 15));
+        const id = randomBytes(6).toString("hex");
+        mkdirSync(join(HOME, "projects", id, "assets"), { recursive: true });
+        return send(res, 200, { ...(await makePlan(idea, Number(b.seconds) || 15)), id });
       }
       if (req.method === "POST" && url.pathname === "/api/render") {
         const b = await readJson(req);
         const out = await serial(() => render(b.plan, b.shape, b.quality === "final" ? "final" : "draft", b.id));
         return send(res, 200, out);
+      }
+      if (req.method === "POST" && url.pathname === "/api/upload") {
+        const id = url.searchParams.get("id") ?? "";
+        if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first, then add a picture.");
+        const type = String(req.headers["content-type"] ?? "").split(";")[0].trim();
+        if (type !== "image/png" && type !== "image/jpeg") throw new Refused("Use a PNG or JPEG picture.");
+        const body = await readBody(req, MAX_PICTURE_BYTES);
+        const info = imageInfo(body);                       // the file's own bytes decide, not its name or the header
+        if (!info) throw new Refused("That does not look like a PNG or JPEG picture, or it is too large.");
+        const name = `${randomBytes(6).toString("hex")}.${info.ext}`;
+        mkdirSync(join(HOME, "projects", id, "assets"), { recursive: true });
+        writeFileSync(join(HOME, "projects", id, "assets", name), body, { flag: "wx" });
+        return send(res, 200, { name, width: info.width, height: info.height, url: `/media/${id}/assets/${name}` });
       }
       if (req.method === "POST" && url.pathname === "/api/reveal") {
         const b = await readJson(req);
@@ -126,6 +148,8 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         openFolder(join(HOME, "projects", m[1], m[2]));
         return send(res, 200, { ok: true });
       }
+      const pic = /^\/media\/([a-f0-9]{12})\/assets\/([a-f0-9]{12}\.(?:png|jpg))$/.exec(url.pathname);
+      if (req.method === "GET" && pic) return serveFile(req, res, join(HOME, "projects", pic[1], "assets", pic[2]));
       const media = /^\/media\/([a-f0-9]{12})\/([\w.-]+\.mp4)$/.exec(url.pathname);
       if (req.method === "GET" && media) return serveFile(req, res, join(HOME, "projects", media[1], media[2]));
       if (req.method === "GET") {

@@ -35,6 +35,8 @@ It builds a 15 second video in about 12 ms and renders the half-size draft in ab
 
 ## What it makes
 
+Each scene can also have your own PNG or JPEG picture behind the words (up to 12 MB). It fills the frame, pushes in slowly, and sits under a dark veil so the words stay readable.
+
 Every scene is a background colour, a short accent line, a headline and an optional small line, each fading and sliding in and out.
 The text is native EffectCraft text, so it stays editable when you open `video.ecproj`. Six looks (Midnight, Sunrise, Paper, Forest,
 Ocean, Pop) and three shapes (wide, tall, square).
@@ -45,19 +47,21 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-17 tests: the planning, the layout (text must fit the frame in all three shapes), the server's refusals, and three that build and render
-real videos in EffectCraft (skipped, and reported as skipped, if EffectCraft is not installed).
+26 tests: the planning, the layout (text must fit the frame in all three shapes), picture detection, the server's refusals (including every kind of
+bad upload), and four that build and render real videos in EffectCraft, one of them checking a pixel of the person's own picture (skipped, and reported
+as skipped, if EffectCraft is not installed).
 
 ## Safety
 
 The server listens on 127.0.0.1 only and refuses any request whose Host or Origin is not that address (so a web page you visit cannot talk
 to it). Request bodies are capped at 64 KB. A plan from the page is re-checked on the server: scene count, text length, durations, look name.
 Folder names are random 12-character hex strings and media paths must match that exact shape, so nothing outside the projects folder is
-served. EffectCraft is started with `shell: false` and confined to the one project folder.
+served. An uploaded picture is accepted only as PNG or JPEG judged by its own first bytes (never its name or header), capped at 12 MB and 12000 pixels
+a side, and stored under a name the server makes. EffectCraft is started with `shell: false` and confined to the one project folder.
 
 ## Not done yet
 
-- Pictures and video clips in scenes (the main app has them; the next step here is a "drop a picture on a scene" box).
+- Video clips in scenes, and AI-made pictures (the main app has both).
 - Music, voiceover, and the editor hand-offs (After Effects, Resolve) beyond opening `video.ecproj` in EffectCraft.
 - A desktop installer. Today it is a command and a browser tab; wrapping it in a window is a later step.
 - Mac and Linux: the code is not Windows-specific, but only Windows has been run.

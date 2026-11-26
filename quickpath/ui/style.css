@@ -72,4 +72,9 @@ legend { color: var(--text2); font-size: 14px; margin-bottom: 6px; padding: 0; }
 #status.ok { color: var(--ok); }
 @media (max-width: 960px) { .studio { grid-template-columns: 1fr; } .screen.portrait, .screen.square { height: 60vh; } }
 
+.pic { display: flex; align-items: center; gap: 10px; }
+.pic img { width: 64px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+.btn.small { min-height: 34px; padding: 6px 12px; font-size: 14px; }
+label.btn { display: inline-block; cursor: pointer; }
+label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 [hidden] { display: none !important; }

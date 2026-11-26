@@ -2,7 +2,7 @@
 // Nothing here needs a key or the network beyond 127.0.0.1.
 import { LOOKS, suggestLook, lookById } from "./looks.ts";
 
-export type Scene = { headline: string; sub: string; seconds: number };
+export type Scene = { headline: string; sub: string; seconds: number; picture?: string };
 export type Plan = { title: string; look: string; scenes: Scene[]; source: "model" | "words" };
 export type Shape = "16:9" | "9:16" | "1:1";
 
