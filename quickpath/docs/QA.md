@@ -3,7 +3,7 @@
 Quality assurance for QuickPath (branch `claude/quick-path`). It says what was tested, how, what was found, and what has not been checked.
 Read it with `README.md` (what the app does) and `docs/USER_GUIDE.md` (how to use it).
 
-Status in one line: **119 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
+Status in one line: **126 automated tests pass, CI passes on Windows, macOS and Linux, an accessibility audit found no violations, and a manual
 script (section 6) is ready for a person to run on a clean PC and a Mac. Not signed. The Mac build has never been run.**
 
 ## 1. Scope
@@ -38,7 +38,7 @@ Out of scope here: EffectCraft itself (a separate product, pinned to 0.24.1), Ol
 Run the automated tests with `npm test` (about 40 s on the owner's PC). Tests that need EffectCraft, ffmpeg or Windows voices say "skipped: NOT CHECKED" when
 they are missing. A skip is never reported as a pass.
 
-Per file: `plan` 12, `ai` 9, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `server` 33, `creds.real` 2, `engine.real` 6, `edge.real` 19, `fuzz` 6, `kie` 9 = 119.
+Per file: `plan` 12, `ai` 9, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `server` 33, `creds.real` 2, `engine.real` 6, `edge.real` 19, `fuzz` 6, `kie` 11, `script` 5 = 126.
 
 ## 4. What the tests prove, by feature
 
@@ -169,7 +169,7 @@ Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**
 
 | Item | State |
 |---|---|
-| Automated tests (119) pass | done |
+| Automated tests (126) pass | done |
 | CI green on Windows, macOS, Linux | done |
 | Accessibility audit | done, 0 violations |
 | Fuzz and edge-case tests | done |
@@ -194,3 +194,16 @@ a person listen to the music and voices.
 | Animate picture, Wan 2.2 Turbo 720p | $0.40 | $0.40 | 5 s, 1280x720 H.264 clip saved in the project |
 
 Total spent on live tests to date: about $0.62 of the $5 limit. Bugs these found: voice price off by 17 times; "make the voiceover first" did not cover Kie voices; a missing import that only failed at run time (picture names). Not yet checked: the animated clip inside a rendered video by eye, and a long run on a real script.
+
+## The film run (2026-11-26): a real 90 second script
+
+The sample script was imported, given your three reference sheets, voiced (narrator plus one character), animated (seven clips, then two redone), scored and rendered at 2560x1080. Cost $4.49 of the $5 limit. What it found:
+
+| # | Finding | Status |
+|---|---|---|
+| F1 | An AI clip invented a person in the closing scene | redone with a no-people prompt; the model can still add people, so look at every clip |
+| F2 | A reference picture had a sign with words baked in | cropped out before animating; the app cannot see words in pictures |
+| F3 | The cut sheet kept a thin pale border; clips froze for the rest of a long scene | fixed: panels are inset 1.2%, pictures and clips keep a slow push-in |
+| F4 | If the page stops, picture choices made since the last render are lost | open: needs autosave |
+| F5 | The page can look idle while a paid request is running (throttled hidden window) | open: show the busy state more clearly |
+| F6 | The clips are 5 s, scenes are 10-16 s | open: chain or loop clips |

@@ -68,7 +68,7 @@ request tells the model to keep the subject in the middle.
 npm test
 ```
 
-119 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
+126 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
 the server's refusals, awkward text and extremes on the real EffectCraft, and fuzzing of every file reader. The tests that need EffectCraft, ffmpeg or Windows
 voices report as skipped (never passed) when those are missing.
 
@@ -162,3 +162,12 @@ from https addresses, and only accepted if the bytes really are a picture.
 - Code signing (Windows shows "unknown publisher") and a Mac run.
 - Automatic updates for the desktop app.
 - Mac and Linux: the code is not Windows-specific (Windows voices and the Credential Manager key lookup are skipped elsewhere), but only Windows has been run.
+
+## Scripts, references and the menu bar (new)
+
+- **Timed script import.** Paste a table whose rows start with a time range (for example 00:10-00:22) into the start box, or use File > Open a script. Each row becomes a scene as long as its time range. The time card (Time card: `TEXT`) is shown small and low for the first few seconds; the End title becomes the scene's words; the quoted voice-over is what is spoken; the picture text stays as the scene's direction (and the starting words for an AI clip). A sample is in `samples/the-day-we-built-superintelligence.md`.
+- **A voice per scene.** The video has a narrator; any scene can have its own speaker. When a script names a speaker other than VO (such as Bisi, on mic) that scene gets a second voice. Each voice is quoted and made for its own lines.
+- **Scenes without words.** A scene can be a picture or clip only: no headline, no accent line, a light veil.
+- **References.** The shelf above the scenes holds pictures for the whole video. Choose a sheet, say how many panels across and down and how much title or caption band to trim, and each panel becomes a PNG you can use on any scene.
+- **Clips never freeze.** Pictures and clips keep a slow push-in for the whole scene, so a 5 second clip in a longer scene still moves.
+- **Menu bar** in the desktop app: File (New video, Open a script, folder, Update, Save final, Settings), Edit, View, Window, Help (guides, About).

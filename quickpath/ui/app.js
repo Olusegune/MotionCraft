@@ -224,8 +224,9 @@ function drawRefs() {
       const bmp = await createImageBitmap(f);
       const cw = Math.floor(bmp.width / cols), ch = Math.floor((bmp.height * (1 - top)) / rows), y0 = Math.round(bmp.height * top);
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-        const keep = Math.floor(ch * (1 - bot)), cv = document.createElement("canvas"); cv.width = cw; cv.height = keep;
-        cv.getContext("2d").drawImage(bmp, c * cw, y0 + r * ch, cw, keep, 0, 0, cw, keep);
+        const keep = Math.floor(ch * (1 - bot)), inset = Math.round(Math.min(cw, keep) * 0.012);   // a thin inset drops the border between panels
+        const cv = document.createElement("canvas"); cv.width = cw - 2 * inset; cv.height = keep - 2 * inset;
+        cv.getContext("2d").drawImage(bmp, c * cw + inset, y0 + r * ch + inset, cv.width, cv.height, 0, 0, cv.width, cv.height);
         const blob = await new Promise((ok) => cv.toBlob(ok, "image/png"));
         await addRef(blob, names[r * cols + c] || `${f.name.replace(/\.[^.]+$/, "")} ${r * cols + c + 1}`);
       }

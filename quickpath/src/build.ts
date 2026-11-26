@@ -118,7 +118,9 @@ async function media(ec: EffectCraft, dir: string, name: string, scene: number, 
     if (natural > window + 0.05) await ec.run("layer.timing", { layers: [layer], out: r4(window) });          // trim first, so sliding never runs off the end
     if (t0 > 0.001) await ec.run("layer.timing", { layers: [layer], delta: r4(t0) });                         // slide: in, out and the clip's own start move together
     if (natural < window - 0.05) await ec.run("layer.timing", { layers: [layer], out: r4(t1) });              // shorter than the scene: hold the last frame
-    await ec.run("prop.set", { layer, path: "transform/scale", value: [r4(cover), r4(cover), 100] });
+    // never a frozen frame: the picture keeps a slow push-in for the whole scene (a short clip holds its last frame, but still moving), and starting 5% in hides any thin border on the source picture
+    await key(t0, cover * 1.05);
+    await key(Math.max(t1 - 0.04, t0 + 0.1), cover * 1.11);
   } else {
     await ec.run("layer.timing", { layers: [layer], in: t0, out: t1 });
     await key(t0, cover);

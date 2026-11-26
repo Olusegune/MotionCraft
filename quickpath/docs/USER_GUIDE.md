@@ -96,3 +96,11 @@ you change the **spending limit**.
 - **Animate this picture:** on a scene with a picture, press it, check the price (about $0.40) and the motion words, press Confirm. Wait one to three minutes; the 5 second clip replaces the picture. Press Update video to see it.
 - **Kie voices:** under Voice, pick one of the 20 names. A window shows the lines and price (about $0.03 a line) before anything is bought.
 - **AI music:** under Music, choose Make with AI (Suno, paid), describe the mood, confirm (about $0.06).
+
+
+## Scripts and references
+
+- **A script:** paste a timed table (rows start with a time such as 00:10-00:22) into the start box, or choose File > Open a script. Press Make my video. Every row is a scene as long as its time range; time cards, the spoken lines and the picture directions are filled in for you. Nothing is bought until you confirm a price.
+- **References:** in the studio, under References, choose a sheet of pictures, set Across and Down (and any title or caption band to trim), name the panels, and press Cut into pictures. On a scene, pick Use a reference. Then Animate this picture if you want it to move.
+- **Speaker:** each scene has a Speaker list when a voice is chosen, so a character can have a different voice from the narrator.
+- **Picture direction:** the box under a scripted scene is the direction from the script; it is also the starting words for an AI clip, and you can change them in the price window.
