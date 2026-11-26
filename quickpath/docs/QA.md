@@ -211,3 +211,5 @@ The sample script was imported, given your three reference sheets, voiced (narra
 ## Clips that fill a scene (2026-11-26)
 
 Tests added: a batch quote (price shown first, refused for another project or without the batch flag, works exactly N times, each real cost counted, film cost per project), a chained-clip render on the real engine (red, green, blue clips play in order and the last holds), autosave. Bug found by a test: the first version of the batch quote ignored the spending limit; fixed and covered. Not checked: the continuation clips themselves on real Kie (the limit was reached first), and whether continuation frames join smoothly by eye.
+
+Live check of continuation (2026-11-26, $0.40): the clip made from the last frame of the one before joined with no visible seam (first frame matches the previous last frame). Finding: the model added people walking into an empty chamber in both clips although the words said no people, so "no people" in a prompt cannot be relied on; check the frames. Total spend of the film run: $4.90 of the $5.00 limit (the limit was kept).
