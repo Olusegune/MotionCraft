@@ -53,7 +53,7 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-41 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
+40 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
 (no credit, bad key, refused prompt, slow, not a picture, non-https address), the server's refusals (every kind of bad upload), and five that build and render real
 videos in EffectCraft and check pixels: your picture shows, a short clip holds its last frame, a long clip is trimmed (skipped, and reported as skipped, if
 EffectCraft or ffmpeg is not installed).
