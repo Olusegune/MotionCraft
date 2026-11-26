@@ -239,3 +239,5 @@ dialog.wide { width: min(680px, 94vw); max-height: 90vh; overflow-y: auto; scrol
 .refs { margin: 0 0 14px; }
 .review summary { cursor: pointer; color: var(--ink2); font-size: 13px; padding: 4px 0; }
 .review .pic { margin: 6px 0; }
+.refs > summary { cursor: pointer; color: var(--ink); font-weight: 600; padding: 6px 0; }
+details.refs { margin: 10px 0; }

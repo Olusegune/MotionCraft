@@ -1,3 +1,5 @@
+> **First time?** Read the [walkthrough with pictures](docs/WALKTHROUGH.md).
+
 # QuickPath
 
 Type an idea. Get a finished video draft in about ten seconds. Change the words, press Update, save the full-size video.

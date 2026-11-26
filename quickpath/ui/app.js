@@ -199,6 +199,13 @@ async function addRef(blob, label) {
   state.plan.refs = [...(state.plan.refs || []), { name: j.name, label: label.slice(0, 40) || "Reference" }].slice(-24);
 }
 
+// The panels below the scene list (references, motion) live in one holder, so the scenes always come first.
+function extras() {
+  let x = $("extras");
+  if (!x) { x = document.createElement("div"); x.id = "extras"; $("scenes").after(x); }
+  return x;
+}
+
 // ---- Motion: clips that fill a scene, frames to check, and what the film has cost.
 const CLIP_SECONDS = 5;
 const clipsOf = (s) => (s.picture && s.picture.endsWith(".mp4") ? [s.picture, ...(s.more || [])] : []);
@@ -238,8 +245,9 @@ async function refreshCost() {
 
 function drawMotion() {
   let box = $("motion");
-  if (!box) { box = document.createElement("section"); box.id = "motion"; box.className = "refs"; $("scenes").before(box); }
+  if (!box) { box = document.createElement("section"); box.id = "motion"; box.className = "refs"; extras().append(box); }
   box.textContent = "";
+  box.hidden = !state.plan.scenes.some((s) => s.picture);          // nothing to plan until a scene has a picture or clip
   const h = document.createElement("h3"); h.textContent = "Motion"; box.append(h);
   const cost = document.createElement("p"); cost.id = "filmCost"; cost.className = "note"; box.append(cost);
   const rows = state.plan.scenes.map((s, i) => ({ s, i, need: missingClips(s) })).filter((r) => r.need > 0);
@@ -391,9 +399,12 @@ function fxRow(s, i) {
 
 function drawRefs() {
   let box = $("refs");
-  if (!box) { box = document.createElement("section"); box.id = "refs"; box.className = "refs"; $("scenes").before(box); }
+  if (!box) { box = document.createElement("details"); box.id = "refs"; box.className = "refs"; extras().prepend(box); }
+  const wasOpen = box.open;
   box.textContent = "";
-  const h = document.createElement("h3"); h.textContent = "References"; box.append(h);
+  const h = document.createElement("summary"); h.textContent = `References${(state.plan.refs || []).length ? ` (${state.plan.refs.length} pictures)` : ""}`; box.append(h);
+  box.open = wasOpen || (state.plan.refs || []).length > 0 && box.dataset.shown !== "1";
+  box.dataset.shown = "1";
   const p = document.createElement("p"); p.className = "note"; p.textContent = "Pictures kept for the whole video. Cut a sheet of panels into pictures, then use any of them on a scene.";
   box.append(p);
   const strip = document.createElement("div"); strip.className = "pic";

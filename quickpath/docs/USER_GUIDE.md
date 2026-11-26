@@ -1,3 +1,5 @@
+> New here? Start with [WALKTHROUGH.md](WALKTHROUGH.md): your first video step by step, with pictures.
+
 # QuickPath: user guide
 
 QuickPath turns an idea into a finished video in about ten seconds. You change the words, add pictures, a voice and music, and save it.

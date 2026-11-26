@@ -67,7 +67,7 @@ async function smoke() {
     out.title = await win.webContents.executeJavaScript("document.title");
     out.page = await win.webContents.executeJavaScript("!!document.getElementById('make') && !!document.getElementById('idea')");
     out.menu = (Menu.getApplicationMenu()?.items ?? []).map((i) => String(i.label).replace(/&/g, ""));
-    out.docs = !packaged || ["USER_GUIDE.md", "SETUP_KEYS.md", "ROADMAP.md", "QA.md"].every((f) => fs.existsSync(docPath(f)));
+    out.docs = !packaged || ["USER_GUIDE.md", "SETUP_KEYS.md", "ROADMAP.md", "QA.md", "WALKTHROUGH.html"].every((f) => fs.existsSync(docPath(f)));
     out.ok = out.shapes === 6 && out.title === "QuickPath" && out.page === true && out.docs && ["File", "Edit", "View", "Window", "Help"].every((m) => out.menu.includes(m));
   } catch (e) { out.ok = false; out.error = String(e && e.message || e).slice(0, 200); }
   console.log("QUICKPATH_SMOKE " + JSON.stringify(out));
@@ -98,7 +98,8 @@ function buildMenu() {
       ...(dev ? [{ type: "separator" }, { role: "toggleDevTools" }] : []) ] },
     { label: "&Window", submenu: [{ role: "minimize" }, { role: "close" }, ...(mac ? [{ type: "separator" }, { role: "front" }] : [])] },
     { label: "&Help", submenu: [
-      { label: "&User guide", accelerator: "F1", click: () => openDoc("USER_GUIDE.md") },
+      { label: "&Walkthrough with pictures", accelerator: "F1", click: () => openDoc("WALKTHROUGH.html") },
+      { label: "&User guide", click: () => openDoc("USER_GUIDE.md") },
       { label: "Setting up &keys", click: () => openDoc("SETUP_KEYS.md") },
       { label: "What is &planned", click: () => openDoc("ROADMAP.md") },
       { label: "How it was &tested", click: () => openDoc("QA.md") },
