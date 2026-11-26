@@ -1,8 +1,10 @@
 // QuickPath as a desktop app. The same server and page as `node src/server.ts`, in its own window.
 // The window shows only http://127.0.0.1:<port> (nothing else can load in it), has no Node access, and asks the system for no permissions.
 "use strict";
-const { app, BrowserWindow, Menu, shell, session } = require("electron");
+const { app, BrowserWindow, Menu, shell, session, dialog } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs");
+const os = require("node:os");
 
 const packaged = app.isPackaged;
 process.env.QUICKPATH_UI = packaged ? path.join(process.resourcesPath, "ui") : path.join(__dirname, "..", "ui");
@@ -21,7 +23,7 @@ function open() {
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false },
   });
   win.once("ready-to-show", () => win.show());
-  win.setMenuBarVisibility(false);
+  win.setMenuBarVisibility(true);
   // Nothing but our own page may load here, and no new windows may open.
   win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith(origin + "/")) e.preventDefault(); });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -32,13 +34,58 @@ function open() {
 
 app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 
+// The normal Windows menu bar. Every item either asks the page to press one of its own buttons (so the same checks apply as for a click)
+// or opens a file or folder in the system's own program. Nothing here sends anything anywhere.
+const HOME_DIR = path.join(os.homedir(), "Documents", "QuickPath");
+const press = (id) => { if (win) win.webContents.executeJavaScript(`(() => { const b = document.getElementById(${JSON.stringify(id)}); if (b && !b.disabled) b.click(); })()`).catch(() => {}); };
+const docPath = (name) => path.join(packaged ? process.resourcesPath : path.join(__dirname, ".."), "docs", name);
+const openDoc = (name) => { const p = docPath(name); if (fs.existsSync(p)) shell.openPath(p); else dialog.showMessageBox(win, { type: "info", message: "That guide was not found next to the app.", detail: p }); };
+
+async function openScript() {
+  if (!win) return;
+  const r = await dialog.showOpenDialog(win, { title: "Open a script", properties: ["openFile"], filters: [{ name: "Script (Markdown or text)", extensions: ["md", "txt", "markdown"] }] });
+  if (r.canceled || !r.filePaths[0]) return;
+  let text;
+  try {
+    const st = fs.statSync(r.filePaths[0]);
+    if (st.size > 60000) { await dialog.showMessageBox(win, { type: "warning", message: "That script is too long.", detail: "Use a script under 60,000 characters (about 12 pages)." }); return; }
+    text = fs.readFileSync(r.filePaths[0], "utf-8");
+  } catch { await dialog.showMessageBox(win, { type: "error", message: "Could not read that file." }); return; }
+  // The words go into the start box as data (JSON), never as code; the page then reads them like pasted text.
+  win.webContents.executeJavaScript(`(() => { const a = document.getElementById("again"); if (a && !a.disabled && document.getElementById("start").hidden) a.click(); const i = document.getElementById("idea"); if (i) { i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event("input", { bubbles: true })); i.focus(); } })()`).catch(() => {});
+}
+
+function buildMenu() {
+  const dev = !packaged;
+  return Menu.buildFromTemplate([
+    { label: "&File", submenu: [
+      { label: "&New video", accelerator: "CmdOrCtrl+N", click: () => press("again") },
+      { label: "Open a &script…", accelerator: "CmdOrCtrl+O", click: openScript },
+      { label: "Your &videos folder", click: () => { fs.mkdirSync(HOME_DIR, { recursive: true }); shell.openPath(HOME_DIR); } },
+      { type: "separator" },
+      { label: "&Update video", accelerator: "CmdOrCtrl+Return", click: () => press("update") },
+      { label: "Save &final video", accelerator: "CmdOrCtrl+S", click: () => press("final") },
+      { type: "separator" },
+      { label: "S&ettings and keys…", accelerator: "CmdOrCtrl+,", click: () => press("gear") },
+      { type: "separator" }, { role: "quit", label: "E&xit" } ] },
+    { label: "&Edit", submenu: [
+      { role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" } ] },
+    { label: "&View", submenu: [
+      { role: "reload" }, { type: "separator" }, { role: "zoomIn" }, { role: "zoomOut" }, { role: "resetZoom" }, { type: "separator" }, { role: "togglefullscreen" },
+      ...(dev ? [{ type: "separator" }, { role: "toggleDevTools" }] : []) ] },
+    { label: "&Window", submenu: [{ role: "minimize" }, { role: "close" }] },
+    { label: "&Help", submenu: [
+      { label: "&User guide", accelerator: "F1", click: () => openDoc("USER_GUIDE.md") },
+      { label: "Setting up &keys", click: () => openDoc("SETUP_KEYS.md") },
+      { label: "What is &planned", click: () => openDoc("ROADMAP.md") },
+      { label: "How it was &tested", click: () => openDoc("QA.md") },
+      { type: "separator" },
+      { label: "&About QuickPath", click: () => dialog.showMessageBox(win, { type: "info", title: "About QuickPath", message: `QuickPath ${app.getVersion()}`, detail: "Type an idea or open a script, get a finished video.\nVideos are made on this computer with EffectCraft. Paid AI parts (pictures, voices, music, clips) only run after you confirm a price, and stop at your spending limit.\nYour keys stay in Windows Credential Manager." }) } ] },
+  ]);
+}
+
 app.whenReady().then(() => {
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: "File", submenu: [
-      { label: "Open the QuickPath folder", click: () => shell.openPath(require("node:path").join(require("node:os").homedir(), "Documents", "QuickPath")) },
-      { type: "separator" }, { role: "quit" } ] },
-    { label: "View", submenu: [{ role: "reload" }, { role: "togglefullscreen" }, { role: "zoomIn" }, { role: "zoomOut" }, { role: "resetZoom" }] },
-  ]));
+  Menu.setApplicationMenu(buildMenu());
   server = start(0);                                           // any free port, on 127.0.0.1 only
   server.once("listening", open);
 });

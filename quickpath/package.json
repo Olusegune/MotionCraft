@@ -39,6 +39,11 @@
       {
         "from": "ui",
         "to": "ui"
+      },
+      {
+        "from": "docs",
+        "to": "docs",
+        "filter": ["USER_GUIDE.md", "SETUP_KEYS.md", "ROADMAP.md", "QA.md"]
       }
     ],
     "asar": true,
