@@ -19,14 +19,20 @@ export type VoiceCue = { file: string; start: number; seconds: number };
 export type MusicCue = { file: string; db: number; seconds?: number };
 export type Sound = { voices: (VoiceCue | null)[]; music: MusicCue | null };
 
+/** The voice that speaks a scene: its own, else the video's, else none (a valid choice only). */
+export function sceneVoice(plan: Plan, s: { voice?: string }): string {
+  for (const v of [s.voice, plan.voice]) if (v && VOICE_CHOICE.test(v)) return v;
+  return "";
+}
+
 /** Resolves the plan's sound. Scenes are lengthened (never shortened) to fit their voice; the returned plan carries the new lengths. */
 export async function resolveSound(dir: string, planIn: Plan): Promise<{ plan: Plan; sound: Sound }> {
   const plan: Plan = { ...planIn, scenes: planIn.scenes.map((s) => ({ ...s })) };
-  const voice = plan.voice && VOICE_CHOICE.test(plan.voice) ? plan.voice : "";
   const lines: (Awaited<ReturnType<typeof lineFor>>)[] = [];
   for (const s of plan.scenes) {
+    const voice = sceneVoice(plan, s);                 // a scene's own voice (a character) wins over the video's voice (the narrator)
     const line = voice ? await lineFor(dir, voice, spokenText(s)) : null;
-    if (voice && !line && (voice.startsWith("openai:") || voice.startsWith("kie:"))) throw new SoundRefused("Make the voiceover first: that voice has not been made yet, and it needs your confirmation.");
+    if (voice && !line && spokenText(s) && (voice.startsWith("openai:") || voice.startsWith("kie:"))) throw new SoundRefused("Make the voiceover first: that voice has not been made yet, and it needs your confirmation.");
     lines.push(line);
     if (line) s.seconds = Math.max(s.seconds, Math.ceil((VOICE_LEAD + line.info.seconds + VOICE_TAIL) * 10) / 10);
   }

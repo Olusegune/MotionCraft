@@ -259,3 +259,46 @@ test("the page offers each of these only where they make sense", async () => {
   for (const needle of ["Animate this picture", "Make with AI", "/api/ai/animate/quote", "/api/ai/music/quote", "kieVoices"]) assert.ok(js.includes(needle), needle);
   assert.ok(!/innerHTML|eval\(|new Function/.test(js));
 });
+
+test("a script becomes a project: a narrator, a different voice for a character, nothing spent; each voice is quoted and made for its own scenes", async () => {
+  const { readFileSync: rf } = await import("node:fs");
+  const script = rf(new URL("../samples/the-day-we-built-superintelligence.md", import.meta.url), "utf-8");
+  const before = await spent();
+  const r = await post("/api/script", { script });
+  assert.equal(r.status, 200, r.text);
+  const plan = r.json;
+  assert.equal(plan.scenes.length, 7);
+  assert.equal(plan.scriptSeconds, 90);
+  assert.match(plan.voice, /^kie:/, "a narrator is chosen when a Kie key exists");
+  assert.match(plan.scenes[4].voice, /^kie:/, "Bisi speaks in a different voice");
+  assert.notEqual(plan.scenes[4].voice, plan.voice);
+  assert.equal(plan.scenes.filter((s: any) => s.voice).length, 1, "only the character's scene has its own voice");
+  assert.equal(await spent(), before, "reading a script spends nothing");
+  assert.equal((await post("/api/script", { script: "no timed rows here" })).status, 400);
+
+  const id = plan.id as string;
+  const q = (await post("/api/voice/quote", { id, plan })).json;
+  assert.equal(q.needed, true);
+  assert.match(q.what, /7 lines of speech/);
+  assert.ok(Math.abs(q.estimateUsd - 7 * 0.03) < 0.0001, `7 lines, each billed as a block. Got ${q.estimateUsd}`);
+  const sentBefore = seen.length;
+  const made = await post("/api/voice/make", { id, token: q.token, plan });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(made.json.made, 7);
+  const sent = seen.slice(sentBefore).filter((s) => s.path === "/jobs/createTask");
+  assert.equal(sent.filter((s) => s.body.input.voice === plan.scenes[4].voice.slice(4)).length, 1, "exactly one line in the character's voice");
+  assert.equal(sent.filter((s) => s.body.input.voice === plan.voice.slice(4)).length, 6, "six lines in the narrator's voice");
+  assert.equal((await post("/api/voice/quote", { id, plan })).json.needed, false, "all seven saved, none paid for twice");
+});
+
+test("without a Kie key a script still opens, with no voices chosen", async () => {
+  const { setStore: set, MemoryStore: Mem } = await import("../src/keys.ts");
+  const saved = process.env.KIE_API_KEY;
+  delete process.env.KIE_API_KEY; set(new Mem());
+  try {
+    const r = await post("/api/script", { script: "| **00:00–00:05** | **One.** A picture. | **VO:** “Hello there.” |" });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.json.voice, undefined);
+    assert.equal(r.json.scenes[0].say, "Hello there.");
+  } finally { process.env.KIE_API_KEY = saved; set(new Mem()); }
+});

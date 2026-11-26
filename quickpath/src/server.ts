@@ -16,9 +16,10 @@ import { generatePicture, picturePrompt, Spend, SpendRefused } from "./ai.ts";
 import { canSaveKeys, keyStatus, kieKey, PROVIDERS, providerKey, removeKey, saveKey, type Provider } from "./keys.ts";
 import { effectiveCap, saveCap } from "./settings.ts";
 import { MOODS } from "./music.ts";
-import { resolveSound, SoundRefused, type Level } from "./sound.ts";
+import { resolveSound, sceneVoice, SoundRefused, type Level } from "./sound.ts";
 import { KIE_VOICES, knownVoice, makeKieLines, makeOpenAILines, OPENAI_VOICES, spokenText, voiceMissing, windowsVoices } from "./voice.ts";
 import { dollars, download, KieError, runTask, uploadPicture, type KieOpts } from "./kie.ts";
+import { isNarrator, parseScript } from "./script.ts";
 import { audioInfo, audioKind, AUDIO_NAME, MAX_AUDIO_BYTES, wavInfo } from "./wav.ts";
 
 // Where the page lives: QUICKPATH_UI when the desktop app sets it, else the ui folder beside src. (The bundled desktop build has no import.meta.url.)
@@ -80,6 +81,18 @@ export async function removeProject(id: string): Promise<"recycled" | "deleted">
   return "deleted";
 }
 
+/** The paid voices a plan uses (a scene's own voice, else the video's), each with the distinct words it must speak. */
+function paidJobs(plan: Plan): { voice: string; texts: string[] }[] {
+  const by = new Map<string, Set<string>>();
+  for (const s of plan.scenes) {
+    const v = sceneVoice(plan, s);
+    if (!v.startsWith("kie:") && !v.startsWith("openai:")) continue;
+    (by.get(v) ?? by.set(v, new Set()).get(v)!).add(spokenText(s));
+  }
+  return [...by].map(([voice, set]) => ({ voice, texts: [...set] }));
+}
+const jobKey = (jobs: { voice: string; texts: string[] }[]) => jobs.map((j) => `${j.voice}:${j.texts.join("|")}`).join("||");
+
 /** What Settings shows. Whether each key is set and where it comes from, never the key. */
 async function settingsView() {
   const keys: Record<string, { set: boolean; source: string | null }> = {};
@@ -125,15 +138,16 @@ const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSy
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}) }));
-  if (scenes.some((s: { headline: string }) => !s.headline)) throw new Refused("Every scene needs some words.");
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}) }));
+  if (scenes.some((s: { headline: string; card?: string; picture?: string; note?: string }) => !s.headline && !s.card && !s.picture && !s.note)) throw new Refused("Every scene needs some words (or a picture or clip).");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
   const voice = typeof raw.voice === "string" && knownVoice(raw.voice) ? raw.voice : undefined;
   const m = raw.music;
   const level: Level = m?.level === "soft" || m?.level === "loud" ? m.level : "medium";
   const music = m && typeof m.file === "string" && AUDIO_NAME.test(m.file) ? { file: m.file, level } : m && typeof m.mood === "string" && MOODS.some((x) => x.id === m.mood) ? { mood: m.mood, level } : undefined;
-  return { title: text(raw.title, 60) || scenes[0].headline, look: lookById(raw.look).id, scenes, source: raw.source === "model" ? "model" : "words", ...(voice ? { voice } : {}), ...(music ? { music } : {}) };
+  const refs = Array.isArray(raw.refs) ? raw.refs.slice(0, 24).filter((r: any) => r && typeof r.name === "string" && MEDIA_NAME.test(r.name) && !r.name.endsWith(".mp4")).map((r: any) => ({ name: r.name, label: text(r.label, 40) || "Reference" })) : [];
+  return { title: text(raw.title, 60) || scenes[0].headline || scenes[0].card || "My video", look: lookById(raw.look).id, scenes, source: raw.source === "model" ? "model" : "words", ...(voice ? { voice } : {}), ...(music ? { music } : {}), ...(refs.length ? { refs } : {}) };
 }
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -267,6 +281,19 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         mkdirSync(join(HOME, "projects", id, "assets"), { recursive: true });
         return send(res, 200, { ...(await makePlan(idea, Number(b.seconds) || 15)), id });
       }
+      if (req.method === "POST" && url.pathname === "/api/script") {
+        const b = await readJson(req);
+        let parsed;
+        try { parsed = parseScript(String(b.script ?? "")); } catch (e) { throw new Refused((e as Error).message); }
+        const id = randomBytes(6).toString("hex");
+        mkdirSync(join(HOME, "projects", id, "assets"), { recursive: true });
+        const kieSet = !!(await providerKey("kie"));
+        const narrator = typeof b.narrator === "string" && knownVoice(b.narrator) ? b.narrator : kieSet ? `kie:${KIE_VOICES.find((v) => v.name === "Daniel")!.id}` : "";
+        const character = typeof b.character === "string" && knownVoice(b.character) ? b.character : kieSet ? `kie:${KIE_VOICES.find((v) => v.name === "Jessica")!.id}` : "";
+        const scenes = parsed.scenes.map(({ speaker, sound, ...s }) => ({ ...s, ...(!isNarrator(speaker) && character ? { voice: character } : {}), ...(sound ? { note: `${s.note ?? ""} Sound: ${sound}`.trim().slice(0, 900) } : {}) }));
+        const plan = checkPlan({ title: parsed.title, look: parsed.look, scenes, voice: narrator || undefined, source: "words" });
+        return send(res, 200, { ...plan, id, scriptSeconds: parsed.scriptSeconds });
+      }
       if (req.method === "POST" && url.pathname === "/api/render") {
         const b = await readJson(req);
         const out = await serial(() => render(b.plan, b.shape, b.quality === "final" ? "final" : "draft", b.id));
@@ -335,34 +362,37 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const b = await readJson(req);
         const dir = projectDir(String(b.id ?? ""));
         const plan = checkPlan(b.plan);
-        const kie = !!plan.voice?.startsWith("kie:"), openai = !!plan.voice?.startsWith("openai:");
-        if (!plan.voice || (!kie && !openai)) return send(res, 200, { needed: false });
-        const texts = plan.scenes.map((x) => spokenText(x));
-        const miss = voiceMissing(dir, plan.voice, texts);
-        if (miss.chars === 0) return send(res, 200, { needed: false });
-        if (!(await providerKey(kie ? "kie" : "openai"))) throw new Refused(kie ? NO_KIE : NO_OPENAI);
-        const offer = kie
-          ? { provider: "Kie.ai", model: `ElevenLabs voice ${KIE_VOICES.find((v) => v.id === plan.voice!.slice(4))?.name ?? ""}`.trim(), usd: Math.max(0.001, miss.usd), note: "Kie.ai charges about $0.03 for each line of speech (up to 1,000 characters), so every scene costs about that, however short. The real cost is read back from Kie afterwards.", what: `${miss.lines} line${miss.lines === 1 ? "" : "s"} of speech` }
-          : { provider: "OpenAI", model: "tts-1 voice " + plan.voice.slice(7), usd: Math.max(0.001, miss.usd), note: "Priced by OpenAI at $15 per million characters.", what: `${miss.chars} characters of speech` };
-        return send(res, 200, { needed: true, ...spend.quote(b.id, texts.join("|"), "16:9", offer) });
+        const jobs = paidJobs(plan);
+        if (!jobs.length) return send(res, 200, { needed: false });
+        let usd = 0, lines = 0, chars = 0;
+        for (const j of jobs) { const m = voiceMissing(dir, j.voice, j.texts); usd += m.usd; lines += m.lines; chars += m.chars; }
+        if (chars === 0) return send(res, 200, { needed: false });
+        const kie = jobs.some((j) => j.voice.startsWith("kie:")), openai = jobs.some((j) => j.voice.startsWith("openai:"));
+        if (kie && !(await providerKey("kie"))) throw new Refused(NO_KIE);
+        if (openai && !(await providerKey("openai"))) throw new Refused(NO_OPENAI);
+        const names = [...new Set(jobs.map((j) => j.voice.startsWith("kie:") ? (KIE_VOICES.find((v) => v.id === j.voice.slice(4))?.name ?? "") : j.voice.slice(7)))].filter(Boolean).join(", ");
+        const offer = kie && !openai
+          ? { provider: "Kie.ai", model: `ElevenLabs voice${names.includes(",") ? "s" : ""} ${names}`.trim(), usd: Math.max(0.001, Math.round(usd * 10000) / 10000), note: "Kie.ai charges about $0.03 for each line of speech (up to 1,000 characters), so every scene costs about that, however short. The real cost is read back from Kie afterwards.", what: `${lines} line${lines === 1 ? "" : "s"} of speech` }
+          : { provider: kie ? "Kie.ai and OpenAI" : "OpenAI", model: `voice ${names}`.trim(), usd: Math.max(0.001, Math.round(usd * 10000) / 10000), note: kie ? "Kie.ai charges about $0.03 a line; OpenAI $15 per million characters." : "Priced by OpenAI at $15 per million characters.", what: `${chars} characters of speech` };
+        return send(res, 200, { needed: true, ...spend.quote(b.id, jobKey(jobs), "16:9", offer) });
       }
       if (req.method === "POST" && url.pathname === "/api/voice/make") {
         const b = await readJson(req);
         const dir = projectDir(String(b.id ?? ""));
         const plan = checkPlan(b.plan);
-        const kie = !!plan.voice?.startsWith("kie:"), openai = !!plan.voice?.startsWith("openai:");
-        if (!plan.voice || (!kie && !openai)) throw new Refused("Only paid voices need to be made first.");
-        const texts = plan.scenes.map((x) => spokenText(x));
-        const held = spend.redeem(String(b.token ?? ""), String(b.id), texts.join("|"));
-        const key = await providerKey(kie ? "kie" : "openai");
-        if (!key) throw new Refused(kie ? NO_KIE : NO_OPENAI);
-        if (kie) {
-          const r = await makeKieLines(dir, plan.voice, texts, key, kieOpts());
-          spend.record(String(b.id), r.usd, `${r.made} spoken lines`, held.offer);
-          return send(res, 200, { made: r.made, spentUsd: spend.spent() });
+        const jobs = paidJobs(plan);
+        if (!jobs.length) throw new Refused("Only paid voices need to be made first.");
+        const held = spend.redeem(String(b.token ?? ""), String(b.id), jobKey(jobs));
+        const kieKey = jobs.some((j) => j.voice.startsWith("kie:")) ? await providerKey("kie") : null;
+        const openaiKey = jobs.some((j) => j.voice.startsWith("openai:")) ? await providerKey("openai") : null;
+        if (jobs.some((j) => j.voice.startsWith("kie:")) && !kieKey) throw new Refused(NO_KIE);
+        if (jobs.some((j) => j.voice.startsWith("openai:")) && !openaiKey) throw new Refused(NO_OPENAI);
+        let made = 0, usd = 0;
+        for (const j of jobs) {
+          if (j.voice.startsWith("kie:")) { const r = await makeKieLines(dir, j.voice, j.texts, kieKey!, kieOpts()); made += r.made; usd += r.usd; }
+          else { const n = await makeOpenAILines(dir, j.voice, j.texts, openaiKey!, { base: process.env.QUICKPATH_OPENAI_BASE }); made += n; }
         }
-        const made = await makeOpenAILines(dir, plan.voice, texts, key, { base: process.env.QUICKPATH_OPENAI_BASE });
-        spend.record(String(b.id), held.offer.usd, `${made} spoken lines`, held.offer);
+        spend.record(String(b.id), kieKey && !openaiKey ? usd : held.offer.usd, `${made} spoken lines`, held.offer);
         return send(res, 200, { made, spentUsd: spend.spent() });
       }
       if (req.method === "POST" && url.pathname === "/api/ai/music/quote") {

@@ -57,6 +57,7 @@ function shapeClass() { const sc = $("screen"), r = ratioOf(state.shape); sc.cla
 
 function drawScenes() {
   const ol = $("scenes"); ol.textContent = "";
+  if (state.plan && state.id) drawRefs();
   state.plan.scenes.forEach((s, i) => {
     const li = document.createElement("li"); li.className = "scene"; li.dataset.i = String(i);
     const top = document.createElement("div"); top.className = "top2";
@@ -74,11 +75,30 @@ function drawScenes() {
     h.addEventListener("input", () => { s.headline = h.value; touch(); });
     const sub = document.createElement("input"); sub.value = s.sub; sub.maxLength = 120; sub.placeholder = "Small line (optional)"; sub.setAttribute("aria-label", `Scene ${i + 1} small line`);
     sub.addEventListener("input", () => { s.sub = sub.value; touch(); });
+    if (s.card !== undefined || s.note) h.placeholder = "Words on screen (empty: none)";
     li.append(top, h, sub);
-    if (state.plan.voice) {
+    if (s.card !== undefined || s.note) {
+      const card = document.createElement("input"); card.value = s.card || ""; card.maxLength = 60; card.placeholder = "Time card (a few words shown low in the frame, optional)"; card.setAttribute("aria-label", `Scene ${i + 1} time card`);
+      card.addEventListener("input", () => { if (card.value) s.card = card.value; else delete s.card; touch(); });
+      li.append(card);
+    }
+    if (state.plan.voice || s.voice) {
       const say = document.createElement("input"); say.className = "say"; say.value = s.say || ""; say.maxLength = 600; say.placeholder = "Voice says (empty: reads the words above)"; say.setAttribute("aria-label", `Scene ${i + 1} voice says`);
       say.addEventListener("input", () => { s.say = say.value; touch(); });
       li.append(say);
+    }
+    if (state.plan.voice || s.voice) {
+      const vs = document.createElement("select"); vs.className = "say"; vs.setAttribute("aria-label", `Scene ${i + 1} speaker`);
+      const same = document.createElement("option"); same.value = ""; same.textContent = "Speaker: same voice as the video"; vs.appendChild(same);
+      for (const o of $("voice").options) if (o.value) vs.appendChild(o.cloneNode(true));
+      vs.value = s.voice || "";
+      vs.addEventListener("change", () => { if (vs.value) s.voice = vs.value; else delete s.voice; touch(); });
+      li.append(vs);
+    }
+    if (s.note !== undefined) {
+      const note = document.createElement("textarea"); note.className = "say"; note.rows = 3; note.maxLength = 900; note.value = s.note; note.placeholder = "Picture direction (also the starting words for an AI clip)"; note.setAttribute("aria-label", `Scene ${i + 1} picture direction`);
+      note.addEventListener("input", () => { s.note = note.value; touch(); });
+      li.append(note);
     }
     li.append(mediaRow(s, i)); ol.appendChild(li);
   });
@@ -153,7 +173,65 @@ function mediaRow(s, i) {
   label.appendChild(input);
   const ai = document.createElement("button"); ai.type = "button"; ai.className = "btn quiet small"; ai.textContent = "Make a picture";
   ai.addEventListener("click", () => askPicture(s, i));
-  row.append(label, ai); return row;
+  row.append(label, ai);
+  if (state.plan.refs && state.plan.refs.length) {
+    const pick = document.createElement("select"); pick.setAttribute("aria-label", `Use a reference picture for scene ${i + 1}`); pick.style.width = "auto";
+    const first = document.createElement("option"); first.value = ""; first.textContent = "Use a reference…"; pick.appendChild(first);
+    for (const r of state.plan.refs) { const o = document.createElement("option"); o.value = r.name; o.textContent = r.label; pick.appendChild(o); }
+    pick.addEventListener("change", () => { if (!pick.value) return; s.picture = pick.value; drawScenes(); touch(); });
+    row.append(pick);
+  }
+  return row;
+}
+
+// The reference shelf: pictures kept for the whole video (characters, places, props). A sheet of panels is cut into pictures here, in the page, and each is saved as a PNG.
+async function addRef(blob, label) {
+  const r = await fetch(`/api/upload?id=${encodeURIComponent(state.id)}`, { method: "POST", headers: { "content-type": "image/png" }, body: blob });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Could not add that picture.");
+  state.plan.refs = [...(state.plan.refs || []), { name: j.name, label: label.slice(0, 40) || "Reference" }].slice(-24);
+}
+function drawRefs() {
+  let box = $("refs");
+  if (!box) { box = document.createElement("section"); box.id = "refs"; box.className = "refs"; $("scenes").before(box); }
+  box.textContent = "";
+  const h = document.createElement("h3"); h.textContent = "References"; box.append(h);
+  const p = document.createElement("p"); p.className = "note"; p.textContent = "Pictures kept for the whole video. Cut a sheet of panels into pictures, then use any of them on a scene.";
+  box.append(p);
+  const strip = document.createElement("div"); strip.className = "pic";
+  for (const r of state.plan.refs || []) {
+    const fig = document.createElement("figure"); fig.style.margin = "0"; fig.style.textAlign = "center";
+    const img = document.createElement("img"); img.src = `/media/${state.id}/assets/${r.name}`; img.alt = r.label; img.style.height = "56px"; img.style.borderRadius = "6px";
+    const cap = document.createElement("figcaption"); cap.className = "note"; cap.textContent = r.label;
+    fig.append(img, cap); strip.append(fig);
+  }
+  box.append(strip);
+  const num = (id, v, label, max) => { const w = document.createElement("label"); w.className = "note"; w.textContent = label + " "; const i = document.createElement("input"); i.type = "number"; i.min = "0"; i.max = String(max); i.value = String(v); i.style.width = "72px"; i.id = id; w.append(i); return w; };
+  const row = document.createElement("div"); row.className = "pic";
+  const file = document.createElement("input"); file.type = "file"; file.id = "refFile"; file.accept = "image/png,image/jpeg,image/webp"; file.setAttribute("aria-label", "Choose a sheet or a picture");
+  const labels = document.createElement("input"); labels.id = "refLabels"; labels.placeholder = "Names, left to right then down (e.g. Pencil, Drawing, Candle)"; labels.setAttribute("aria-label", "Names of the panels"); labels.style.minWidth = "260px";
+  const go = document.createElement("button"); go.type = "button"; go.className = "btn quiet small"; go.textContent = "Cut into pictures";
+  row.append(file, num("refCols", 3, "Across", 8), num("refRows", 2, "Down", 8), num("refTop", 0, "Title band at the top, %", 40), num("refBot", 0, "Caption band under each panel, %", 40), labels, go);
+  box.append(row);
+  go.addEventListener("click", async () => {
+    const f = file.files && file.files[0]; if (!f) { say("Choose a picture or a sheet first.", "error"); return; }
+    if (f.size > 25 * MB) { say("That file is over 25 MB.", "error"); return; }
+    const bot = Math.min(40, Math.max(0, Number($("refBot").value) || 0)) / 100;
+    const cols = Math.max(1, Number($("refCols").value) || 1), rows = Math.max(1, Number($("refRows").value) || 1), top = Math.min(40, Math.max(0, Number($("refTop").value) || 0)) / 100;
+    const names = $("refLabels").value.split(",").map((x) => x.trim());
+    say("Cutting the sheet…");
+    try {
+      const bmp = await createImageBitmap(f);
+      const cw = Math.floor(bmp.width / cols), ch = Math.floor((bmp.height * (1 - top)) / rows), y0 = Math.round(bmp.height * top);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const keep = Math.floor(ch * (1 - bot)), cv = document.createElement("canvas"); cv.width = cw; cv.height = keep;
+        cv.getContext("2d").drawImage(bmp, c * cw, y0 + r * ch, cw, keep, 0, 0, cw, keep);
+        const blob = await new Promise((ok) => cv.toBlob(ok, "image/png"));
+        await addRef(blob, names[r * cols + c] || `${f.name.replace(/\.[^.]+$/, "")} ${r * cols + c + 1}`);
+      }
+      drawRefs(); drawScenes(); touch(); say("The pictures are on the shelf. Use them on any scene.", "ok");
+    } catch (e) { say(e.message || "Could not cut that picture.", "error"); }
+  });
 }
 
 // Nothing is spent until the person presses Confirm: the quote shows the model, the provider, an estimate and what is sent.
@@ -214,7 +292,7 @@ async function askMusic() {
 // A scene's picture brought to life as a short video clip. The window says the picture is uploaded to Kie.ai, and shows the price, before anything is sent.
 async function askAnimate(s, i) {
   say("");
-  const first = `${s.headline}. Gentle natural motion, a very slow camera push-in, soft light.`;
+  const first = s.note ? s.note.replace(/ Sound:.*$/, "").slice(0, 420) : `${s.headline}. Gentle natural motion, a very slow camera push-in, soft light.`;
   let quote;
   try { quote = await api("/api/ai/animate/quote", { id: state.id, picture: s.picture, prompt: first }); } catch (e) { say(e.message, "error"); return; }
   const ok = await confirmSpend(quote, { title: "Bring this picture to life?", forWhat: `Scene ${i + 1}`, words: quote.prompt, editable: true, button: "Confirm and make the clip" });
@@ -231,7 +309,8 @@ async function askAnimate(s, i) {
 
 // A paid voice must be made, and confirmed, before the video is. Windows voices need nothing.
 async function ensureVoice() {
-  if (!state.plan.voice || !(state.plan.voice.startsWith("openai:") || state.plan.voice.startsWith("kie:"))) return true;
+  const paid = (v) => !!v && (v.startsWith("openai:") || v.startsWith("kie:"));
+  if (!paid(state.plan.voice) && !state.plan.scenes.some((x) => paid(x.voice))) return true;
   const q = await api("/api/voice/quote", { id: state.id, plan: state.plan });
   if (!q.needed) return true;
   const words = state.plan.scenes.map((s) => (s.say && s.say.trim()) || [s.headline, s.sub].filter(Boolean).join(". ")).join("\n");
@@ -289,10 +368,11 @@ async function make() {
   const idea = $("idea").value.trim();
   if (idea.length < 3) { $("startnote").textContent = "Tell me a little about your video first."; $("idea").focus(); return; }
   $("startnote").textContent = "";
-  $("make").disabled = true; $("startnote").textContent = "Writing the scenes…";
+  const isScript = /\|\s*\**\s*\d{1,2}:\d{2}\s*[\u2013\u2014-]\s*\d{1,2}:\d{2}/.test(idea);
+  $("make").disabled = true; $("startnote").textContent = isScript ? "Reading your script…" : "Writing the scenes…";
   const slow = setTimeout(() => { $("startnote").textContent = "Still writing. A model on your computer can take a moment; if it takes too long, your own words are used."; }, 7000);
   try {
-    state.plan = await api("/api/plan", { idea, seconds: state.seconds });
+    state.plan = isScript ? await api("/api/script", { script: idea }) : await api("/api/plan", { idea, seconds: state.seconds });
     state.idea = idea; state.id = state.plan.id; state.dirty = false; state.musicFile = null; $("voice").value = ""; $("music").value = ""; $("musicOpts").hidden = true; $("musicFileLabel").hidden = true;
     $("start").hidden = true; $("recent").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
     await render("draft");

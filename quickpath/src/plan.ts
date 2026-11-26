@@ -2,9 +2,10 @@
 // Nothing here needs a key or the network beyond 127.0.0.1.
 import { LOOKS, suggestLook, lookById } from "./looks.ts";
 
-export type Scene = { headline: string; sub: string; seconds: number; picture?: string; say?: string };
+export type Scene = { headline: string; sub: string; seconds: number; picture?: string; say?: string; card?: string; note?: string; voice?: string };
+export type Ref = { name: string; label: string };
 export type Music = { mood?: string; file?: string; level?: "soft" | "medium" | "loud" };
-export type Plan = { title: string; look: string; scenes: Scene[]; source: "model" | "words"; voice?: string; music?: Music };
+export type Plan = { title: string; look: string; scenes: Scene[]; source: "model" | "words"; voice?: string; music?: Music; refs?: Ref[] };
 export type Shape = "16:9" | "9:16" | "1:1" | "4:5" | "21:9" | "4:3";
 
 /** Every shape the app makes: the size of the finished video, and what it is for. The page shows these, and the server only accepts these. */

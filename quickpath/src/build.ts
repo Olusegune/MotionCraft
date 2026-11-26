@@ -99,7 +99,7 @@ async function text(ec: EffectCraft, name: string, value: string, size: number, 
 
 /** A scene's own picture or clip, filling the frame (never stretched), under a dark veil so the words stay readable. A picture pushes in slowly;
  * a clip plays from the start of its scene, and is trimmed if it is longer than the scene or holds its last frame if shorter. */
-async function media(ec: EffectCraft, dir: string, name: string, scene: number, t0: number, t1: number, width: number, height: number): Promise<boolean> {
+async function media(ec: EffectCraft, dir: string, name: string, scene: number, t0: number, t1: number, width: number, height: number, veilPct = 45): Promise<boolean> {
   if (!MEDIA_NAME.test(name)) return false;
   const file = join(dir, "assets", name);
   let bytes: Buffer;
@@ -125,7 +125,7 @@ async function media(ec: EffectCraft, dir: string, name: string, scene: number, 
     await key(Math.max(t1 - 0.04, t0), cover * 1.07);
   }
   const veil = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${scene} veil`, size: [width, height], fill: [0, 0, 0], position: [width / 2, height / 2] });
-  await ec.run("layer.setTransform", { layers: [veil.layer], prop: "opacity", value: 45 });
+  await ec.run("layer.setTransform", { layers: [veil.layer], prop: "opacity", value: veilPct });
   await ec.run("layer.timing", { layers: [veil.layer], in: t0, out: t1 });
   return true;
 }
@@ -169,21 +169,31 @@ export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape
     const t0 = Math.round(t * 100) / 100, t1 = Math.round((t + s.seconds) * 100) / 100;
     t += s.seconds;
     const n = i + 1;
-    const lay = layoutScene(s.headline, s.sub, width, height);
+    const words = !!s.headline;                                                      // a scene with only a picture (or a time card) draws no headline and no accent line
+    const lay = layoutScene(s.headline || " ", s.sub, width, height);
     const bg = await ec.run<{ layer: number }>("layer.newSolid", { name: `Scene ${n} background`, color: i % 2 ? look.bg2 : look.bg });
     await ec.run("layer.timing", { layers: [bg.layer], in: t0, out: t1 });
-    const pictured = s.picture ? await media(ec, dir, s.picture, n, t0, t1, width, height) : false;
+    const pictured = s.picture ? await media(ec, dir, s.picture, n, t0, t1, width, height, words || !!s.card ? 45 : 18) : false;
     const ink: Rgb = pictured ? [1, 1, 1] : look.text;
-    const bar = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${n} accent`, size: [lay.barW, lay.barH], fill: look.accent, position: [width / 2, lay.barY] });
-    await ec.run("layer.timing", { layers: [bar.layer], in: t0, out: t1 });
-    await fadeSlide(ec, bar.layer, t0, t1, width / 2, lay.barY, 18);
-    const head = await text(ec, `Scene ${n} headline`, lay.headline, lay.headSize, width / 2, lay.headY, ink);
-    await ec.run("layer.timing", { layers: [head], in: t0 + 0.05, out: t1 });
-    await fadeSlide(ec, head, t0 + 0.05, t1, width / 2, lay.headY, 36);
-    if (lay.sub) {
-      const sub = await text(ec, `Scene ${n} sub`, lay.sub, lay.subSize, width / 2, lay.subY, look.accent);
-      await ec.run("layer.timing", { layers: [sub], in: t0 + 0.25, out: t1 });
-      await fadeSlide(ec, sub, t0 + 0.25, t1, width / 2, lay.subY, 28);
+    if (words) {
+      const bar = await ec.run<{ layer: number }>("layer.newShape", { kind: "rect", name: `Scene ${n} accent`, size: [lay.barW, lay.barH], fill: look.accent, position: [width / 2, lay.barY] });
+      await ec.run("layer.timing", { layers: [bar.layer], in: t0, out: t1 });
+      await fadeSlide(ec, bar.layer, t0, t1, width / 2, lay.barY, 18);
+      const head = await text(ec, `Scene ${n} headline`, lay.headline, lay.headSize, width / 2, lay.headY, ink);
+      await ec.run("layer.timing", { layers: [head], in: t0 + 0.05, out: t1 });
+      await fadeSlide(ec, head, t0 + 0.05, t1, width / 2, lay.headY, 36);
+      if (lay.sub) {
+        const sub = await text(ec, `Scene ${n} sub`, lay.sub, lay.subSize, width / 2, lay.subY, look.accent);
+        await ec.run("layer.timing", { layers: [sub], in: t0 + 0.25, out: t1 });
+        await fadeSlide(ec, sub, t0 + 0.25, t1, width / 2, lay.subY, 28);
+      }
+    }
+    if (s.card) {                                                                    // a time card: small, low in the frame, for the first few seconds of the scene only
+      const size = Math.round(Math.min(height * 0.07, width * 0.05)), y = height * 0.88;
+      const card = await text(ec, `Scene ${n} time card`, s.card.toUpperCase(), size, width / 2, y, [1, 1, 1]);
+      const c1 = Math.min(t1, t0 + 3.4);
+      await ec.run("layer.timing", { layers: [card], in: t0 + 0.3, out: c1 });
+      await fadeSlide(ec, card, t0 + 0.3, c1, width / 2, y, 16);
     }
   }
   if (sound) await placeSound(ec, dir, sound, total);
