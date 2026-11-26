@@ -88,7 +88,8 @@ export const canSaveKeys = () => store !== null;
 
 const cache = new Map<Provider, { key: string | null; source: KeySource }>();
 // A key is letters, digits and a few marks. Voicekiller's is two parts, a User ID and a key, written USERID:APIKEY.
-const plausibleFor = (p: Provider, k: string) => (p === "voicekiller" ? /^[A-Za-z0-9_\-.]{1,100}:[A-Za-z0-9_\-.]{8,200}$/ : /^[A-Za-z0-9_\-.]{16,200}$/).test(k);
+// fal keys are written id:secret, so a colon is part of a real fal key.
+const plausibleFor = (p: Provider, k: string) => (p === "fal" ? /^[A-Za-z0-9_\-.]{4,100}:[A-Za-z0-9_\-.]{8,200}$|^[A-Za-z0-9_\-.]{16,200}$/ : p === "voicekiller" ? /^[A-Za-z0-9_\-.@+]{1,100}:[A-Za-z0-9_\-.]{8,200}$/ : /^[A-Za-z0-9_\-.]{16,200}$/).test(k);
 
 async function look(p: Provider): Promise<{ key: string | null; source: KeySource }> {
   const hit = cache.get(p);
@@ -118,7 +119,7 @@ export async function saveKey(p: Provider, raw: string): Promise<void> {
   if (!PROVIDERS.includes(p)) throw new Error("Unknown provider.");
   if (!store) throw new Error("Saving keys from here works on Windows. On this system, set the " + ENV[p] + " setting instead.");
   const key = raw.trim();
-  if (!plausibleFor(p, key)) throw new Error(p === "voicekiller" ? "That does not look right. Write your Voicekiller User ID, a colon, then your key, with no spaces (USERID:APIKEY)." : "That does not look like a key. Copy the whole key from your account page and paste it again.");
+  if (!plausibleFor(p, key)) throw new Error(p === "voicekiller" ? "That does not look right. Fill in both your Voicekiller User ID and your API key, exactly as they appear on your Voicekiller API page." : "That does not look like a key. Copy the whole key from your account page and paste it again.");
   await store.set(SAVED(p), key);
   cache.delete(p);
 }

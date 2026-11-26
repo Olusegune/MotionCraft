@@ -47,7 +47,7 @@ const STEPS = [
   ] },
   { h: "8. Settings and keys", img: ["08-settings", "The sliders button at the top right opens Settings: keys for each service, and your spending limit."], p: [
     "Paste a key into its box, press **Save key**, then **Check it works**. Keys are kept in Windows Credential Manager and never shown again.",
-    "**Kie.ai** (pictures, voices, music, clips), **ElevenLabs** (your own voices; paste the key), **Voicekiller** (paste `USERID:APIKEY`: your User ID, a colon, your key), **OpenAI** (voices), **fal** (not used yet). The full guide to getting each key is `SETUP_KEYS.md`.",
+    "**Kie.ai** (pictures, voices, music, clips), **ElevenLabs** (your own voices; paste the key), **Voicekiller** (two boxes: your User ID and your API key), **OpenAI** (voices), **fal** (not used yet). The full guide to getting each key is `SETUP_KEYS.md`.",
     "The **spending limit** (default $5) is a hard stop: QuickPath refuses anything that would pass it. You can change it here.",
   ] },
   { h: "9. Start from a script", img: ["09-script-pasted", "Paste a timed script: a table whose rows start with a time such as 00:10-00:22."], p: [

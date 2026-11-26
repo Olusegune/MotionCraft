@@ -90,7 +90,7 @@ A confirmation is used once, for that one thing. When a service bills through yo
 
 Paste a key into its box, press **Save key**, then **Check it works**. Keys are kept in Windows Credential Manager and never shown again.
 
-**Kie.ai** (pictures, voices, music, clips), **ElevenLabs** (your own voices; paste the key), **Voicekiller** (paste `USERID:APIKEY`: your User ID, a colon, your key), **OpenAI** (voices), **fal** (not used yet). The full guide to getting each key is `SETUP_KEYS.md`.
+**Kie.ai** (pictures, voices, music, clips), **ElevenLabs** (your own voices; paste the key), **Voicekiller** (two boxes: your User ID and your API key), **OpenAI** (voices), **fal** (not used yet). The full guide to getting each key is `SETUP_KEYS.md`.
 
 The **spending limit** (default $5) is a hard stop: QuickPath refuses anything that would pass it. You can change it here.
 

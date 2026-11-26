@@ -198,7 +198,7 @@ export function splitVoicekillerKey(key: string): { userId: string; apiKey: stri
 
 export async function speakVoicekiller(text: string, voiceName: string, key: string, opts: { fetchImpl?: typeof fetch; base?: string; instructions?: string } = {}): Promise<Buffer> {
   const k = splitVoicekillerKey(key);
-  if (!k) throw new Error("The Voicekiller key must be written USERID:APIKEY (both are on your Voicekiller API page). Save it again in Settings.");
+  if (!k) throw new Error("QuickPath needs both your Voicekiller User ID and your API key. Save them again in Settings.");
   const r = await (opts.fetchImpl ?? fetch)(`${opts.base ?? VOICEKILLER_BASE}/api/generate-speech`, {
     method: "POST", signal: AbortSignal.timeout(120_000),
     headers: { "api-key": k.apiKey, userid: k.userId, "content-type": "application/json" },

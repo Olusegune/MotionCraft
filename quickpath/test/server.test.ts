@@ -423,7 +423,7 @@ test("the Settings screen: a gear button and a window exist, key boxes are passw
   assert.match(js, /type: "password", autocomplete: "off", spellcheck: "false"/, "key boxes hide what is typed and are not remembered by the browser");
   assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/.test(js), "the page script builds nothing from strings of HTML");
   assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie/.test(js), "nothing is kept in the browser");
-  assert.match(js, /const key = input\.value; input\.value = ""/, "the box is emptied before the key is sent");
+  assert.match(js, /const key = input\.value, uid = userId \? userId\.value : undefined; input\.value = ""/, "the box is emptied before the key is sent");
   assert.ok(!/console\.(log|info|debug)/.test(js), "nothing is logged by the page");
 });
 

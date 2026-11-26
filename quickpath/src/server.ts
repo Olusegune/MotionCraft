@@ -171,7 +171,7 @@ async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> 
   }
   if (p === "voicekiller") {
     const k = splitVoicekillerKey(key);
-    if (!k) return { ok: false, message: "The Voicekiller key must be written USERID:APIKEY (both are on your Voicekiller API page). Save it again." };
+    if (!k) return { ok: false, message: "QuickPath needs both your Voicekiller User ID and your API key. Save them again in Settings." };
     try {
       const r = await fetch(`${process.env.QUICKPATH_VOICEKILLER_BASE ?? VOICEKILLER_BASE}/api/generate-speech/voicelist`, { method: "POST", headers: { "api-key": k.apiKey, userid: k.userId }, signal: AbortSignal.timeout(15_000) });
       if (r.status === 401 || r.status === 403) return { ok: false, message: "Voicekiller did not accept the User ID and key. Copy them again from your Voicekiller API page." };
@@ -207,7 +207,7 @@ async function checkKey(p: Provider): Promise<{ ok: boolean; message: string }> 
 const kieOpts = (): KieOpts => (process.env.QUICKPATH_KIE_BASE ? { base: process.env.QUICKPATH_KIE_BASE, allowLocalHttp: true, pollMs: 20 } : {});
 const NO_KIE = "No Kie.ai key was found. Add one in Settings (the sliders button at the top right), then try again.";
 const NO_ELEVEN = "No ElevenLabs key was found. Add one in Settings (the sliders button at the top right), then try again.";
-const NO_VK = "No Voicekiller key was found. Add it in Settings as USERID:APIKEY (the sliders button at the top right), then try again.";
+const NO_VK = "No Voicekiller key was found. Add your User ID and API key in Settings (the sliders button at the top right), then try again.";
 const NO_OPENAI = "No OpenAI key was found. Add one in Settings (the sliders button at the top right), then try again.";
 const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first."); return join(HOME, "projects", id); };
 
@@ -338,7 +338,9 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const b = await readJson(req);
         const p = String(b.provider ?? "") as Provider;
         if (!PROVIDERS.includes(p)) throw new Refused("Unknown provider.");
-        try { await saveKey(p, String(b.key ?? "")); } catch (e) { throw new Refused((e as Error).message); }
+        // Voicekiller wants a User ID as well as a key: the page sends them as two fields, and they are kept together as one entry
+        const raw = p === "voicekiller" && typeof b.userId === "string" ? `${b.userId.trim()}:${String(b.key ?? "").trim()}` : String(b.key ?? "");
+        try { await saveKey(p, raw); } catch (e) { throw new Refused((e as Error).message); }
         return send(res, 200, await settingsView());
       }
       if (req.method === "POST" && url.pathname === "/api/settings/key/remove") {

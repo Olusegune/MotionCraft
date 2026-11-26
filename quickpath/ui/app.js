@@ -723,12 +723,14 @@ async function renderSettings() {
 
   const row = (provider, title, what, where, cost) => {
     const k = s.keys[provider];
-    const input = el("input", { type: "password", autocomplete: "off", spellcheck: "false", placeholder: k.set ? "Paste a new key to replace it" : "Paste your key here", "aria-label": `${title} key` });
+    const input = el("input", { type: "password", autocomplete: "off", spellcheck: "false", placeholder: k.set ? "Paste a new key to replace it" : (provider === "voicekiller" ? "Paste your API key here" : "Paste your key here"), "aria-label": `${title} key` });
+    const userId = provider === "voicekiller" ? el("input", { type: "text", autocomplete: "off", spellcheck: "false", placeholder: "Your User ID", "aria-label": `${title} User ID` }) : null;
     const save = el("button", { class: "btn small primary", type: "button", text: "Save key" }); save.disabled = true;
-    input.addEventListener("input", () => { save.disabled = input.value.trim().length < 8; });
+    const ready = () => { save.disabled = input.value.trim().length < 8 || (userId !== null && userId.value.trim().length < 1); };
+    input.addEventListener("input", ready); if (userId) userId.addEventListener("input", ready);
     save.addEventListener("click", async () => {
       save.disabled = true; setMsg("Saving…");
-      try { const key = input.value; input.value = ""; await api("/api/settings/key", { provider, key }); setMsg(`${title} key saved. It is not shown again.`, "ok"); await renderSettings(); }
+      try { const key = input.value, uid = userId ? userId.value : undefined; input.value = ""; if (userId) userId.value = ""; await api("/api/settings/key", { provider, key, ...(uid !== undefined ? { userId: uid } : {}) }); setMsg(`${title} key saved. It is not shown again.`, "ok"); await renderSettings(); }
       catch (e) { setMsg(e.message, "error"); }
     });
     const check = el("button", { class: "btn small", type: "button", text: "Check it works" });
@@ -736,7 +738,7 @@ async function renderSettings() {
     const rm = el("button", { class: "btn small quiet", type: "button", text: "Remove" });
     rm.addEventListener("click", async () => { if (!confirm(`Remove the saved ${title} key from this computer?`)) return; try { await api("/api/settings/key/remove", { provider }); setMsg(`${title} key removed.`, "ok"); await renderSettings(); } catch (e) { setMsg(e.message, "error"); } });
     const keyrow = el("div", { class: "keyrow" });
-    if (s.canSaveKeys) keyrow.append(input, save);
+    if (s.canSaveKeys) { if (userId) keyrow.append(userId); keyrow.append(input, save); }
     const actions = el("div", { class: "keyrow" });
     if (k.set) actions.append(check);
     if (k.source === "saved") actions.append(rm);
@@ -750,7 +752,7 @@ async function renderSettings() {
   body.append(row("kie", "Pictures, voices, music and video (Kie.ai)", "One account for AI pictures (Imagen), voices (ElevenLabs), music (Suno) and video clips (Wan).", "Create a key in your Kie.ai account (kie.ai, API Key page), then paste it here.", "Pictures about $0.02, voices about $0.03 per 1,000 characters, a music track or a video clip a few cents to a few tens of cents. Always asked first."));
   body.append(row("openai", "Voices (OpenAI)", "More natural voiceovers. The free Windows voices need no key.", "Create a key in your OpenAI account (platform.openai.com, API keys), then paste it here.", "About $0.002 for a 15 second video, always asked first."));
   body.append(row("elevenlabs", "Voices (ElevenLabs, your own account)", "Voiceovers straight from your ElevenLabs account and plan, including voices you made or cloned there.", "In ElevenLabs open your profile, Developers, API keys, create a key, and paste it here.", "Billed against your ElevenLabs plan (about $0.15 per 1,000 characters if you go past it), always asked first."));
-  body.append(row("voicekiller", "Voices (Voicekiller, your own account)", "Voiceovers from your Voicekiller account, with its voices and cloned voices.", "On your Voicekiller API page copy your User ID and your API key, then paste them here written as USERID:APIKEY (the User ID, a colon, the key, no spaces).", "Billed by Voicekiller through your plan; QuickPath cannot see the price."));
+  body.append(row("voicekiller", "Voices (Voicekiller, your own account)", "Voiceovers from your Voicekiller account, with its voices and cloned voices.", "On your Voicekiller API page copy your User ID and your API key, then paste each into its own box here.", "Billed by Voicekiller through your plan; QuickPath cannot see the price."));
   body.append(row("fal", "fal (optional, not used yet)", "A second place to make AI pictures and videos. QuickPath does not use fal yet: saving a key now is safe, and a later version will.", "Create a key in your fal account (fal.ai, Keys page), then paste it here.", "Nothing is charged by saving it."));
 
   // The spending limit

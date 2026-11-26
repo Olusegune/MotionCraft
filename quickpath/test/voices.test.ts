@@ -173,10 +173,10 @@ test("Settings can check both keys, says what it found, and never echoes a key",
   assert.ok(!view.includes("el_test_") && !view.includes("vk_test_"), "no key in the settings view");
   assert.equal(JSON.parse(view).keys.elevenlabs.set, true);
   assert.equal(JSON.parse(view).keys.voicekiller.set, true);
-  // a Voicekiller key that is not USERID:APIKEY is explained when saved, and is never used if it arrives some other way
-  const refused = await post("/api/settings/key", { provider: "voicekiller", key: "justakeywithnocolonatall" });
-  assert.equal(refused.status, 400); assert.match(refused.json.error, /USERID:APIKEY/);
-  const saved = await post("/api/settings/key", { provider: "voicekiller", key: "user_77:another_key_0123456789" });
+  // a Voicekiller key with no User ID is explained when saved, and is never used if it arrives some other way
+  const refused = await post("/api/settings/key", { provider: "voicekiller", key: "justakeywithnouseridatall" });
+  assert.equal(refused.status, 400); assert.match(refused.json.error, /User ID and your API key/);
+  const saved = await post("/api/settings/key", { provider: "voicekiller", userId: "user_77@example.com", key: "another_key_0123456789" });
   assert.equal(saved.status, 200);
   assert.ok(!JSON.stringify(saved.json).includes("another_key"), "the key is not echoed back");
   process.env.VOICEKILLER_API_KEY = "justakeywithnocolon";
@@ -184,4 +184,11 @@ test("Settings can check both keys, says what it found, and never echoes a key",
   assert.equal((await post("/api/settings/check", { provider: "voicekiller" })).json.ok, false, "a key in the wrong shape is not used");
   process.env.VOICEKILLER_API_KEY = "user_42:vk_test_0123456789abcdef";
   (await import("../src/keys.ts")).forgetKeys();
+});
+
+test("a fal key (written id:secret) is accepted in Settings, and junk is still refused", async () => {
+  const good = "abcd1234-ef56-7890-abcd-ef1234567890:0123456789abcdef0123456789abcdef";
+  assert.equal((await post("/api/settings/key", { provider: "fal", key: good })).status, 200);
+  assert.ok(!JSON.stringify((await call("GET", "/api/settings")).json).includes("0123456789abcdef"), "the key is not echoed back");
+  for (const bad of ["short", "has spaces in it 0123456789", "a:b", "id:secret with space", "<script>alert(1)</script>"]) assert.equal((await post("/api/settings/key", { provider: "fal", key: bad })).status, 400, bad);
 });
