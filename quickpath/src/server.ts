@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { EffectCraft, EngineError } from "./ec.ts";
 import { buildComposition, renderVideo } from "./build.ts";
 import { LOOKS, lookById } from "./looks.ts";
-import { clamp, makePlan, pickModel, type Plan, type Shape } from "./plan.ts";
+import { clamp, makePlan, pickModel, SHAPE_LIST, SIZES, type Plan, type Shape } from "./plan.ts";
 import { imageInfo, MAX_PICTURE_BYTES, MEDIA_NAME } from "./images.ts";
 import { looksLikeMp4, MAX_CLIP_BYTES, mp4Info } from "./mp4.ts";
 import { generatePicture, picturePrompt, Spend, SpendRefused } from "./ai.ts";
@@ -32,7 +32,7 @@ const CANDIDATES = [
 const cliPath = () => CANDIDATES.find((p) => existsSync(p)) ?? "";
 
 const MIME: Record<string, string> = { ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".svg": "image/svg+xml", ".png": "image/png" };
-const SHAPES: Shape[] = ["16:9", "9:16", "1:1"];
+const SHAPES = Object.keys(SIZES) as Shape[];
 
 class Refused extends Error {}
 
@@ -201,7 +201,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       const url = new URL(req.url ?? "/", `http://${host}`);
 
       if (req.method === "GET" && url.pathname === "/api/status") {
-        return send(res, 200, { recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
+        return send(res, 200, { shapes: SHAPE_LIST, recycles: process.platform === "win32" && process.env.QUICKPATH_DELETE !== "permanent", engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
       }
       if (req.method === "GET" && url.pathname === "/api/projects") {
         return send(res, 200, { projects: listProjects() });

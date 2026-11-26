@@ -23,7 +23,7 @@ cents, and worked.
 
 ## 3. A person runs the manual test script
 
-`QA.md`, section 7: 30 steps for a clean Windows PC and a Mac. Whatever breaks becomes the next fix list.
+`QA.md`, section 7: 31 steps for a clean Windows PC and a Mac. Whatever breaks becomes the next fix list.
 
 ## 4. Release basics
 

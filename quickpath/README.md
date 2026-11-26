@@ -45,7 +45,20 @@ A picture or clip fills the frame and sits under a dark veil so the words stay r
 
 Every scene is a background colour, a short accent line, a headline and an optional small line, each fading and sliding in and out.
 The text is native EffectCraft text, so it stays editable when you open `video.ecproj`. Six looks (Midnight, Sunrise, Paper, Forest,
-Ocean, Pop) and three shapes (wide, tall, square).
+Ocean, Pop) and six shapes, each drawn to scale on its button:
+
+| Shape | Ratio | Size | Good for |
+|---|---|---|---|
+| Wide | 16:9 | 1920 x 1080 | YouTube, presentations, screens |
+| Tall | 9:16 | 1080 x 1920 | Phone stories, Reels, Shorts, TikTok |
+| Square | 1:1 | 1080 x 1080 | Feeds |
+| Portrait | 4:5 | 1080 x 1350 | Instagram and Facebook feed posts |
+| Cinema | 21:9 | 2560 x 1080 | Ultrawide screens, a film look |
+| Classic | 4:3 | 1440 x 1080 | Older screens, slides |
+
+(21:9 is the usual 2560 x 1080 ultrawide frame, a hair wider than an exact 21:9. Drafts are half size; all sizes are even numbers, as video needs.)
+For AI pictures: Imagen offers 1:1, 16:9, 9:16, 3:4 and 4:3, so Cinema asks for a 16:9 picture and Portrait a 3:4 one and the edges are trimmed to fill the frame; the
+request tells the model to keep the subject in the middle.
 
 ## Tests
 
@@ -53,7 +66,7 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-103 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
+110 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
 the server's refusals, awkward text and extremes on the real EffectCraft, and fuzzing of every file reader. The tests that need EffectCraft, ffmpeg or Windows
 voices report as skipped (never passed) when those are missing.
 

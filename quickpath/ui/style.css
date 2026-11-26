@@ -103,6 +103,11 @@ legend { color: var(--ink3); font-size: 12px; letter-spacing: 0.08em; text-trans
 .seg button:hover { color: var(--ink); background: var(--fill); }
 .seg button[aria-checked="true"] { background: linear-gradient(135deg, var(--amber), var(--coral)); color: var(--on-accent); font-weight: 600; box-shadow: 0 4px 16px -4px rgba(255, 122, 89, 0.6); }
 
+.shapes { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--edge); border-radius: 12px; background: var(--well); flex-wrap: wrap; }
+.shapes button { display: grid; justify-items: center; align-content: center; gap: 5px; min-width: 62px; padding: 8px 8px 6px; background: transparent; color: var(--ink2); border: 0; border-radius: 9px; font: inherit; font-size: 12px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+.shapes button i { display: block; border: 1.5px solid currentColor; border-radius: 3px; opacity: 0.9; }
+.shapes button:hover { color: var(--ink); background: var(--fill); }
+.shapes button[aria-checked="true"] { background: linear-gradient(135deg, var(--amber), var(--coral)); color: var(--on-accent); font-weight: 600; box-shadow: 0 4px 16px -4px rgba(255, 122, 89, 0.6); }
 .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
 .row.tight { margin-top: 6px; gap: 10px; }
 .row.tight select { width: auto; }
@@ -142,8 +147,7 @@ label.btn { display: inline-flex; align-items: center; cursor: pointer; }
 .stage { position: sticky; top: 76px; }
 .screen { background: #000; border-radius: 12px; aspect-ratio: 16 / 9; display: grid; place-items: center; overflow: hidden; max-height: 70vh; margin: 0 auto; position: relative;
   box-shadow: 0 0 0 1px var(--edge), 0 40px 90px -30px rgba(0, 0, 0, 0.95), 0 0 120px -40px rgba(155, 140, 255, 0.55); }
-.screen.portrait { aspect-ratio: 9 / 16; height: 70vh; }
-.screen.square { aspect-ratio: 1; height: 70vh; }
+.screen.tall { height: 70vh; max-width: 100%; }
 .screen video { width: 100%; height: 100%; display: block; background: #000; }
 .empty { display: flex; gap: 12px; align-items: center; color: var(--ink2); }
 .spin { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.14); border-top-color: var(--amber); border-right-color: var(--coral); animation: spin 0.8s linear infinite; }
@@ -207,7 +211,7 @@ dialog textarea { min-height: 120px; }
 @media (max-width: 960px) {
   .studio { grid-template-columns: 1fr; }
   .stage, .side { position: static; max-height: none; }
-  .screen.portrait, .screen.square { height: 60vh; }
+  .screen.tall { height: 60vh; }
   .go { margin-left: 0; width: 100%; } .go .btn { width: 100%; }
   main { padding: 18px 16px 50px; } .top { padding: 12px 16px; }
 }

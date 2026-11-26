@@ -5,7 +5,9 @@ const state = { plan: null, shape: "16:9", seconds: 15, id: null, busy: false, d
 const MB = 1024 * 1024;
 
 const LENGTHS = [10, 15, 30, 60];
-const SHAPES = [["16:9", "Wide"], ["9:16", "Tall"], ["1:1", "Square"]];
+// The same list the server accepts (a test checks they match). Each is drawn to scale on its button.
+const SHAPES = [["16:9", "Wide"], ["9:16", "Tall"], ["1:1", "Square"], ["4:5", "Portrait"], ["21:9", "Cinema"], ["4:3", "Classic"]];
+const ratioOf = (shape) => { const [w, h] = shape.split(":").map(Number); return w / h; };
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined);
@@ -25,6 +27,21 @@ function segmented(host, items, current, onPick) {
   }
 }
 
+/** The shape picker: each button shows the shape drawn to scale, its name and its ratio. */
+function shapePicker(host, current, onPick) {
+  host.textContent = "";
+  for (const [value, name] of SHAPES) {
+    const r = ratioOf(value), w = r >= 1 ? 26 : Math.round(26 * r), h = r >= 1 ? Math.round(26 / r) : 26;
+    const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(value === current));
+    b.setAttribute("aria-label", `${name}, ${value}`); b.title = `${name} ${value}`;
+    const box = document.createElement("i"); box.style.width = `${w}px`; box.style.height = `${h}px`;
+    const label = document.createElement("span"); label.textContent = value;
+    b.append(box, label);
+    b.addEventListener("click", () => { onPick(value); shapePicker(host, value, onPick); });
+    host.appendChild(b);
+  }
+}
+
 function say(text, kind = "") { const s = $("status"); s.textContent = text; s.className = "muted " + kind; }
 function setBusy(on, text = "") {
   state.busy = on;
@@ -36,7 +53,7 @@ function setBusy(on, text = "") {
 // The first frame is only background (the words fade in), so a fresh video waits a moment in, where the words are.
 $("video").addEventListener("loadedmetadata", (e) => { const v = e.target; if (v.currentTime === 0 && v.duration > 3) v.currentTime = 1.2; });
 
-function shapeClass() { $("screen").className = "screen" + (state.shape === "9:16" ? " portrait" : state.shape === "1:1" ? " square" : ""); }
+function shapeClass() { const sc = $("screen"), r = ratioOf(state.shape); sc.className = "screen" + (r < 1.5 ? " tall" : ""); sc.style.aspectRatio = state.shape.replace(":", " / "); }
 
 function drawScenes() {
   const ol = $("scenes"); ol.textContent = "";
@@ -325,7 +342,7 @@ async function openProject(id) {
     m.value = mu ? (mu.file ? "file" : "mood:" + mu.mood) : ""; if (mu && m.value !== (mu.file ? "file" : "mood:" + mu.mood)) { m.value = ""; delete state.plan.music; }
     $("level").value = (state.plan.music && state.plan.music.level) || "medium";
     $("musicOpts").hidden = !m.value; $("musicFileLabel").hidden = m.value !== "file";
-    segmented($("shape"), SHAPES, state.shape, (x) => { state.shape = x; });
+    shapePicker($("shape"), state.shape, (x) => { state.shape = x; });
     $("start").hidden = true; $("recent").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
     $("startnote").textContent = "";
     await render("draft");
@@ -402,7 +419,7 @@ async function openSettings() {
 
 function init() {
   segmented($("len"), LENGTHS.map((n) => [n, `${n} s`]), state.seconds, (v) => (state.seconds = v));
-  segmented($("shape"), SHAPES, state.shape, (v) => { state.shape = v; });
+  shapePicker($("shape"), state.shape, (v) => { state.shape = v; });
   $("make").addEventListener("click", make);
   $("idea").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) make(); });
   document.querySelectorAll("[data-ex]").forEach((b) => b.addEventListener("click", () => { $("idea").value = b.dataset.ex; $("idea").focus(); }));

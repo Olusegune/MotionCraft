@@ -28,25 +28,26 @@ Out of scope here: EffectCraft itself (a separate product, pinned to 0.24.1), Ol
 |---|---|---|
 | Unit | Pure functions: planning, text wrapping and fitting, layout, music levels, name and voice-choice checks, file readers (`plan`, `images`, `mp4`, `sound`) | 27 |
 | Fake provider | A fake Kie.ai, OpenAI and Ollama answer every case: success, bad key, no credit, refused prompt, slow, never answers, not JSON, wrong shape, one scene, connection reset, only picture models installed, non-https address (`ai`, `planner`, plus the voice cases in `sound` and `server`) | 14 |
-| Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal, the strict page policy, Settings (keys, checks, spending limit) | 30 |
-| Real engine | The real EffectCraft builds and renders; pixels and audio of the result are checked | 6 + 18 |
+| Server | A real server on a random port: Host/Origin refusal, size limits, bad uploads of every kind, one-time confirmations, saved-plan re-checking, removal, the strict page policy, Settings (keys, checks, spending limit), shapes | 33 |
+| Real engine | The real EffectCraft builds and renders; pixels, sizes and audio of the result are checked | 6 + 19 |
 | Fuzz | Seeded random and corrupted bytes at every file reader, random JSON at the plan checker, random text at the layout and planner | 6 |
 | Real credential store | The real Windows Credential Manager: write, read back, remove, restore what was there; refuses any entry that is not QuickPath's | 2 |
 | Page | Driven through the real desktop window (Chromium debug port): end to end (`drive.cjs`), accessibility with axe-core in four states (`a11y.cjs`), keyboard-only use (`keyboard.cjs`), screenshots at 1280, 1000 and 760 px wide with a check for sideways scrolling | scripts, not in `npm test` |
-| Manual | Section 6 | 30 steps |
+| Manual | Section 6 | 31 steps |
 
 Run the automated tests with `npm test` (about 40 s on the owner's PC). Tests that need EffectCraft, ffmpeg or Windows voices say "skipped: NOT CHECKED" when
 they are missing. A skip is never reported as a pass.
 
-Per file: `plan` 10, `ai` 8, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `server` 30, `creds.real` 2, `engine.real` 6, `edge.real` 18, `fuzz` 6 = 103.
+Per file: `plan` 12, `ai` 9, `images` 5, `mp4` 3, `sound` 9, `planner` 6, `server` 33, `creds.real` 2, `engine.real` 6, `edge.real` 19, `fuzz` 6 = 110.
 
 ## 4. What the tests prove, by feature
 
 | Feature | Checked by | Result |
 |---|---|---|
 | Scenes from an idea (own words, local model, fallback) | `plan`, `fuzz` (3000 random ideas and model answers) | pass |
-| Text fits the frame in every shape; no orphan words; minimum size | `plan`, `fuzz` (1500 random texts x 3 shapes), `edge.real` | pass |
+| Text fits the frame in every shape; no orphan words; minimum size | `plan`, `fuzz` (1500 random texts x 6 shapes), `edge.real` | pass |
 | Odd text: quotes, backslashes, newlines, emoji, Chinese/Japanese/Korean, Arabic, symbols, one huge word, 40-word sentence, one character, text that looks like a file path | `edge.real` against the real engine, each must render and show the words | pass |
+| Six shapes (16:9, 9:16, 1:1, 4:5, 21:9, 4:3): each has a real size; the headline, the small line and the accent line fit inside the frame with clear space between them (checked against EffectCraft's measured line spacing, 1.2 x the text size); each renders at its own size (half-size drafts, rounded to even); each remembers its shape when saved and reopened; the AI picture request uses a ratio the model offers; the page and the server list the same shapes | `plan`, `ai`, `server`, `edge.real` | pass |
 | Extremes: 12 scenes of 1.5 s; 8 scenes over 120 s; every look in every shape; two videos built at once | `edge.real` | pass |
 | Own picture shows (pixel check) and a missing picture file does not break the build | `engine.real` | pass |
 | Clips: shorter than the scene holds its last frame, longer is trimmed, both start with the scene (pixel checks) | `engine.real` | pass |
@@ -72,6 +73,7 @@ Found by testing, fixed, and now covered by a test.
 
 | # | Bug | Found by | Fix |
 |---|---|---|---|
+| 1b | The small line touched or overlapped the headline in narrow shapes: the layout assumed a line spacing of 1.12; EffectCraft uses 1.2 (measured) | looking at all six shapes side by side | the layout uses the measured numbers; a test checks the gap in every shape |
 | 1 | Square video with a long headline wrapped into seven huge lines and ran off the frame | layout unit test | text shrinks until the whole block fits |
 | 2 | Music fade-in jumped back to full volume in the middle of the first voice line | music-levels test | every level key respects ducking |
 | 3 | A paid voice not yet made was reported as "EffectCraft not found" on a machine without EffectCraft | CI (Linux) | cheap checks run before looking for the engine |
@@ -139,7 +141,7 @@ Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**
 | 7 | Change the length of a scene to 8 s | the video gets longer |
 | 8 | Remove a scene; add a scene | scene list and video follow |
 | 9 | Pick each look in turn | colours change; text stays readable |
-| 10 | Start over with Tall, then Square | the picture is the right shape and nothing is cut off |
+| 10 | Start over with each other shape (Tall, Square, Portrait, Cinema, Classic) | the picture is the right shape and nothing is cut off; the small line never touches the headline |
 | 11 | Add your own PNG to a scene | thumbnail shows; after Update the picture is behind the words, dimmed |
 | 12 | Try to add a text file renamed `.png` | refused with a plain message |
 | 13 | Add an MP4 clip shorter than the scene, then one longer | short holds its last frame; long is trimmed; both start with the scene |
@@ -148,25 +150,25 @@ Run on a **clean Windows PC** (no Node, no EffectCraft first), then on a **Mac**
 | 16 | Music: try each mood, then Soft, Medium, Loud | music fades in and out, dips under the voice; levels differ |
 | 17 | Music: My own sound file (WAV, then MP3) | plays; a text file renamed `.mp3` is refused |
 | 18 | With no voice and no music, play the video | silent |
-| 18b | Press the sliders button. Paste a Kie.ai key, Save key, then Check it works | the box empties; badge says Key set; "The key works. Credits left: ..."; the key is never shown again |
-| 19 | (Needs a Kie.ai key) Make a picture on a scene | window shows model, price, limit and the words; Cancel sends nothing |
-| 20 | Confirm, then Update video | a picture appears behind the words; "Used so far" went up by about $0.02 |
-| 21 | Edit the words in the window before confirming | the edited words are the ones used |
-| 22 | (Needs an OpenAI key) Pick an OpenAI voice, press Update | confirmation shows characters and price; after Confirm the voice plays |
-| 23 | Update again without changing words | no second confirmation (lines were saved) |
-| 24 | Save final video | a full-size MP4 appears in `Documents\QuickPath`; "Show in folder" opens it; it plays in another player with sound |
-| 25 | Close and reopen QuickPath | "Your videos" lists the video; opening it brings back the scenes, look, voice, music and pictures |
-| 26 | Remove a video from the list | asks first; goes to the Recycle Bin; can be restored |
-| 27 | Open `video.ecproj` in EffectCraft | text is editable; audio layers are there |
-| 28 | Start QuickPath twice | only one window |
-| 29 | Keyboard only: Tab through the start screen and the studio; Ctrl+Enter | every control reachable and visible; Update runs |
-| 30 | Uninstall from Windows Settings | removed; `Documents\QuickPath` is left alone |
+| 19 | Press the sliders button. Paste a Kie.ai key, Save key, then Check it works | the box empties; badge says Key set; "The key works. Credits left: ..."; the key is never shown again |
+| 20 | (Needs a Kie.ai key) Make a picture on a scene | window shows model, price, limit and the words; Cancel sends nothing |
+| 21 | Confirm, then Update video | a picture appears behind the words; "Used so far" went up by about $0.02 |
+| 22 | Edit the words in the window before confirming | the edited words are the ones used |
+| 23 | (Needs an OpenAI key) Pick an OpenAI voice, press Update | confirmation shows characters and price; after Confirm the voice plays |
+| 24 | Update again without changing words | no second confirmation (lines were saved) |
+| 25 | Save final video | a full-size MP4 appears in `Documents\QuickPath`; "Show in folder" opens it; it plays in another player with sound |
+| 26 | Close and reopen QuickPath | "Your videos" lists the video; opening it brings back the scenes, look, voice, music and pictures |
+| 27 | Remove a video from the list | asks first; goes to the Recycle Bin; can be restored |
+| 28 | Open `video.ecproj` in EffectCraft | text is editable; audio layers are there |
+| 29 | Start QuickPath twice | only one window |
+| 30 | Keyboard only: Tab through the start screen and the studio; Ctrl+Enter | every control reachable and visible; Update runs |
+| 31 | Uninstall from Windows Settings | removed; `Documents\QuickPath` is left alone |
 
 ## 8. Release checklist and sign-off
 
 | Item | State |
 |---|---|
-| Automated tests (103) pass | done |
+| Automated tests (110) pass | done |
 | CI green on Windows, macOS, Linux | done |
 | Accessibility audit | done, 0 violations |
 | Fuzz and edge-case tests | done |

@@ -11,7 +11,9 @@ You need **EffectCraft 0.24.1** installed. QuickPath asks it to build and render
 1. Open QuickPath.
 2. Write what your video is about. One sentence is enough; the words you write become the words on screen. The three small buttons (Product teaser, Event invite,
    Explain an idea) fill in an example.
-3. Pick a **length** (10, 15, 30 or 60 seconds) and a **shape**: Wide (for YouTube and screens), Tall (for phones and stories) or Square.
+3. Pick a **length** (10, 15, 30 or 60 seconds) and a **shape**. Each shape is drawn to scale on its button:
+   **Wide** 16:9 (YouTube, screens), **Tall** 9:16 (phone stories, Reels, Shorts, TikTok), **Square** 1:1 (feeds), **Portrait** 4:5 (Instagram and Facebook feed posts),
+   **Cinema** 21:9 (ultrawide, a film look) and **Classic** 4:3 (older screens, slides). Pick it before you press Make; to change it later, start the video over.
 4. Press **Make my video**. In about ten seconds it plays.
 
 If you have Ollama running on your computer, a model there writes the scenes from your idea. If not, your own sentences are cut into scenes.

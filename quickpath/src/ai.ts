@@ -12,7 +12,8 @@ export const PROVIDER = "Kie.ai";
 export const ESTIMATE_USD = 0.02;
 export const QUOTE_SECONDS = 300;
 export const NO_LETTERING = "A purely visual still image with no lettering, words, numbers, symbols, logos or watermarks anywhere in it.";
-const ASPECT: Record<Shape, string> = { "16:9": "16:9", "9:16": "9:16", "1:1": "1:1" };
+// Imagen 4 Fast offers 1:1, 16:9, 9:16, 3:4 and 4:3. For 21:9 a 16:9 picture is made and the sides are trimmed to fill the frame; for 4:5, a 3:4 one.
+export const ASPECT: Record<Shape, string> = { "16:9": "16:9", "9:16": "9:16", "1:1": "1:1", "4:5": "3:4", "21:9": "16:9", "4:3": "4:3" };
 
 export class SpendRefused extends Error {}
 
@@ -69,10 +70,11 @@ export class Spend {
 
 /** The prompt for a scene: the look of the piece, what the scene says, and an explicit ban on lettering. */
 export function picturePrompt(headline: string, sub: string, idea: string, shape: Shape): string {
-  const orient = shape === "9:16" ? "vertical" : shape === "1:1" ? "square" : "wide";
+  const orient = { "16:9": "wide", "9:16": "vertical", "1:1": "square", "4:5": "portrait", "21:9": "ultra-wide cinematic", "4:3": "classic" }[shape];
+  const keep = shape === "21:9" || shape === "4:5" ? " Keep the main subject in the middle of the frame: the edges will be trimmed." : "";
   const about = idea.replace(/\s+/g, " ").trim().slice(0, 200).replace(/[\s.!?,;:]+$/, "");        // no doubled full stops where the idea already ends in one
   const scene = `${headline.slice(0, 90).replace(/[\s.!?,;:]+$/, "")}${sub ? ` (${sub.slice(0, 90).replace(/[\s.!?,;:]+$/, "")})` : ""}`;
-  return `${NO_LETTERING} A ${orient}, cinematic, softly lit photograph that suits this moment of a short video: ${scene}. ${about ? `The video is about: ${about}.` : ""} Generous empty space in the middle for text.`.slice(0, 700);
+  return `${NO_LETTERING} A ${orient}, cinematic, softly lit photograph that suits this moment of a short video: ${scene}. ${about ? `The video is about: ${about}.` : ""} Generous empty space in the middle for text.${keep}`.slice(0, 700);
 }
 
 type Fetch = typeof fetch;

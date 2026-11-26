@@ -42,6 +42,10 @@ async function main() {
   out.dialogOpen = await ev("document.getElementById('spend').open");
   await snap("dialog");
   await ev("(() => { const d = document.getElementById('spend'); if (d.open) d.close('cancel'); return 0; })()");
+  await ev("document.getElementById('gear').click(); 0");
+  await sleep(2500);
+  await snap("settings");
+  await ev("(() => { const d = document.getElementById('settings'); if (d.open) d.close(); return 0; })()");
   for (const w of [1000, 760]) {
     await call("Emulation.setDeviceMetricsOverride", { width: w, height: 800, deviceScaleFactor: 1, mobile: false });
     await sleep(800);

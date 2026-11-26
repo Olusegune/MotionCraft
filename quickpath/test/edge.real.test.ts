@@ -68,11 +68,41 @@ test("the extremes: 12 scenes of the minimum length, and 8 scenes over 120 s", {
   assert.equal(b.frames, 3600);
 });
 
-test("every look builds in every shape", { skip }, async () => {
+test("every shape builds with two looks, and every look builds in the wide shape", { skip }, async () => {
   const { LOOKS } = await import("../src/looks.ts");
-  for (const l of LOOKS) for (const shape of ["16:9", "9:16", "1:1"] as Shape[]) {
-    const r = await run(plan([{ headline: `${l.name} in ${shape}`, sub: "check" }], l.id), shape);
-    assert.ok(r.textAppears, `${l.id} ${shape}`);
+  const { SHAPE_LIST } = await import("../src/plan.ts");
+  for (const sh of SHAPE_LIST) for (const look of ["midnight", "paper"]) {
+    const r = await run(plan([{ headline: `${look} in ${sh.id}`, sub: "a small line that wraps in a narrow frame" }], look), sh.id);
+    assert.ok(r.textAppears, `${look} ${sh.id}`);
+  }
+  for (const l of LOOKS) {
+    const r = await run(plan([{ headline: `${l.name} wide`, sub: "check" }], l.id), "16:9");
+    assert.ok(r.textAppears, l.id);
+  }
+});
+
+test("each shape renders at its own size: the draft is half of it, and the picture keeps its shape", { skip }, async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { SHAPE_LIST } = await import("../src/plan.ts");
+  let probe = true;
+  try { execFileSync("ffprobe", ["-version"], { stdio: "ignore" }); } catch { probe = false; }
+  for (const sh of SHAPE_LIST) {
+    const dir = mkdtempSync(join(tmpdir(), "qp-shape-"));
+    const ec = new EffectCraft(cli, [dir]);
+    try {
+      await ec.start();
+      const built = await buildComposition(ec, plan([{ headline: `Shape ${sh.id}`, sub: "check the frame" }, { headline: "Second" }]), sh.id, dir);
+      assert.equal(built.width, sh.width);
+      assert.equal(built.height, sh.height);
+      const out = join(dir, "d.mp4");
+      await renderVideo(ec, built.comp, out, "draft");
+      if (probe) {
+        const [w, h] = execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", out]).toString().trim().split(",").map(Number);
+        const half = (n: number) => Math.floor(n / 2 / 2) * 2;          // half size, rounded down to an even number (video sizes must be even): 4:5 gives 540 by 674
+        assert.equal(w, half(sh.width), `${sh.id} draft width`);
+        assert.equal(h, half(sh.height), `${sh.id} draft height`);
+      }
+    } finally { ec.stop(); }
   }
 });
 

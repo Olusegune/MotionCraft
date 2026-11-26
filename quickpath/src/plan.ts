@@ -5,11 +5,15 @@ import { LOOKS, suggestLook, lookById } from "./looks.ts";
 export type Scene = { headline: string; sub: string; seconds: number; picture?: string; say?: string };
 export type Music = { mood?: string; file?: string; level?: "soft" | "medium" | "loud" };
 export type Plan = { title: string; look: string; scenes: Scene[]; source: "model" | "words"; voice?: string; music?: Music };
-export type Shape = "16:9" | "9:16" | "1:1";
+export type Shape = "16:9" | "9:16" | "1:1" | "4:5" | "21:9" | "4:3";
 
+/** Every shape the app makes: the size of the finished video, and what it is for. The page shows these, and the server only accepts these. */
 export const SIZES: Record<Shape, { width: number; height: number }> = {
   "16:9": { width: 1920, height: 1080 }, "9:16": { width: 1080, height: 1920 }, "1:1": { width: 1080, height: 1080 },
+  "4:5": { width: 1080, height: 1350 }, "21:9": { width: 2560, height: 1080 }, "4:3": { width: 1440, height: 1080 },
 };
+export const SHAPE_NAMES: Record<Shape, string> = { "16:9": "Wide", "9:16": "Tall", "1:1": "Square", "4:5": "Portrait", "21:9": "Cinema", "4:3": "Classic" };
+export const SHAPE_LIST = (Object.keys(SIZES) as Shape[]).map((id) => ({ id, name: SHAPE_NAMES[id], ...SIZES[id] }));
 
 export const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 

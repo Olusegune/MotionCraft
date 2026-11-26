@@ -38,7 +38,11 @@ export function fitSize(lines: string[], width: number, base: number, min = 36):
 
 const NL = String.fromCharCode(10);
 
-export type Layout ={ headline: string; headSize: number; headY: number; sub: string; subSize: number; subY: number; barY: number; barW: number; barH: number };
+/** EffectCraft's text, measured (a 100-point line): lines are 1.2 times the size apart, capital letters are 0.73 times the size tall, and the
+ * position you give is the baseline of the first line. The layout below is built on these. */
+export const LINE = 1.2, CAP = 0.73, BASE = 0.82, DESC = 0.22;
+
+export type Layout = { headline: string; headSize: number; headY: number; sub: string; subSize: number; subY: number; barY: number; barW: number; barH: number; lines: number; subLines: number };
 
 /** Where everything goes for one scene in a frame of this size. y grows downward; text is placed by its first baseline.
  * The text starts big and shrinks until the whole block (headline and small line) fits inside 70% of the height and 78% of the width. */
@@ -49,15 +53,16 @@ export function layoutScene(headline: string, sub: string, width: number, height
     const lines = wrapText(headline, Math.max(8, Math.floor(boxW / (size * 0.52))));
     const subSize = Math.round(size * 0.36);
     const subLines = sub ? wrapText(sub, Math.max(12, Math.floor(boxW / (subSize * 0.52)))) : [];
-    const lineH = size * 1.12;
-    const blockH = lines.length * lineH + (subLines.length ? subSize * 1.5 * subLines.length + subSize * 0.8 : 0);
+    const gap = subSize * 0.6;                                                          // clear space between the headline's last line and the small line
+    const blockH = lines.length * size * LINE + (subLines.length ? gap + subLines.length * subSize * LINE : 0);
     const widest = Math.max(...lines.map((l) => l.length)) * size * 0.52;
     if ((blockH <= height * 0.7 && widest <= boxW) || size <= 36) {
       const top = height / 2 - blockH / 2;
       return {
-        headline: lines.join(NL), headSize: size, headY: top + size * 0.82,
-        sub: subLines.join(NL), subSize, subY: top + lines.length * lineH + subSize * 1.35,
-        barY: top - size * 0.45, barW: Math.round(width * 0.09), barH: Math.max(6, Math.round(height * 0.007)),
+        headline: lines.join(NL), headSize: size, headY: top + size * BASE,
+        sub: subLines.join(NL), subSize, subY: top + lines.length * size * LINE + gap + subSize * BASE,
+        barY: top - size * 0.45, barW: Math.round(Math.min(width, height * 1.78) * 0.09), barH: Math.max(6, Math.round(height * 0.007)),
+        lines: lines.length, subLines: subLines.length,
       };
     }
     size = Math.max(36, size - 4);

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ESTIMATE_USD, generatePicture, NO_LETTERING, picturePrompt, Spend, SpendRefused } from "../src/ai.ts";
+import { ASPECT, ESTIMATE_USD, generatePicture, NO_LETTERING, picturePrompt, Spend, SpendRefused } from "../src/ai.ts";
 import { solidPng } from "./png.ts";
 
 const ledger = () => join(mkdtempSync(join(tmpdir(), "qp-spend-")), "spend.jsonl");
@@ -101,4 +101,16 @@ test("the picture prompt reads cleanly: no doubled full stops or stray punctuati
   const p = picturePrompt("Wake up slowly.", "start now!", "A coffee brand. Warm mornings. Wake up slowly.", "16:9");
   assert.ok(!/[.!?]\s*[.!?]/.test(p.slice(NO_LETTERING.length)), "no doubled stops: " + p);
   assert.ok(p.includes("Wake up slowly (start now)") && p.includes("Warm mornings. Wake up slowly."));
+});
+
+test("every shape asks the picture model for a ratio it offers, and shapes that get trimmed say where the subject belongs", () => {
+  const offered = new Set(["1:1", "16:9", "9:16", "3:4", "4:3"]);
+  for (const shape of Object.keys(ASPECT) as (keyof typeof ASPECT)[]) {
+    assert.ok(offered.has(ASPECT[shape]), `${shape} asks for ${ASPECT[shape]}`);
+    const p = picturePrompt("A headline", "", "an idea", shape);
+    assert.ok(p.length <= 700);
+    assert.equal(/trimmed/.test(p), shape === "21:9" || shape === "4:5", `${shape}: ${p.slice(-90)}`);
+  }
+  assert.match(picturePrompt("x", "", "y", "21:9"), /ultra-wide cinematic/);
+  assert.match(picturePrompt("x", "", "y", "4:5"), /portrait/);
 });

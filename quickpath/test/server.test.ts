@@ -433,3 +433,37 @@ test("the server never writes a key to a file or a log, and never returns one", 
   assert.ok(!/writeFileSync\([^)]*key/i.test(src), "no key is written to a file");
   assert.match(src, /stdio: \["pipe", "pipe", "ignore"\]/, "the key goes to Windows on standard input, not the command line");
 });
+
+
+test("the page and the server agree on the shapes, and the status says what each one is", async () => {
+  const st = JSON.parse((await call("GET", "/api/status")).text);
+  assert.deepEqual(st.shapes.map((x: { id: string }) => x.id), ["16:9", "9:16", "1:1", "4:5", "21:9", "4:3"]);
+  const js = (await call("GET", "/app.js")).text;
+  const line = js.split(String.fromCharCode(10)).find((l) => l.startsWith("const SHAPES = "))!;
+  const pageIds = [...line.matchAll(/\["(\d+:\d+)", "(\w+)"\]/g)].map((m) => m[1]);
+  assert.deepEqual(pageIds, st.shapes.map((x: { id: string }) => x.id), "the page lists exactly the shapes the server accepts, in the same order");
+  const names = [...line.matchAll(/\["(\d+:\d+)", "(\w+)"\]/g)].map((m) => m[2]);
+  assert.deepEqual(names, st.shapes.map((x: { name: string }) => x.name));
+});
+
+test("a picture request for a cinema or portrait video asks for the trimmed shape; an unknown shape is treated as wide", async () => {
+  const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "Shape quote test", seconds: 10 }) })).text);
+  const wide = JSON.parse((await post("/api/ai/quote", { id, shape: "21:9", headline: "A scene", sub: "", idea: "x" })).text);
+  assert.match(wide.prompt, /ultra-wide cinematic/);
+  assert.match(wide.prompt, /trimmed/);
+  const odd = JSON.parse((await post("/api/ai/quote", { id, shape: "../../etc", headline: "A scene", sub: "", idea: "x" })).text);
+  assert.doesNotMatch(odd.prompt, /ultra-wide|portrait|vertical/);
+  assert.match(odd.prompt, /A wide, cinematic/);
+});
+
+test("a saved video remembers its shape for every shape, and reopens in it", { skip: existsSync(process.env.EFFECTCRAFT_CLI ?? "C:/Program Files/EffectCraft/effectcraft-cli.exe") ? false : "EffectCraft not installed: NOT CHECKED" }, async () => {
+  for (const shape of ["21:9", "4:5", "4:3"]) {
+    const plan = { title: `Saved ${shape}`, look: "forest", source: "words", scenes: [{ headline: `In ${shape}`, sub: "", seconds: 3 }, { headline: "Second", sub: "", seconds: 3 }] };
+    const r = JSON.parse((await post("/api/render", { plan, shape, quality: "draft" })).text);
+    assert.equal(r.frames, 180, shape);
+    const back = JSON.parse((await call("GET", `/api/project?id=${r.id}`)).text);
+    assert.equal(back.shape, shape);
+    const listed = (JSON.parse((await call("GET", "/api/projects")).text).projects as { id: string; shape: string }[]).find((p) => p.id === r.id);
+    assert.equal(listed?.shape, shape);
+  }
+});
