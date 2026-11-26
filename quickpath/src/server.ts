@@ -13,7 +13,11 @@ import { clamp, makePlan, type Plan, type Shape } from "./plan.ts";
 import { imageInfo, MAX_PICTURE_BYTES, MEDIA_NAME } from "./images.ts";
 import { looksLikeMp4, MAX_CLIP_BYTES, mp4Info } from "./mp4.ts";
 import { generatePicture, picturePrompt, Spend, SpendRefused } from "./ai.ts";
-import { kieKey } from "./keys.ts";
+import { kieKey, providerKey } from "./keys.ts";
+import { MOODS } from "./music.ts";
+import { resolveSound, SoundRefused, type Level } from "./sound.ts";
+import { makeOpenAILines, openAIMissing, OPENAI_VOICES, spokenText, VOICE_CHOICE, windowsVoices } from "./voice.ts";
+import { audioKind, AUDIO_NAME, MAX_AUDIO_BYTES, wavInfo } from "./wav.ts";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const UI = resolve(HERE, "..", "ui");
@@ -35,11 +39,15 @@ class Refused extends Error {}
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}) }));
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}) }));
   if (scenes.some((s: { headline: string }) => !s.headline)) throw new Refused("Every scene needs some words.");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
-  return { title: text(raw.title, 60) || scenes[0].headline, look: lookById(raw.look).id, scenes, source: raw.source === "model" ? "model" : "words" };
+  const voice = typeof raw.voice === "string" && VOICE_CHOICE.test(raw.voice) ? raw.voice : undefined;
+  const m = raw.music;
+  const level: Level = m?.level === "soft" || m?.level === "loud" ? m.level : "medium";
+  const music = m && typeof m.file === "string" && AUDIO_NAME.test(m.file) ? { file: m.file, level } : m && typeof m.mood === "string" && MOODS.some((x) => x.id === m.mood) ? { mood: m.mood, level } : undefined;
+  return { title: text(raw.title, 60) || scenes[0].headline, look: lookById(raw.look).id, scenes, source: raw.source === "model" ? "model" : "words", ...(voice ? { voice } : {}), ...(music ? { music } : {}) };
 }
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -56,11 +64,12 @@ async function render(planIn: unknown, shapeIn: unknown, quality: "draft" | "fin
   writeFileSync(join(dir, "plan.json"), JSON.stringify({ plan, shape }, null, 2));
   const ec = new EffectCraft(cli, [dir]);
   try {
+    const resolved = await resolveSound(dir, plan);          // scenes are lengthened to fit their voice; refused if a paid voice was not made yet
     await ec.start();
-    const built = await buildComposition(ec, plan, shape, dir);
+    const built = await buildComposition(ec, resolved.plan, shape, dir, resolved.sound);
     const file = quality === "draft" ? "draft.mp4" : `final-${Date.now()}.mp4`;
     const frames = await renderVideo(ec, built.comp, join(dir, file), quality);
-    return { id, file, url: `/media/${id}/${file}`, frames, seconds: built.total, path: join(dir, file) };
+    return { id, file, url: `/media/${id}/${file}`, frames, seconds: built.total, path: join(dir, file), scenes: resolved.plan.scenes.map((x) => x.seconds) };
   } finally { ec.stop(); }
 }
 
@@ -117,7 +126,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       const url = new URL(req.url ?? "/", `http://${host}`);
 
       if (req.method === "GET" && url.pathname === "/api/status") {
-        return send(res, 200, { engine: !!cliPath(), looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
+        return send(res, 200, { engine: !!cliPath(), voices: await windowsVoices(), openaiVoices: (await providerKey("openai")) ? [...OPENAI_VOICES] : [], moods: MOODS, looks: LOOKS.map((l) => ({ id: l.id, name: l.name, bg: l.bg, text: l.text, accent: l.accent })), home: HOME });
       }
       if (req.method === "POST" && url.pathname === "/api/plan") {
         const b = await readJson(req);
@@ -136,7 +145,19 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const id = url.searchParams.get("id") ?? "";
         if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first, then add a picture.");
         const type = String(req.headers["content-type"] ?? "").split(";")[0].trim();
-        if (type !== "image/png" && type !== "image/jpeg" && type !== "video/mp4") throw new Refused("Use a PNG or JPEG picture, or an MP4 clip.");
+        const sound = type === "audio/wav" || type === "audio/x-wav" || type === "audio/mpeg";
+        if (!sound && type !== "image/png" && type !== "image/jpeg" && type !== "video/mp4") throw new Refused("Use a PNG or JPEG picture, an MP4 clip, or a WAV or MP3 sound.");
+        if (sound) {
+          const audio = await readBody(req, MAX_AUDIO_BYTES);
+          const kind = audioKind(audio);                         // the file's own bytes decide, not its name or the header
+          if (!kind) throw new Refused("That does not look like a WAV or MP3 sound that can be read.");
+          const wi = kind === "wav" ? wavInfo(audio) : null;
+          if (wi && wi.seconds > 1800) throw new Refused("Use a sound under thirty minutes.");
+          const aname = `${randomBytes(6).toString("hex")}.${kind}`;
+          mkdirSync(join(HOME, "projects", id, "assets", "audio"), { recursive: true });
+          writeFileSync(join(HOME, "projects", id, "assets", "audio", aname), audio, { flag: "wx" });
+          return send(res, 200, { name: aname, seconds: wi?.seconds });
+        }
         const clip = type === "video/mp4";
         const body = await readBody(req, clip ? MAX_CLIP_BYTES : MAX_PICTURE_BYTES);
         let ext: string, width: number, height: number, seconds: number | undefined;
@@ -179,6 +200,33 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         writeFileSync(join(HOME, "projects", id, "assets", name), out.bytes, { flag: "wx" });
         return send(res, 200, { name, width: out.info.width, height: out.info.height, url: `/media/${id}/assets/${name}`, spentUsd: spend.spent() });
       }
+      if (req.method === "POST" && url.pathname === "/api/voice/quote") {
+        const b = await readJson(req);
+        const id = String(b.id ?? "");
+        if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first.");
+        const plan = checkPlan(b.plan);
+        if (!plan.voice?.startsWith("openai:")) return send(res, 200, { needed: false });
+        const texts = plan.scenes.map((x) => spokenText(x));
+        const miss = openAIMissing(join(HOME, "projects", id), plan.voice, texts);
+        if (miss.chars === 0) return send(res, 200, { needed: false });
+        if (!(await providerKey("openai"))) throw new Refused("No OpenAI key was found. Save one in Windows Credential Manager as QuickPath/openai, or set OPENAI_API_KEY, and try again.");
+        const offer = { provider: "OpenAI", model: "tts-1 voice " + plan.voice.slice(7), usd: Math.max(0.001, miss.usd), note: "Priced by OpenAI at $15 per million characters.", what: `${miss.chars} characters of speech` };
+        return send(res, 200, { needed: true, ...spend.quote(id, texts.join("|"), "16:9", offer) });
+      }
+      if (req.method === "POST" && url.pathname === "/api/voice/make") {
+        const b = await readJson(req);
+        const id = String(b.id ?? "");
+        if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first.");
+        const plan = checkPlan(b.plan);
+        if (!plan.voice?.startsWith("openai:")) throw new Refused("Only OpenAI voices need to be made first.");
+        const texts = plan.scenes.map((x) => spokenText(x));
+        const held = spend.redeem(String(b.token ?? ""), id, texts.join("|"));
+        const key = await providerKey("openai");
+        if (!key) throw new Refused("No OpenAI key was found.");
+        const made = await makeOpenAILines(join(HOME, "projects", id), plan.voice, texts, key, { base: process.env.QUICKPATH_OPENAI_BASE });
+        spend.record(id, held.offer.usd, `${made} spoken lines`, held.offer);
+        return send(res, 200, { made, spentUsd: spend.spent() });
+      }
       if (req.method === "POST" && url.pathname === "/api/reveal") {
         const b = await readJson(req);
         const m = /^\/media\/([a-f0-9]{12})\/([\w.-]+\.mp4)$/.exec(String(b.url ?? ""));
@@ -199,7 +247,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       send(res, 405, { error: "Not allowed." });
     } catch (e) {
       const msg = (e as Error).message ?? "";
-      const known = e instanceof Refused || e instanceof EngineError || e instanceof SpendRefused || /^(Kie\.ai|The picture|What came back|Your Kie)/.test(msg);
+      const known = e instanceof Refused || e instanceof EngineError || e instanceof SpendRefused || e instanceof SoundRefused || /^(Kie\.ai|OpenAI|The picture|What came back|Your Kie|That Windows voice|The Windows voice)/.test(msg);
       send(res, known ? 400 : 500, { error: known ? (e as Error).message : "Something went wrong. Try again." });
     }
   });

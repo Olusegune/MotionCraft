@@ -53,10 +53,11 @@ Ocean, Pop) and three shapes (wide, tall, square).
 npm test
 ```
 
-40 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
-(no credit, bad key, refused prompt, slow, not a picture, non-https address), the server's refusals (every kind of bad upload), and five that build and render real
-videos in EffectCraft and check pixels: your picture shows, a short clip holds its last frame, a long clip is trimmed (skipped, and reported as skipped, if
-EffectCraft or ffmpeg is not installed).
+54 tests: the planning, the layout (text must fit the frame in all three shapes), picture and MP4 reading, the spend gate, a fake provider for every failure
+(no credit, bad key, refused prompt, slow, not a picture, non-https address), the server's refusals (every kind of bad upload), the sound (music that never clips and is the same every time, music levels that dip under each voice, every refusal for a voice or sound file),
+and six that build and render real videos in EffectCraft and check pixels and sound: your picture shows, a short clip holds its last frame, a long clip is
+trimmed, a voice and music are in the movie, scenes stretch to fit their voice, and no sound means no audio track (skipped, and reported as skipped, if
+EffectCraft, ffmpeg or Windows voices are not available).
 
 ## Safety
 
@@ -65,6 +66,23 @@ to it). Request bodies are capped at 64 KB. A plan from the page is re-checked o
 Folder names are random 12-character hex strings and media paths must match that exact shape, so nothing outside the projects folder is
 served. An uploaded picture is accepted only as PNG or JPEG judged by its own first bytes (never its name or header), capped at 12 MB and 12000 pixels
 a side, and stored under a name the server makes. EffectCraft is started with `shell: false` and confined to the one project folder.
+
+## Sound
+
+**Voiceover.** Pick a voice under Sound and each scene's words are read aloud, starting a moment after the scene does. A scene that is too short for its
+line grows to fit it (never shrinks). Under each scene a "Voice says" box lets you write different words for the voice than the ones on screen.
+
+- **Windows voices** (David and Zira on a standard install) are free, work offline and need no key.
+- **OpenAI voices** (nova, onyx, alloy, shimmer) sound more natural and cost about $0.002 for a 15 second video (OpenAI lists $15 per million characters).
+  They use the same confirmation window as pictures: it shows the price and the exact words, and nothing is sent until you press Confirm. Lines are
+  saved under a name made from the voice and the words, so the same line is never made, or paid for, twice. The key is found the same way as the Kie.ai key
+  (`OPENAI_API_KEY`, Credential Manager `QuickPath/openai`, or the key saved in MotionCraft).
+
+**Music.** Choose Calm, Warm, Upbeat or Cinematic, or your own WAV or MP3 file (up to 40 MB). The four moods are made here from nothing, in under a
+second, so there is no licence to worry about and no key: soft pads, plucked chords, a light beat or a low drone, as long as the video needs. Music fades
+in and out and dips under each voice line. Volume is Soft, Medium or Loud.
+
+Voice and music are ordinary audio layers in `video.ecproj`, so they stay editable in EffectCraft. With no voice and no music chosen, the movie has no audio track.
 
 ## Money and keys
 
@@ -76,7 +94,8 @@ from https addresses, and only accepted if the bytes really are a picture.
 
 ## Not done yet
 
-- AI video clips, voiceover and music (the main app has them).
+- AI video clips, and AI-composed music (the main app rules out AI music from Suno and similar; the built-in moods are simple background music, not compositions).
+- Setting a voice for one scene only, speed and pitch, and loudness-matching OpenAI and Windows voices (OpenAI lines come out quieter).
 - Checking an AI picture for stray lettering and trying again (the prompt asks for none and sends a negative prompt, and the first real picture had none).
 - Music, voiceover, and the editor hand-offs (After Effects, Resolve) beyond opening `video.ecproj` in EffectCraft.
 - A desktop installer. Today it is a command and a browser tab; wrapping it in a window is a later step.

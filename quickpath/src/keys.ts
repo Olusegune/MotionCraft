@@ -1,12 +1,14 @@
 // Where a provider's key comes from. Never from the page, never written to disk or a log, never sent anywhere but that provider.
-//   1. the KIE_API_KEY environment variable;
-//   2. Windows Credential Manager, entry "QuickPath/kie";
-//   3. on Windows, the key the person already saved in MotionCraft ("kie-api-key.motioncraft"), the same computer and the same person.
+//   1. an environment variable (KIE_API_KEY, OPENAI_API_KEY);
+//   2. Windows Credential Manager, entry "QuickPath/<provider>";
+//   3. on Windows, the key the person already saved in MotionCraft ("<provider>-api-key.motioncraft"), the same computer and the same person.
 // The names read are fixed here: nothing the page sends ever decides which entry is read.
 import { execFile } from "node:child_process";
 
-const TARGETS = ["QuickPath/kie", "kie-api-key.motioncraft"] as const;
-let cached: string | null | undefined;
+export type Provider = "kie" | "openai";
+const ENV: Record<Provider, string> = { kie: "KIE_API_KEY", openai: "OPENAI_API_KEY" };
+const TARGETS: Record<Provider, string[]> = { kie: ["QuickPath/kie", "kie-api-key.motioncraft"], openai: ["QuickPath/openai", "openai-api-key.motioncraft"] };
+const cache = new Map<Provider, string | null>();
 
 const SCRIPT = (target: string) => `
 $src = @'
@@ -35,18 +37,20 @@ function readCredential(target: string): Promise<string> {
 
 const plausible = (k: string) => /^[A-Za-z0-9_\-.]{16,200}$/.test(k);
 
-/** The Kie.ai key, or null. Looked up once per run. */
-export async function kieKey(): Promise<string | null> {
-  if (cached !== undefined) return cached;
-  const env = (process.env.KIE_API_KEY ?? "").trim();
-  if (plausible(env)) return (cached = env);
+/** A provider's key, or null. Looked up once per run. */
+export async function providerKey(p: Provider): Promise<string | null> {
+  if (cache.has(p)) return cache.get(p) ?? null;
+  const env = (process.env[ENV[p]] ?? "").trim();
+  if (plausible(env)) { cache.set(p, env); return env; }
   if (process.platform === "win32") {
-    for (const t of TARGETS) {
+    for (const t of TARGETS[p]) {
       const k = await readCredential(t);
-      if (plausible(k)) return (cached = k);
+      if (plausible(k)) { cache.set(p, k); return k; }
     }
   }
-  return (cached = null);
+  cache.set(p, null);
+  return null;
 }
 
-export const forgetKeys = () => { cached = undefined; };
+export const kieKey = () => providerKey("kie");
+export const forgetKeys = () => cache.clear();

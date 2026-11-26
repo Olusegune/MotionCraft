@@ -11,6 +11,8 @@ import { join } from "node:path";
 import { EffectCraft } from "../src/ec.ts";
 import { buildComposition, renderVideo } from "../src/build.ts";
 import { planFromWords, type Shape } from "../src/plan.ts";
+import { resolveSound } from "../src/sound.ts";
+import { windowsVoices } from "../src/voice.ts";
 
 const cli = process.env.EFFECTCRAFT_CLI ?? "C:/Program Files/EffectCraft/effectcraft-cli.exe";
 const have = existsSync(cli);
@@ -80,6 +82,47 @@ test("clips build: one shorter than its scene holds its last frame, one longer i
     assert.ok(end.g > end.r + 20, `still green at the end, got ${JSON.stringify(end)}`);
     const frames = await renderVideo(ec, built.comp, join(dir, "d.mp4"), "draft");
     assert.equal(frames, Math.round(built.total * 30));
+  } finally { ec.stop(); }
+});
+
+const streams = (file: string) => execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type,duration", "-of", "csv=p=0", file]).toString().trim().split(String.fromCharCode(10)).map((x) => x.trim());
+const meanDb = (file: string, from: number, len: number) => {
+  const out = execFileSync("ffmpeg", ["-hide_banner", "-ss", String(from), "-t", String(len), "-i", file, "-af", "volumedetect", "-vn", "-f", "null", "-"], { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
+  return out;
+};
+
+test("sound: a voice and music are in the rendered movie, scenes stretch to fit the voice, and no sound means no audio track", { skip: have && ffmpegOk && process.platform === "win32" ? false : "EffectCraft, ffmpeg or Windows voices missing: NOT CHECKED" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "qp-real-sound-"));
+  const ec = new EffectCraft(cli, [dir]);
+  try {
+    await ec.start();
+    const voice = `win:${(await windowsVoices())[0]}`;
+    const plan = planFromWords("Warm mornings start slowly with a cup of something good and a quiet window. Wake up slowly.", 8);
+    plan.voice = voice;
+    plan.music = { mood: "warm", level: "medium" };
+    plan.scenes[0].seconds = 2;                                  // far too short for the sentence: the scene must grow to fit its voice
+    const { plan: fitted, sound } = await resolveSound(dir, plan);
+    assert.ok(fitted.scenes[0].seconds > 3, `scene 1 grew to fit its voice, got ${fitted.scenes[0].seconds}`);
+    assert.ok(sound.voices.every((v) => v && v.seconds > 0.5));
+    assert.ok(sound.music);
+    const built = await buildComposition(ec, fitted, "16:9", dir, sound);
+    const out = join(dir, "sound.mp4");
+    await renderVideo(ec, built.comp, out, "draft");
+    const s = streams(out);
+    assert.ok(s.some((x) => x.startsWith("audio")), `an audio track, got ${s}`);
+    const audioLen = Number(s.find((x) => x.startsWith("audio"))!.split(",")[1]);
+    assert.ok(Math.abs(audioLen - built.total) < 0.3, `audio length ${audioLen} matches video ${built.total}`);
+    assert.ok(!/mean_volume: -(?:6\d|inf)/.test(meanDb(out, 1, 2)), "there is sound in the first seconds");
+    const quiet = await resolveSound(dir, { ...plan, voice: undefined, music: undefined });
+    const dir2 = mkdtempSync(join(tmpdir(), "qp-real-silent-"));
+    const ec2 = new EffectCraft(cli, [dir2]);
+    try {
+      await ec2.start();
+      const b2 = await buildComposition(ec2, quiet.plan, "16:9", dir2, quiet.sound);
+      const out2 = join(dir2, "silent.mp4");
+      await renderVideo(ec2, b2.comp, out2, "draft");
+      assert.ok(!streams(out2).some((x) => x.startsWith("audio")), "no sound chosen: no audio track");
+    } finally { ec2.stop(); }
   } finally { ec.stop(); }
 });
 

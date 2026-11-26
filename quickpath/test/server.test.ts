@@ -5,19 +5,23 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { solidPng } from "./png.ts";
+import { writeWav } from "../src/wav.ts";
 
 process.env.QUICKPATH_HOME = mkdtempSync(join(tmpdir(), "qp-"));
-process.env.KIE_API_KEY = "test-key-0123456789abcdef";            // found first, so the real Credential Manager is never read in tests
+process.env.KIE_API_KEY = "test-key-0123456789abcdef";
+process.env.OPENAI_API_KEY = "test-openai-0123456789abcdef";            // found first, so the real Credential Manager is never read in tests
 const fake = createServer((req, res) => {
   const addr = fake.address() as { port: number };
   const send = (o: unknown) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
   req.resume();
+  if (req.url?.endsWith("/audio/speech")) { res.writeHead(200, { "content-type": "audio/wav" }); return res.end(writeWav(new Float32Array(11025), new Float32Array(11025), 22050)); }
   if (req.url?.endsWith("/jobs/createTask")) return send({ code: 200, data: { taskId: "t-1" } });
   if (req.url?.includes("/jobs/recordInfo")) return send({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: [`http://127.0.0.1:${addr.port}/img.png`] }) } });
   res.writeHead(200, { "content-type": "image/png" }); res.end(solidPng(48, 27, [20, 120, 200]));
 });
 await new Promise<void>((r) => fake.listen(0, "127.0.0.1", r));
 process.env.QUICKPATH_KIE_BASE = `http://127.0.0.1:${(fake.address() as { port: number }).port}`;
+process.env.QUICKPATH_OPENAI_BASE = process.env.QUICKPATH_KIE_BASE;
 const { start } = await import("../src/server.ts");
 const server = start(0);
 await new Promise((r) => server.once("listening", r));
@@ -151,4 +155,61 @@ test("AI pictures: no confirmation, no picture. One confirmation buys one pictur
   const again = await call("POST", "/api/ai/picture", { body: JSON.stringify({ id, token: q2.token, prompt: q2.prompt }) });
   assert.equal(again.status, 400, "the confirmation is used up");
   assert.equal((await call("GET", out.url)).status, 200);
+});
+
+
+const PLAN = (voice: string) => ({ title: "t", look: "midnight", source: "words", voice, scenes: [{ headline: "Warm mornings", sub: "start slowly", seconds: 3 }, { headline: "Wake up slowly", sub: "", seconds: 3 }] });
+
+test("a paid voice: no confirmation, no voice; one confirmation makes the missing lines once and is counted", async () => {
+  const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "A voice made by a model", seconds: 10 }) })).text);
+  const raw = await call("POST", "/api/render", { body: JSON.stringify({ plan: PLAN("openai:nova"), id }) });
+  assert.equal(raw.status, 400);
+  assert.match(JSON.parse(raw.text).error, /Make the voiceover first/);
+  const q = JSON.parse((await call("POST", "/api/voice/quote", { body: JSON.stringify({ id, plan: PLAN("openai:nova") }) })).text);
+  assert.equal(q.needed, true);
+  assert.equal(q.provider, "OpenAI");
+  assert.ok(q.estimateUsd > 0 && q.estimateUsd < 0.01);
+  assert.match(q.what, /characters of speech/);
+  const wrongPlan = await call("POST", "/api/voice/make", { body: JSON.stringify({ id, token: q.token, plan: { ...PLAN("openai:nova"), scenes: [{ headline: "Something else", sub: "", seconds: 3 }] } }) });
+  assert.equal(wrongPlan.status, 400, "a confirmation for other words is refused");
+  const q2 = JSON.parse((await call("POST", "/api/voice/quote", { body: JSON.stringify({ id, plan: PLAN("openai:nova") }) })).text);
+  const made = await call("POST", "/api/voice/make", { body: JSON.stringify({ id, token: q2.token, plan: PLAN("openai:nova") }) });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(JSON.parse(made.text).made, 2);
+  const again = JSON.parse((await call("POST", "/api/voice/quote", { body: JSON.stringify({ id, plan: PLAN("openai:nova") }) })).text);
+  assert.equal(again.needed, false, "saved lines are never paid for twice");
+  assert.equal((await call("POST", "/api/voice/make", { body: JSON.stringify({ id, token: q2.token, plan: PLAN("openai:nova") }) })).status, 400, "the confirmation is used up");
+});
+
+test("Windows voices need no quote, and a voice name that is not a real choice is dropped", async () => {
+  const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "A free voice here", seconds: 10 }) })).text);
+  const free = JSON.parse((await call("POST", "/api/voice/quote", { body: JSON.stringify({ id, plan: PLAN("win:Microsoft David Desktop") }) })).text);
+  assert.equal(free.needed, false);
+  const evil = JSON.parse((await call("POST", "/api/voice/quote", { body: JSON.stringify({ id, plan: PLAN("win:x'; calc #") }) })).text);
+  assert.equal(evil.needed, false, "the voice was dropped, not run");
+});
+
+function uploadAudio(id: string, type: string, body: Buffer) { return upload(id, type, body); }
+
+test("sound files are accepted only if their bytes are WAV or MP3", async () => {
+  const { id } = JSON.parse((await call("POST", "/api/plan", { body: JSON.stringify({ idea: "Music upload tests", seconds: 10 }) })).text);
+  const ok = await uploadAudio(id, "audio/wav", writeWav(new Float32Array(4410), new Float32Array(4410), 44100));
+  assert.equal(ok.status, 200);
+  assert.match(ok.json.name, /^[a-f0-9]{12}\.wav$/);
+  assert.equal((await uploadAudio(id, "audio/wav", Buffer.from("not a sound at all"))).status, 400);
+  assert.equal((await uploadAudio(id, "audio/mpeg", solidPng(8, 8, [0, 0, 0]))).status, 400);
+  assert.equal((await uploadAudio(id, "audio/ogg", Buffer.alloc(100))).status, 400);
+});
+
+test("the plan's sound fields are re-checked on the server", async () => {
+  const { checkPlan } = await import("../src/server.ts");
+  const p = checkPlan({ scenes: [{ headline: "a", seconds: 3, say: "x".repeat(900) }], voice: "win:ok name", music: { mood: "nope", level: "loud" } });
+  assert.equal(p.voice, "win:ok name");
+  assert.equal(p.music, undefined, "an unknown mood is dropped");
+  assert.equal(p.scenes[0].say?.length, 600);
+  const q = checkPlan({ scenes: [{ headline: "a", seconds: 3 }], voice: "powershell:evil", music: { file: "../../x.wav" } });
+  assert.equal(q.voice, undefined);
+  assert.equal(q.music, undefined);
+  const r = checkPlan({ scenes: [{ headline: "a", seconds: 3 }], music: { mood: "warm", level: "weird" } });
+  assert.deepEqual(r.music, { mood: "warm", level: "medium" });
 });

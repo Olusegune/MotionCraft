@@ -7,6 +7,7 @@ import { lookById, type Rgb } from "./looks.ts";
 import { SIZES, type Plan, type Shape } from "./plan.ts";
 import { imageInfo, MEDIA_NAME } from "./images.ts";
 import { mp4Info } from "./mp4.ts";
+import { musicKeys, type Sound } from "./sound.ts";
 
 /** Breaks text into lines of at most `max` characters, at spaces, then evens the lines out so no single word is left alone. */
 export function wrapText(text: string, max: number): string[] {
@@ -118,8 +119,34 @@ async function media(ec: EffectCraft, dir: string, name: string, scene: number, 
   return true;
 }
 
+/** Voice lines at their scenes and music under everything, as ordinary audio layers (so they stay editable in EffectCraft). */
+async function placeSound(ec: EffectCraft, dir: string, sound: Sound, total: number): Promise<void> {
+  const add = async (file: string, name: string): Promise<number | null> => {
+    const path = join(dir, "assets", "audio", file);
+    const imp = await ec.run<{ items?: number[]; errors?: unknown[] }>("file.import", { paths: [path] });
+    if (imp?.errors?.length || !imp?.items?.length) return null;
+    const { layer } = await ec.run<{ layer: number }>("layer.addItem", { item: imp.items[0] });
+    await ec.run("layer.rename", { layer, name });
+    return layer;
+  };
+  for (const [i, v] of sound.voices.entries()) {
+    if (!v) continue;
+    const layer = await add(v.file, `Scene ${i + 1} voice`);
+    if (layer === null) continue;
+    if (v.start + v.seconds > total) await ec.run("layer.timing", { layers: [layer], out: r4(Math.max(0.1, total - v.start)) });
+    await ec.run("layer.timing", { layers: [layer], delta: r4(v.start) });
+  }
+  if (sound.music) {
+    const layer = await add(sound.music.file, "Music");
+    if (layer !== null) {
+      await ec.run("layer.timing", { layers: [layer], out: r4(total) });                       // a track longer than the video stops with it
+      for (const [time, db] of musicKeys(total, sound.music.db, sound.voices)) await ec.run("prop.addKey", { layer, path: "audio/levels", time, value: [db, db] });
+    }
+  }
+}
+
 /** Builds the composition for a plan in the project folder and saves it. */
-export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape, dir: string): Promise<Built> {
+export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape, dir: string, sound?: Sound): Promise<Built> {
   const { width, height } = SIZES[shape];
   const look = lookById(plan.look);
   const total = Math.round(plan.scenes.reduce((n, s) => n + s.seconds, 0) * 10) / 10;
@@ -148,6 +175,7 @@ export async function buildComposition(ec: EffectCraft, plan: Plan, shape: Shape
       await fadeSlide(ec, sub, t0 + 0.25, t1, width / 2, lay.subY, 28);
     }
   }
+  if (sound) await placeSound(ec, dir, sound, total);
   const project = join(dir, "video.ecproj");
   await ec.run("file.save", { path: project });
   return { comp, project, total, width, height };

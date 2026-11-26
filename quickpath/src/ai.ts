@@ -1,5 +1,5 @@
-// AI pictures through Kie.ai (an opt-in aggregator that serves Google's Imagen). Nothing is sent until the person confirms a quote:
-// a quote is one-time, expires, and is tied to the exact prompt and project it was made for. A spend ledger caps the total.
+// Paid AI through official or opt-in providers. Nothing is sent until the person confirms a quote: a quote is one-time, expires, and is tied to
+// the exact words and project it was made for. A spend ledger caps the total.
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -16,9 +16,12 @@ const ASPECT: Record<Shape, string> = { "16:9": "16:9", "9:16": "9:16", "1:1": "
 
 export class SpendRefused extends Error {}
 
-export type Quote = { token: string; provider: string; model: string; estimateUsd: number; note: string; prompt: string; spentUsd: number; capUsd: number };
+export type Offer = { provider: string; model: string; usd: number; note: string; what: string };
+export type Quote = { token: string; provider: string; model: string; estimateUsd: number; note: string; prompt: string; what: string; spentUsd: number; capUsd: number };
 
-type Held = { project: string; prompt: string; shape: Shape; expires: number };
+type Held = { project: string; prompt: string; shape: Shape; expires: number; offer: Offer };
+
+const PICTURE_OFFER: Offer = { provider: PROVIDER, model: MODEL, usd: ESTIMATE_USD, note: "An estimate: Kie.ai does not publish an exact price.", what: "one picture" };
 
 export class Spend {
   private held = new Map<string, Held>();
@@ -40,13 +43,13 @@ export class Spend {
   }
 
   /** Makes a quote the person must confirm. Refused when the cap would be passed. */
-  quote(project: string, prompt: string, shape: Shape): Quote {
+  quote(project: string, prompt: string, shape: Shape, offer: Offer = PICTURE_OFFER): Quote {
     const spentUsd = this.spent();
-    if (spentUsd + ESTIMATE_USD > this.cap) throw new SpendRefused(`This would pass your spending limit of $${this.cap.toFixed(2)} (about $${spentUsd.toFixed(2)} used so far).`);
+    if (spentUsd + offer.usd > this.cap) throw new SpendRefused(`This would pass your spending limit of $${this.cap.toFixed(2)} (about $${spentUsd.toFixed(2)} used so far).`);
     const token = randomBytes(16).toString("hex");
     for (const [k, v] of this.held) if (v.expires < this.now()) this.held.delete(k);
-    this.held.set(token, { project, prompt, shape, expires: this.now() + QUOTE_SECONDS * 1000 });
-    return { token, provider: PROVIDER, model: MODEL, estimateUsd: ESTIMATE_USD, note: "An estimate: Kie.ai does not publish an exact price.", prompt, spentUsd, capUsd: this.cap };
+    this.held.set(token, { project, prompt, shape, expires: this.now() + QUOTE_SECONDS * 1000, offer });
+    return { token, provider: offer.provider, model: offer.model, estimateUsd: offer.usd, note: offer.note, prompt, what: offer.what, spentUsd, capUsd: this.cap };
   }
 
   /** Uses the quote up. It works once, for the project and prompt it was made for, before it expires. */
@@ -58,9 +61,9 @@ export class Spend {
     return h;
   }
 
-  record(project: string, usd: number, what: string): void {
+  record(project: string, usd: number, what: string, offer: Offer = PICTURE_OFFER): void {
     mkdirSync(dirname(this.ledger), { recursive: true });
-    appendFileSync(this.ledger, JSON.stringify({ at: new Date(this.now()).toISOString(), project, usd, what, provider: PROVIDER, model: MODEL }) + "\n");
+    appendFileSync(this.ledger, JSON.stringify({ at: new Date(this.now()).toISOString(), project, usd, what, provider: offer.provider, model: offer.model }) + "\n");
   }
 }
 

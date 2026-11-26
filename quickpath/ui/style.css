@@ -86,4 +86,9 @@ dialog h2 { margin: 0 0 12px; }
 .error { color: var(--error); min-height: 1.4em; margin: 6px 0 0; }
 .pic video { width: 64px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
 .pic { flex-wrap: wrap; }
+.sound { display: grid; gap: 6px; }
+.sound select { padding: 9px 12px; }
+.row.tight { margin-top: 4px; gap: 10px; }
+.row.tight select { width: auto; }
+.scene .say { font-size: 14px; }
 [hidden] { display: none !important; }

@@ -57,7 +57,13 @@ function drawScenes() {
     h.addEventListener("input", () => { s.headline = h.value; touch(); });
     const sub = document.createElement("input"); sub.value = s.sub; sub.maxLength = 120; sub.placeholder = "Small line (optional)"; sub.setAttribute("aria-label", `Scene ${i + 1} small line`);
     sub.addEventListener("input", () => { s.sub = sub.value; touch(); });
-    li.append(top, h, sub, mediaRow(s, i)); ol.appendChild(li);
+    li.append(top, h, sub);
+    if (state.plan.voice) {
+      const say = document.createElement("input"); say.className = "say"; say.value = s.say || ""; say.maxLength = 600; say.placeholder = "Voice says (empty: reads the words above)"; say.setAttribute("aria-label", `Scene ${i + 1} voice says`);
+      say.addEventListener("input", () => { s.say = say.value; touch(); });
+      li.append(say);
+    }
+    li.append(mediaRow(s, i)); ol.appendChild(li);
   });
 }
 
@@ -94,36 +100,56 @@ function mediaRow(s, i) {
   row.append(label, ai); return row;
 }
 
-// Nothing is spent until the person presses Confirm: the quote shows the model, the provider, an estimate and the exact words sent.
+// Nothing is spent until the person presses Confirm: the quote shows the model, the provider, an estimate and what is sent.
+// Resolves to true when confirmed. `words` is shown in the box; when `editable`, the person may change it and the caller gets the final text.
+function confirmSpend(quote, opts) {
+  return new Promise((resolve) => {
+    const dlg = $("spend");
+    $("spendTitle").textContent = opts.title;
+    $("spendWhat").textContent = opts.forWhat;
+    $("spendModel").textContent = `${quote.model} via ${quote.provider}`;
+    $("spendPrice").textContent = `About $${quote.estimateUsd.toFixed(quote.estimateUsd < 0.01 ? 4 : 2)} for ${quote.what}. ${quote.note}`;
+    $("spendLimit").textContent = `Used so far: $${quote.spentUsd.toFixed(2)} of your $${quote.capUsd.toFixed(2)} limit.`;
+    $("spendPromptLabel").textContent = opts.editable ? "The words sent to the model. You can change them." : "The words that will be spoken.";
+    $("spendPrompt").value = opts.words; $("spendPrompt").readOnly = !opts.editable;
+    $("spendFoot").textContent = `Nothing is sent until you press Confirm. This pays for ${quote.what}.`;
+    $("spendConfirm").textContent = opts.button;
+    $("spendErr").textContent = "";
+    dlg.returnValue = "";
+    dlg.onclose = () => resolve(dlg.returnValue === "confirm" ? { edited: $("spendPrompt").value.replace(/\s+/g, " ").trim() } : null);
+    dlg.showModal();
+  });
+}
+
 async function askPicture(s, i) {
   say("");
   let quote;
   try { quote = await api("/api/ai/quote", { id: state.id, shape: state.shape, headline: s.headline, sub: s.sub, idea: state.idea }); }
   catch (e) { say(e.message, "error"); return; }
-  const dlg = $("spend");
-  $("spendWhat").textContent = `Scene ${i + 1}`;
-  $("spendModel").textContent = `${quote.model} via ${quote.provider}`;
-  $("spendPrice").textContent = `About $${quote.estimateUsd.toFixed(2)}. ${quote.note}`;
-  $("spendLimit").textContent = `Used so far: $${quote.spentUsd.toFixed(2)} of your $${quote.capUsd.toFixed(2)} limit.`;
-  $("spendPrompt").value = quote.prompt;
-  $("spendPrompt").dataset.orig = quote.prompt;
-  $("spendErr").textContent = "";
-  dlg.dataset.token = quote.token;
-  dlg.returnValue = "";
-  dlg.onclose = async () => {
-    if (dlg.returnValue !== "confirm") return;
-    let token = dlg.dataset.token, prompt = $("spendPrompt").dataset.orig;
-    const edited = $("spendPrompt").value.replace(/\s+/g, " ").trim();
-    try {
-      // Edited words need their own confirmation, so a new quote is made for exactly those words.
-      if (edited && edited !== prompt) { const q2 = await api("/api/ai/quote", { id: state.id, shape: state.shape, prompt: edited }); token = q2.token; prompt = q2.prompt; }
-      setBusy(true, "Making the picture…");
-      const out = await api("/api/ai/picture", { id: state.id, token, prompt });
-      s.picture = out.name; setBusy(false); drawScenes(); touch();
-      say(`Picture added. Used so far: $${out.spentUsd.toFixed(2)}. Press Update video to see it.`, "ok");
-    } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); }
-  };
-  dlg.showModal();
+  const ok = await confirmSpend(quote, { title: "Make a picture with AI?", forWhat: `Scene ${i + 1}`, words: quote.prompt, editable: true, button: "Confirm and make the picture" });
+  if (!ok) return;
+  try {
+    let token = quote.token, prompt = quote.prompt;
+    if (ok.edited && ok.edited !== prompt) { const q2 = await api("/api/ai/quote", { id: state.id, shape: state.shape, prompt: ok.edited }); token = q2.token; prompt = q2.prompt; }   // edited words need their own quote
+    setBusy(true, "Making the picture…");
+    const out = await api("/api/ai/picture", { id: state.id, token, prompt });
+    s.picture = out.name; setBusy(false); drawScenes(); touch();
+    say(`Picture added. Used so far: $${out.spentUsd.toFixed(2)}. Press Update video to see it.`, "ok");
+  } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); }
+}
+
+// A paid voice must be made, and confirmed, before the video is. Windows voices need nothing.
+async function ensureVoice() {
+  if (!state.plan.voice || !state.plan.voice.startsWith("openai:")) return true;
+  const q = await api("/api/voice/quote", { id: state.id, plan: state.plan });
+  if (!q.needed) return true;
+  const words = state.plan.scenes.map((s) => (s.say && s.say.trim()) || [s.headline, s.sub].filter(Boolean).join(". ")).join("\n");
+  const ok = await confirmSpend(q, { title: "Make the voiceover?", forWhat: `${state.plan.scenes.length} scenes`, words, editable: false, button: "Confirm and make the voiceover" });
+  if (!ok) return false;
+  setBusy(true, "Making the voiceover…");
+  const out = await api("/api/voice/make", { id: state.id, token: q.token, plan: state.plan });
+  say(`Voiceover made. Used so far: $${out.spentUsd.toFixed(2)}.`, "ok");
+  return true;
 }
 
 function drawLooks() {
@@ -145,8 +171,14 @@ async function render(quality) {
   const label = quality === "final" ? "Saving the full-size video…" : "Making your video…";
   setBusy(true, label); say("");
   try {
+    if (!(await ensureVoice())) { setBusy(false); if ($("video").src) { $("video").hidden = false; $("empty").hidden = true; } return; }
+    setBusy(true, label);
     const out = await api("/api/render", { plan: state.plan, shape: state.shape, quality, id: state.id });
     state.id = out.id;
+    if (Array.isArray(out.scenes) && out.scenes.some((sec, k) => state.plan.scenes[k] && Math.abs(sec - state.plan.scenes[k].seconds) > 0.05)) {
+      out.scenes.forEach((sec, k) => { if (state.plan.scenes[k]) state.plan.scenes[k].seconds = sec; });
+      drawScenes();                                         // scenes grew to fit their voice: show the new lengths
+    }
     if (quality === "draft") {
       const v = $("video"); v.src = out.url + "?t=" + Date.now(); v.hidden = false; $("empty").hidden = true;
       state.dirty = false; state.last = null; $("done").hidden = true;
@@ -169,10 +201,44 @@ async function make() {
   $("make").disabled = true; $("startnote").textContent = "Writing the scenes…";
   try {
     state.plan = await api("/api/plan", { idea, seconds: state.seconds });
-    state.idea = idea; state.id = state.plan.id; state.dirty = false;
+    state.idea = idea; state.id = state.plan.id; state.dirty = false; state.musicFile = null; $("voice").value = ""; $("music").value = ""; $("musicOpts").hidden = true; $("musicFileLabel").hidden = true;
     $("start").hidden = true; $("studio").hidden = false; shapeClass(); drawScenes(); drawLooks();
     await render("draft");
   } catch (e) { $("startnote").textContent = e.message; $("make").disabled = false; }
+}
+
+function fillSound(s) {
+  const v = $("voice"); v.textContent = "";
+  const opt = (sel, value, label) => { const o = document.createElement("option"); o.value = value; o.textContent = label; sel.appendChild(o); };
+  opt(v, "", "No voiceover");
+  for (const n of s.voices || []) opt(v, "win:" + n, `${n.replace(/^Microsoft /, "").replace(/ Desktop$/, "")} (Windows, free)`);
+  for (const n of s.openaiVoices || []) opt(v, "openai:" + n, `${n[0].toUpperCase() + n.slice(1)} (OpenAI, paid)`);
+  v.addEventListener("change", () => { if (!state.plan) return; if (v.value) state.plan.voice = v.value; else delete state.plan.voice; drawScenes(); touch(); });
+  const m = $("music"); m.textContent = "";
+  opt(m, "", "No music");
+  for (const x of s.moods || []) opt(m, "mood:" + x.id, `${x.name}: ${x.note}`);
+  opt(m, "file", "My own sound file…");
+  const apply = () => {
+    if (!state.plan) return;
+    const level = $("level").value;
+    if (m.value.startsWith("mood:")) state.plan.music = { mood: m.value.slice(5), level };
+    else if (m.value === "file" && state.musicFile) state.plan.music = { file: state.musicFile, level };
+    else delete state.plan.music;
+    $("musicOpts").hidden = !m.value; $("musicFileLabel").hidden = m.value !== "file";
+  };
+  m.addEventListener("change", () => { apply(); touch(); });
+  $("level").addEventListener("change", () => { apply(); touch(); });
+  $("musicFile").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    if (f.size > 40 * MB) { say("That sound file is over 40 MB. Try a smaller one.", "error"); return; }
+    say("Adding the sound…");
+    try {
+      const r = await fetch(`/api/upload?id=${encodeURIComponent(state.id)}`, { method: "POST", headers: { "content-type": f.type === "audio/mpeg" ? "audio/mpeg" : "audio/wav" }, body: f });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not add that sound.");
+      state.musicFile = j.name; apply(); touch();
+    } catch (err) { say(err.message, "error"); }
+  });
 }
 
 function init() {
@@ -188,6 +254,7 @@ function init() {
   $("reveal").addEventListener("click", () => state.last && api("/api/reveal", { url: state.last }).catch(() => {}));
   api("/api/status").then((s) => {
     state.looks = s.looks;
+    fillSound(s);
     const e = $("engine");
     e.textContent = s.engine ? "EffectCraft ready" : "EffectCraft not found";
     e.className = "engine" + (s.engine ? "" : " bad");

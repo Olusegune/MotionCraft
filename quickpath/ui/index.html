@@ -49,6 +49,19 @@
       <h2>Scenes</h2>
       <ol id="scenes" class="scenes"></ol>
       <button id="add" class="btn quiet" type="button">Add a scene</button>
+      <h2>Sound</h2>
+      <div class="sound">
+        <label class="hint" for="voice">Voiceover</label>
+        <select id="voice" aria-describedby="voiceHint"></select>
+        <label class="hint" for="music">Music</label>
+        <select id="music"></select>
+        <div id="musicOpts" class="row tight" hidden>
+          <label class="hint" for="level">Volume</label>
+          <select id="level"><option value="soft">Soft</option><option value="medium" selected>Medium</option><option value="loud">Loud</option></select>
+          <label id="musicFileLabel" class="btn quiet small" hidden>Choose a sound file<input id="musicFile" type="file" accept="audio/wav,audio/mpeg" class="visually-hidden" aria-label="Choose your own music file"></label>
+        </div>
+        <p class="hint" id="voiceHint">Scenes get longer when the voice needs more time. Windows voices are free and stay on this computer.</p>
+      </div>
       <h2>Look</h2>
       <div id="looks" class="looks" role="radiogroup" aria-label="Look"></div>
       <div class="actions">
@@ -69,9 +82,9 @@
       <dt>Cost</dt><dd id="spendPrice"></dd>
     </dl>
     <p class="hint" id="spendLimit"></p>
-    <label for="spendPrompt" class="hint">The words sent to the model. You can change them.</label>
+    <label for="spendPrompt" id="spendPromptLabel" class="hint">The words sent to the model. You can change them.</label>
     <textarea id="spendPrompt" rows="6" maxlength="900"></textarea>
-    <p class="hint">Nothing is sent until you press Confirm. This pays for one picture.</p>
+    <p class="hint" id="spendFoot">Nothing is sent until you press Confirm. This pays for one picture.</p>
     <p id="spendErr" class="error" role="alert"></p>
     <div class="row end"><button class="btn" value="cancel" formnovalidate>Cancel</button><button id="spendConfirm" class="btn primary" value="confirm">Confirm and make the picture</button></div>
   </form>

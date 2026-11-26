@@ -2,8 +2,9 @@
 // Nothing here needs a key or the network beyond 127.0.0.1.
 import { LOOKS, suggestLook, lookById } from "./looks.ts";
 
-export type Scene = { headline: string; sub: string; seconds: number; picture?: string };
-export type Plan = { title: string; look: string; scenes: Scene[]; source: "model" | "words" };
+export type Scene = { headline: string; sub: string; seconds: number; picture?: string; say?: string };
+export type Music = { mood?: string; file?: string; level?: "soft" | "medium" | "loud" };
+export type Plan = { title: string; look: string; scenes: Scene[]; source: "model" | "words"; voice?: string; music?: Music };
 export type Shape = "16:9" | "9:16" | "1:1";
 
 export const SIZES: Record<Shape, { width: number; height: number }> = {
