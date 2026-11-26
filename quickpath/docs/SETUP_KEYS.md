@@ -8,6 +8,9 @@ QuickPath works with **no AI at all**. Everything below is optional and adds mor
 |---|---|---|---|---|
 | Writing the scenes from your idea | A model through **Ollama** (for example `qwen3:8b`) | On your own computer | No | Free |
 | Pictures behind your scenes | Google **Imagen 4 Fast**, through **Kie.ai** | Kie.ai's servers | Yes, a Kie.ai key | About $0.02 per picture |
+| Voices (20 to choose from) | **ElevenLabs** through **Kie.ai** | Kie.ai's servers | Yes, the same Kie.ai key | About $0.03 per line |
+| AI music | **Suno** through **Kie.ai** | Kie.ai's servers | Yes, the same Kie.ai key | About $0.06 per track |
+| A picture brought to life | **Wan 2.2 Turbo** through **Kie.ai** | Kie.ai's servers | Yes, the same Kie.ai key | About $0.40 per 5 second clip |
 | More natural voiceovers | **OpenAI** speech (`tts-1`) | OpenAI's servers | Yes, an OpenAI key | About $0.002 for a 15 second video |
 | Free voiceover | The voices built into Windows (David, Zira) | On your own computer | No | Free |
 | Music | Made by QuickPath itself (four moods), or your own file | On your own computer | No | Free |
@@ -77,3 +80,7 @@ Saving keys from the Settings window works on **Windows** for now. On a Mac, set
 | "Could not reach the provider" | Check your internet connection |
 | "This would pass your spending limit" | Raise the limit in Settings if you want to spend more |
 | "Windows did not save the key" | Try again; if it keeps failing, set the `KIE_API_KEY` or `OPENAI_API_KEY` computer setting instead |
+
+## fal
+
+A fal key can be saved and checked in Settings (it is kept as `QuickPath/fal` or in `FAL_KEY`). Nothing uses it yet: Kie.ai already does pictures, voices, music and clips.

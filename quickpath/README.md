@@ -41,6 +41,8 @@ Each scene can also have a picture or a clip behind the words, from three places
 - **Your own MP4 clip** (up to 150 MB, under ten minutes). It plays from the start of its scene; a clip longer than the scene is trimmed, a shorter one holds its last frame.
 - **A picture made by AI** (Google Imagen 4 Fast through Kie.ai). Press **Make a picture** and a window shows the model, an estimated price, how much you have already spent, and the exact words that will be sent (you can change them). Nothing is sent until you press Confirm, and one confirmation pays for one picture.
 
+- **A clip made from a picture by AI** (Wan 2.2 Turbo through Kie.ai). Press **Animate this picture** on a scene that has a picture: a window shows the model, the estimated price (about $0.40 for 5 seconds at 720p; the one real clip cost exactly that) and the words describing the motion. After Confirm, one to three minutes later a 5 second clip replaces the picture on that scene.
+
 A picture or clip fills the frame and sits under a dark veil so the words stay readable.
 
 Every scene is a background colour, a short accent line, a headline and an optional small line, each fading and sliding in and out.
@@ -66,7 +68,7 @@ request tells the model to keep the subject in the middle.
 npm test
 ```
 
-110 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
+119 tests (see `docs/QA.md` for what each group proves): planning, layout, picture, MP4 and sound reading, the spend gate, a fake provider for every failure,
 the server's refusals, awkward text and extremes on the real EffectCraft, and fuzzing of every file reader. The tests that need EffectCraft, ffmpeg or Windows
 voices report as skipped (never passed) when those are missing.
 
@@ -122,6 +124,8 @@ a side, and stored under a name the server makes. EffectCraft is started with `s
 line grows to fit it (never shrinks). Under each scene a "Voice says" box lets you write different words for the voice than the ones on screen.
 
 - **Windows voices** (David and Zira on a standard install) are free, work offline and need no key.
+- **Kie.ai voices** (20 ElevenLabs voices such as Sarah, Adam, Brian) are billed per line, about $0.03 each (measured: 4 short lines cost $0.12). A window shows the lines and the price first. They are MP3 files saved once per voice and words.
+- **AI music** (Suno through Kie.ai): choose Make with AI (Suno, paid) under Music; about $0.06 a track (measured: 12 credits for a 23.6 s track). It ducks under the voice like the built-in moods.
 - **OpenAI voices** (nova, onyx, alloy, shimmer) sound more natural and cost about $0.002 for a 15 second video (OpenAI lists $15 per million characters).
   They use the same confirmation window as pictures: it shows the price and the exact words, and nothing is sent until you press Confirm. Lines are
   saved under a name made from the voice and the words, so the same line is never made, or paid for, twice. The key is found the same way as the Kie.ai key
@@ -150,7 +154,8 @@ from https addresses, and only accepted if the bytes really are a picture.
 
 ## Not done yet
 
-- AI video clips, and AI-composed music (the main app rules out AI music from Suno and similar; the built-in moods are simple background music, not compositions).
+- Using fal. Its key can be saved and checked in Settings, but nothing is made with it yet (Kie.ai covers pictures, voices, music and clips).
+- A decision on record: the main app's ADR-0005 bans Suno and voices through Kie.ai. For QuickPath, Victor chose to allow them (2026-11-26), behind the same price window and spend limit.
 - Setting a voice for one scene only, speed and pitch, and loudness-matching OpenAI and Windows voices (OpenAI lines come out quieter).
 - Checking an AI picture for stray lettering and trying again (the prompt asks for none and sends a negative prompt, and the first real picture had none).
 - Music, voiceover, and the editor hand-offs (After Effects, Resolve) beyond opening `video.ecproj` in EffectCraft.

@@ -70,7 +70,7 @@ Each video also has an EffectCraft project (`video.ecproj`) in its folder. Open 
 
 ## What it costs
 
-Almost everything is free: scenes, Windows voices, music, and your own pictures, clips and sounds. Only AI pictures (about $0.02 each) and OpenAI voices
+Almost everything is free: scenes, Windows voices, music, and your own pictures, clips and sounds. Only AI pictures (about $0.02 each), Kie voices (about $0.03 a line), AI music (about $0.06 a track), animated pictures (about $0.40 a clip) and OpenAI voices
 (about $0.002 for a 15 second video) cost anything, and always after you press Confirm. QuickPath stops at **$5** in total (the number is kept in the file
 `spend.jsonl` in your QuickPath folder).
 
@@ -90,3 +90,9 @@ you change the **spending limit**.
 | "Make the voiceover first" | You picked an OpenAI voice; press Update video and confirm |
 | "That does not look like a PNG or JPEG..." | The file is not really that type. Export it again from its program |
 | Windows says "unknown publisher" | QuickPath is not signed yet. Choose More info, then Run anyway |
+
+## Animate, Kie voices and AI music
+
+- **Animate this picture:** on a scene with a picture, press it, check the price (about $0.40) and the motion words, press Confirm. Wait one to three minutes; the 5 second clip replaces the picture. Press Update video to see it.
+- **Kie voices:** under Voice, pick one of the 20 names. A window shows the lines and price (about $0.03 a line) before anything is bought.
+- **AI music:** under Music, choose Make with AI (Suno, paid), describe the mood, confirm (about $0.06).

@@ -18,8 +18,7 @@ Word or PDF), whether times are given, and how you mark voiceover and music. Nev
 
 ## 2. Put your keys in Settings and try the paid parts for real
 
-Once the keys are in, I can run an end-to-end test of AI pictures and OpenAI voices on your script, within your spending limit. Both were tried once already, for a few
-cents, and worked.
+Kie voices, Suno music, pictures and animated clips were all tried live on 2026-11-26 (about $0.62 in total) and worked. Next is a full run on your script within the spending limit.
 
 ## 3. A person runs the manual test script
 
