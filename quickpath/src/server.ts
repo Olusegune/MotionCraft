@@ -19,8 +19,8 @@ import { resolveSound, SoundRefused, type Level } from "./sound.ts";
 import { makeOpenAILines, openAIMissing, OPENAI_VOICES, spokenText, VOICE_CHOICE, windowsVoices } from "./voice.ts";
 import { audioKind, AUDIO_NAME, MAX_AUDIO_BYTES, wavInfo } from "./wav.ts";
 
-const HERE = fileURLToPath(new URL(".", import.meta.url));
-const UI = resolve(HERE, "..", "ui");
+// Where the page lives: QUICKPATH_UI when the desktop app sets it, else the ui folder beside src. (The bundled desktop build has no import.meta.url.)
+const UI = process.env.QUICKPATH_UI ? resolve(process.env.QUICKPATH_UI) : resolve(typeof __dirname !== "undefined" ? __dirname : fileURLToPath(new URL(".", import.meta.url)), typeof __dirname !== "undefined" ? "." : "..", "ui");
 export const HOME = process.env.QUICKPATH_HOME ?? join(homedir(), "Documents", "QuickPath");
 const CANDIDATES = [
   process.env.EFFECTCRAFT_CLI ?? "",
@@ -255,7 +255,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
   return server;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (process.argv[1] && typeof import.meta.url === "string" && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const s = start();
   s.on("listening", () => {
     const a = s.address();

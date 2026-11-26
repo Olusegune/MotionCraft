@@ -59,6 +59,25 @@ and six that build and render real videos in EffectCraft and check pixels and so
 trimmed, a voice and music are in the movie, scenes stretch to fit their voice, and no sound means no audio track (skipped, and reported as skipped, if
 EffectCraft, ffmpeg or Windows voices are not available).
 
+## The desktop app
+
+QuickPath also comes as an ordinary Windows program, so you do not need a terminal.
+
+- **Install:** run `QuickPath_0.2.0_x64-setup.exe`. It installs for you only (no administrator needed), adds a Start menu entry and an uninstaller.
+  Or unzip `QuickPath_0.2.0_x64.zip` anywhere and run `QuickPath.exe`.
+- **What it is:** the same page, in its own window, with a built-in copy of the server. It still needs EffectCraft 0.24.1 installed. Only one window opens, even if you
+  start it twice. Videos go to the same `Documents\QuickPath` folder.
+- **Safety:** the window can only show QuickPath's own page on 127.0.0.1, cannot open other windows, has no access to Node or your files, and is refused every
+  permission a web page can ask for (camera, microphone, location). The Host and Origin checks, upload limits and spend confirmation work exactly as above.
+- **Unsigned for now:** Windows will say "unknown publisher" the first time. Choose More info, then Run anyway.
+- **Size:** about 120 MB to download, because the program carries its own copy of the Chromium browser engine. The code itself is under 100 KB.
+
+To build it yourself: `npm ci`, then `npm run dist` (installer and zip land in `release/`), or `npm run desktop` to run it without installing.
+A GitHub Actions workflow (`.github/workflows/quickpath.yml`) builds both on every push to this branch. The macOS build is made by CI but has never been run on a Mac.
+
+Build tools note: `npm audit` reports a moderate issue in a file-matching helper that `electron-builder` uses while packaging. It is a development tool and is not part of
+the installed app.
+
 ## Safety
 
 The server listens on 127.0.0.1 only and refuses any request whose Host or Origin is not that address (so a web page you visit cannot talk
@@ -98,5 +117,6 @@ from https addresses, and only accepted if the bytes really are a picture.
 - Setting a voice for one scene only, speed and pitch, and loudness-matching OpenAI and Windows voices (OpenAI lines come out quieter).
 - Checking an AI picture for stray lettering and trying again (the prompt asks for none and sends a negative prompt, and the first real picture had none).
 - Music, voiceover, and the editor hand-offs (After Effects, Resolve) beyond opening `video.ecproj` in EffectCraft.
-- A desktop installer. Today it is a command and a browser tab; wrapping it in a window is a later step.
-- Mac and Linux: the code is not Windows-specific, but only Windows has been run.
+- Code signing (Windows shows "unknown publisher") and a Mac run.
+- Automatic updates for the desktop app.
+- Mac and Linux: the code is not Windows-specific (Windows voices and the Credential Manager key lookup are skipped elsewhere), but only Windows has been run.

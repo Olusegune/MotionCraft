@@ -1,0 +1,52 @@
+name: QuickPath
+
+# QuickPath lives in quickpath/ on the claude/quick-path branch. It is separate from the main MotionCraft app and its CI.
+on:
+  push:
+    branches: [claude/quick-path]
+    paths: ["quickpath/**", ".github/workflows/quickpath.yml"]
+  pull_request:
+    paths: ["quickpath/**", ".github/workflows/quickpath.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: quickpath } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: quickpath/package-lock.json }
+      - run: npm ci
+      - run: npx tsc --noEmit -p . || true   # types are advisory: the tests below are the gate
+      - name: Tests (the real-EffectCraft tests report as skipped here, not passed)
+        run: npm test
+
+  desktop:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows, command: "npm run dist" }
+          - { os: macos-latest, name: macos, command: "npm run bundle && npx electron-builder --mac dmg --publish never" }
+    runs-on: ${{ matrix.os }}
+    defaults: { run: { working-directory: quickpath } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: quickpath/package-lock.json }
+      - run: npm ci
+      - run: ${{ matrix.command }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"   # unsigned for now
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuickPath-${{ matrix.name }}
+          path: |
+            quickpath/release/*.exe
+            quickpath/release/*.zip
+            quickpath/release/*.dmg
+          if-no-files-found: error

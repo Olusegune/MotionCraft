@@ -1,12 +1,66 @@
 {
   "name": "quickpath",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Idea to a finished video draft in a minute. Node and TypeScript only, EffectCraft does the rendering.",
   "type": "module",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "start": "node src/server.ts",
-    "test": "node --test \"test/*.test.ts\""
+    "test": "node --test \"test/*.test.ts\"",
+    "bundle": "esbuild src/server.ts --bundle --platform=node --format=cjs --target=node22 --outfile=desktop/server.cjs --define:import.meta.url=undefined --log-level=warning",
+    "desktop": "npm run bundle && electron .",
+    "dist": "npm run bundle && electron-builder --win nsis zip --publish never"
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2"
+  },
+  "main": "desktop/main.cjs",
+  "author": "MotionCraft",
+  "build": {
+    "appId": "com.motioncraft.quickpath",
+    "productName": "QuickPath",
+    "copyright": "MotionCraft",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "desktop/main.cjs",
+      "desktop/server.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "ui",
+        "to": "ui"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "QuickPath_${version}_${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "QuickPath_${version}_${arch}-setup.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.video"
+    }
   }
 }
