@@ -44,16 +44,17 @@ const openDoc = (name) => { const p = docPath(name); if (fs.existsSync(p)) shell
 
 async function openScript() {
   if (!win) return;
-  const r = await dialog.showOpenDialog(win, { title: "Open a script", properties: ["openFile"], filters: [{ name: "Script (Markdown or text)", extensions: ["md", "txt", "markdown"] }] });
+  const r = await dialog.showOpenDialog(win, { title: "Open a script", properties: ["openFile"], filters: [{ name: "Script (PDF, Word, Markdown or text)", extensions: ["pdf", "docx", "md", "txt", "markdown"] }] });
   if (r.canceled || !r.filePaths[0]) return;
-  let text;
+  let bytes;
   try {
     const st = fs.statSync(r.filePaths[0]);
-    if (st.size > 60000) { await dialog.showMessageBox(win, { type: "warning", message: "That script is too long.", detail: "Use a script under 60,000 characters (about 12 pages)." }); return; }
-    text = fs.readFileSync(r.filePaths[0], "utf-8");
+    if (st.size > 8 * 1024 * 1024) { await dialog.showMessageBox(win, { type: "warning", message: "That script file is too big.", detail: "Use a file under 8 MB." }); return; }
+    bytes = fs.readFileSync(r.filePaths[0]);
   } catch { await dialog.showMessageBox(win, { type: "error", message: "Could not read that file." }); return; }
-  // The words go into the start box as data (JSON), never as code; the page then reads them like pasted text.
-  win.webContents.executeJavaScript(`(() => { const a = document.getElementById("again"); if (a && !a.disabled && document.getElementById("start").hidden) a.click(); const i = document.getElementById("idea"); if (i) { i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event("input", { bubbles: true })); i.focus(); } })()`).catch(() => {});
+  // The file goes to the page as data (base64), never as code; the page reads it (PDF, Word or text) and puts the words in the start box.
+  const name = path.basename(r.filePaths[0]);
+  win.webContents.executeJavaScript(`(() => { const a = document.getElementById("again"); if (a && !a.disabled && document.getElementById("start").hidden) a.click(); if (window.importScriptFile) window.importScriptFile(${JSON.stringify(name)}, ${JSON.stringify(bytes.toString("base64"))}); })()`).catch(() => {});
 }
 
 // A self-check for the build pipeline: with QUICKPATH_SMOKE=1 the app starts, loads its own page, checks what it can see and exits 0 (all good), 1 (something wrong) or 2 (no answer in time).

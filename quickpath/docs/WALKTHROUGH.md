@@ -100,9 +100,9 @@ The **spending limit** (default $5) is a hard stop: QuickPath refuses anything t
 
 ## 9. Start from a script
 
-If you have a script with times (a table with a time column, the picture and motion, and the voice-over and sound), paste it in the start box, or choose **File, Open a script** in the desktop app. A sample is in `samples/the-day-we-built-superintelligence.md`.
+If you have a script, paste it in the start box, press **Open a script file** under it (PDF, Word or text), or choose **File, Open a script** in the desktop app. Two kinds work: a **timed table** (a time column, the picture and motion, and the voice-over and sound; a sample is in `samples/the-day-we-built-superintelligence.md`) and a **scene script** with no times, written as `SCENE 1 — TITLE` blocks (a music-video or screenplay style script). Everything is read on your computer; nothing is sent anywhere.
 
-QuickPath makes one scene per row, as long as its time range. Time cards (such as DAY ZERO) appear small and low in the frame; the quoted voice-over is what is spoken; a speaker other than the narrator gets a second voice; the picture direction is kept for each scene; and sound notes switch on matching effects.
+For a timed table QuickPath makes one scene per row, as long as its time range. For a scene script it makes one scene per SCENE heading, with no words on screen, the scene's action as its direction, and lengths of about 15 seconds each that you can change. If you have the song, add it under **Music**, **My own sound file**, then press **Fit scenes to the music**: the scene lengths are stretched to match the song. Time cards (such as DAY ZERO) appear small and low in the frame; the quoted voice-over is what is spoken; a speaker other than the narrator gets a second voice; the picture direction is kept for each scene; and sound notes switch on matching effects.
 
 ![Paste a timed script: a table whose rows start with a time such as 00:10-00:22.](img/09-script-pasted.png)
 

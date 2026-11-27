@@ -500,7 +500,7 @@ async function askMusic() {
     if (ok.edited && ok.edited !== style) { const q2 = await api("/api/ai/music/quote", { id: state.id, style: ok.edited, idea: state.idea }); token = q2.token; style = q2.prompt; }
     setBusy(true, "Making the music. This can take a minute or two…");
     const out = await api("/api/ai/music", { id: state.id, token, style, seconds: total });
-    setBusy(false); state.musicFile = out.name; return out;
+    setBusy(false); state.musicFile = out.name; state.musicSeconds = Number(out.seconds) || 0; showFitMusic(); return out;
   } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); return false; }
 }
 
@@ -589,7 +589,7 @@ async function make() {
   const idea = $("idea").value.trim();
   if (idea.length < 3) { $("startnote").textContent = "Tell me a little about your video first."; $("idea").focus(); return; }
   $("startnote").textContent = "";
-  const isScript = /\|\s*\**\s*\d{1,2}:\d{2}\s*[\u2013\u2014-]\s*\d{1,2}:\d{2}/.test(idea);
+  const isScript = /\|\s*\**\s*\d{1,2}:\d{2}\s*[\u2013\u2014-]\s*\d{1,2}:\d{2}/.test(idea) || /^\s*SCENE\s+\d+\s*[\u2014\u2013:-]/im.test(idea);
   $("make").disabled = true; $("startnote").textContent = isScript ? "Reading your script…" : "Writing the scenes…";
   const slow = setTimeout(() => { $("startnote").textContent = "Still writing. A model on your computer can take a moment; if it takes too long, your own words are used."; }, 7000);
   try {
@@ -642,7 +642,7 @@ function fillSound(s) {
       const r = await fetch(`/api/upload?id=${encodeURIComponent(state.id)}`, { method: "POST", headers: { "content-type": f.type === "audio/mpeg" ? "audio/mpeg" : "audio/wav" }, body: f });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || "Could not add that sound.");
-      state.musicFile = j.name; apply(); touch();
+      state.musicFile = j.name; state.musicSeconds = Number(j.seconds) || 0; showFitMusic(); apply(); touch();
     } catch (err) { say(err.message, "error"); }
   });
 }
@@ -805,7 +805,97 @@ async function pollActivity() {
   try { showActivity((await (await fetch("/api/activity")).json()).items || []); } catch { /* the server is not answering: leave the banner as it is */ }
 }
 
+
+// ---- Reading a script from a file: PDF (pdf.js, vendored, runs in the page), Word (.docx is a zip of XML: read here) or plain text. Nothing leaves the computer.
+async function pdfText(bytes) {
+  const pdfjs = await import("/vendor/pdfjs/pdf.min.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.mjs";
+  const doc = await pdfjs.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: false }).promise;
+  const out = [];
+  for (let p = 1; p <= Math.min(doc.numPages, 80); p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    const lines = []; let line = "", y = null;
+    for (const it of tc.items) {
+      if (typeof it.str !== "string") continue;
+      const iy = it.transform ? it.transform[5] : 0;
+      if (y !== null && Math.abs(iy - y) > 2) { lines.push({ t: line, y }); line = ""; }
+      line += it.str; y = iy;
+      if (it.hasEOL) { lines.push({ t: line, y: iy }); line = ""; y = null; }
+    }
+    if (line) lines.push({ t: line, y: y ?? 0 });
+    const gaps = []; for (let i = 1; i < lines.length; i++) gaps.push(Math.abs(lines[i - 1].y - lines[i].y));
+    const typical = gaps.length ? [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 0;
+    lines.forEach((l, i) => { if (i && typical && Math.abs(lines[i - 1].y - l.y) > typical * 1.45) out.push(""); out.push(l.t.replace(/\s+$/, "")); });
+    out.push("");
+  }
+  return out.join("\n");
+}
+async function inflateRaw(bytes) {
+  const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function docxText(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1; for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 70000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("That does not look like a Word file.");
+  let p = dv.getUint32(eocd + 16, true); const n = dv.getUint16(eocd + 10, true);
+  for (let k = 0; k < n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nlen));
+    if (name === "word/document.xml") {
+      const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+      const raw = bytes.subarray(start, start + csize);
+      if (csize > 20 * 1024 * 1024) throw new Error("That Word file is too big.");
+      const xml = new TextDecoder().decode(method === 8 ? await inflateRaw(raw) : raw);
+      return xml.replace(/<w:tab\/>/g, " ").replace(/<w:br[^>]*\/>/g, "\n").replace(/<\/w:p>/g, "\n\n").replace(/<[^>]+>/g, "")
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n");
+    }
+    p += 46 + nlen + elen + clen;
+  }
+  throw new Error("I could not find the text in that Word file.");
+}
+async function textFromFile(name, bytes) {
+  const lower = String(name).toLowerCase();
+  if (lower.endsWith(".pdf")) return pdfText(bytes);
+  if (lower.endsWith(".docx")) return docxText(bytes);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+async function importScriptBytes(name, bytes) {
+  const note = $("scriptFileNote");
+  if (bytes.length > 8 * MB) { note.textContent = "That file is over 8 MB."; return; }
+  note.textContent = "Reading the file…";
+  try {
+    const text = (await textFromFile(name, bytes)).trim();
+    if (text.length < 20) throw new Error("I could not find any text in that file (a scanned page is a picture, not text).");
+    const box = $("idea"); box.value = text.slice(0, 40000); box.dispatchEvent(new Event("input", { bubbles: true }));
+    note.textContent = `Loaded ${name} (${text.length.toLocaleString("en-US")} characters). Press Make my video.`;
+    box.focus();
+  } catch (e) { note.textContent = e.message || "Could not read that file."; }
+}
+// the desktop app's File menu hands the file over here
+window.importScriptFile = async (name, b64) => { const bin = atob(b64), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); await importScriptBytes(String(name).slice(0, 200), bytes); };
+function fitScenesToMusic() {
+  const target = state.musicSeconds, total = state.plan.scenes.reduce((n, s) => n + s.seconds, 0);
+  if (!target || !total) return;
+  const f = target / total; let acc = 0;
+  state.plan.scenes.forEach((s, i) => {
+    const last = i === state.plan.scenes.length - 1;
+    s.seconds = last ? Math.max(1.5, Math.min(30, Math.round((target - acc) * 2) / 2)) : Math.max(1.5, Math.min(30, Math.round(s.seconds * f * 2) / 2));
+    acc += s.seconds;
+  });
+  drawScenes(); touch();
+  say(`Scenes now add up to ${Math.round(acc)} s, to match the music (${Math.round(target)} s).`, "ok");
+}
+function showFitMusic() {
+  let b = $("fitMusic");
+  if (!b) { b = document.createElement("button"); b.id = "fitMusic"; b.type = "button"; b.className = "btn quiet small"; b.addEventListener("click", fitScenesToMusic); $("musicOpts").after(b); }
+  b.hidden = !(state.musicSeconds > 0);
+  b.textContent = `Fit scenes to the music (${Math.round(state.musicSeconds || 0)} s)`;
+}
+
 function init() {
+  $("scriptFile").addEventListener("change", async (e) => { const f = e.target.files && e.target.files[0]; if (f) await importScriptBytes(f.name, new Uint8Array(await f.arrayBuffer())); e.target.value = ""; });
   pollActivity(); setInterval(pollActivity, 2500);
   segmented($("len"), LENGTHS.map((n) => [n, `${n} s`]), state.seconds, (v) => (state.seconds = v));
   shapePicker($("shape"), state.shape, (v) => { state.shape = v; });

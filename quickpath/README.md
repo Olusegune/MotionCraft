@@ -189,3 +189,10 @@ Wired up and waiting for your identity: Mac hardened runtime and notarisation, A
 
 - **Delivery notes.** When a scene's voice is a Voicekiller voice, a box under it takes how to say the line (for example warm, slow, almost a whisper). It is sent to Voicekiller as its acting instructions, is never read out, and a changed note makes a new line. If Voicekiller refuses a voice, the message gives its reason and says to pick another voice; lines already made are kept.
 - **Steady progress.** The server says what it is busy with (a video, a clip, a voice, a track), how long it has taken, and for which video. A blue bar at the top shows it, even after the page is reloaded or reopened, with an **Open it** button. When a job finishes while the page was away, the video is reopened with its result. Batches say which clip they are on (clip 3 of 8).
+
+## Script files: PDF, Word and scene scripts (new)
+
+- **Open a script file** (under the idea box, and File, Open a script): reads a PDF (with the bundled PDF.js, in the page), a Word `.docx` (read directly) or a text/Markdown file. Everything happens on your computer.
+- **Scene scripts without times**: a script written as `SCENE 1 - TITLE` blocks (a music video or screenplay) becomes one scene per heading, no words on screen, the action as the scene's direction, about 15 seconds each. Notes after `END.` or a "Direction notes" heading are not read. Up to 12 scenes; a film can now be up to 5 minutes.
+- **Fit scenes to the music**: after adding a song (or making an AI track), a button stretches the scene lengths to match it.
+- Checked on a real 8-scene PDF script through the real app: 8,574 characters read, 8 scenes, 120 seconds, a video rendered, no page errors.

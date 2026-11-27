@@ -81,7 +81,7 @@ test("the server never trusts a plan from the page", () => {
   assert.throws(() => checkPlan({ scenes: [] }));
   assert.throws(() => checkPlan({ scenes: Array(13).fill({ headline: "x", seconds: 3 }) }));
   assert.throws(() => checkPlan({ scenes: [{ headline: "  ", seconds: 3 }] }));
-  assert.throws(() => checkPlan({ scenes: Array(7).fill({ headline: "x", seconds: 30 }) }), /three minutes/);
+  assert.throws(() => checkPlan({ scenes: Array(11).fill({ headline: "x", seconds: 30 }) }), /five minutes/);
   const p = checkPlan({ look: "../../etc", title: "t".repeat(200), scenes: [{ headline: "h".repeat(500), sub: 5, seconds: 9999 }] });
   assert.equal(p.look, LOOKS[0].id);
   assert.equal(p.title.length, 60);

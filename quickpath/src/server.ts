@@ -35,7 +35,7 @@ const CANDIDATES = [
 ].filter(Boolean);
 const cliPath = () => CANDIDATES.find((p) => existsSync(p)) ?? "";
 
-const MIME: Record<string, string> = { ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".svg": "image/svg+xml", ".png": "image/png" };
+const MIME: Record<string, string> = { ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".mp4": "video/mp4", ".mjs": "text/javascript; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".svg": "image/svg+xml", ".png": "image/png" };
 const SHAPES = Object.keys(SIZES) as Shape[];
 
 class Refused extends Error {}
@@ -219,7 +219,7 @@ export function checkPlan(raw: any): Plan {
   const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.tone, 200) ? { tone: text(s.tone, 200) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}), ...(Array.isArray(s?.fx) && s.fx.some((x: unknown) => typeof x === "string" && effectById(x)) ? { fx: [...new Set(s.fx.filter((x: unknown) => typeof x === "string" && effectById(x)))].slice(0, 6) } : {}) }));
   if (scenes.some((s: { headline: string; card?: string; picture?: string; note?: string }) => !s.headline && !s.card && !s.picture && !s.note)) throw new Refused("Every scene needs some words (or a picture or clip).");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
-  if (total > 180) throw new Refused("Keep it under three minutes.");
+  if (total > 300) throw new Refused("Keep it under five minutes.");
   const voice = typeof raw.voice === "string" && knownVoice(raw.voice) ? raw.voice : undefined;
   const m = raw.music;
   const level: Level = m?.level === "soft" || m?.level === "loud" ? m.level : "medium";
@@ -270,8 +270,8 @@ async function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-async function readJson(req: IncomingMessage): Promise<any> {
-  try { return JSON.parse((await readBody(req, 64 * 1024)).toString("utf-8") || "{}"); } catch (e) { if (e instanceof Refused) throw e; throw new Refused("That request was not understood."); }
+async function readJson(req: IncomingMessage, max = 64 * 1024): Promise<any> {
+  try { return JSON.parse((await readBody(req, max)).toString("utf-8") || "{}"); } catch (e) { if (e instanceof Refused) throw e; throw new Refused("That request was not understood."); }
 }
 
 function serveFile(req: IncomingMessage, res: ServerResponse, file: string) {
@@ -384,7 +384,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         return send(res, 200, { ...(await makePlan(idea, Number(b.seconds) || 15)), id });
       }
       if (req.method === "POST" && url.pathname === "/api/script") {
-        const b = await readJson(req);
+        const b = await readJson(req, 384 * 1024);            // a script from a long PDF can be bigger than a normal request
         let parsed;
         try { parsed = parseScript(String(b.script ?? "")); } catch (e) { throw new Refused((e as Error).message); }
         const id = randomBytes(6).toString("hex");
@@ -448,7 +448,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
           const aname = `${randomBytes(6).toString("hex")}.${kind}`;
           mkdirSync(join(HOME, "projects", id, "assets", "audio"), { recursive: true });
           writeFileSync(join(HOME, "projects", id, "assets", "audio", aname), audio, { flag: "wx" });
-          return send(res, 200, { name: aname, seconds: wi?.seconds });
+          return send(res, 200, { name: aname, seconds: audioInfo(audio)?.seconds });
         }
         const clip = type === "video/mp4";
         const body = await readBody(req, clip ? MAX_CLIP_BYTES : MAX_PICTURE_BYTES);

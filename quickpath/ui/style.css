@@ -247,3 +247,5 @@ details.refs { margin: 10px 0; }
 .activity::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .activity::before { animation: none; } }
+.filerow { margin: 8px 2px 0; }
+.filerow label { cursor: pointer; }

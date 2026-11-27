@@ -221,3 +221,7 @@ Built from the providers' documentation and tested against fake servers that ans
 ## Delivery notes and progress
 
 Tests added: a note reaches Voicekiller as `instructions` and never as spoken words, a changed note is a new line, no note sends none, other providers ignore the note, a refused voice gives Voicekiller's own reason plus what to do and records nothing, and the activity list shows a running job and is empty when idle. Checked by hand: a render was started, the page reloaded, and the bar showed the job with its title and time. Not checked: whether Voicekiller's instructions change how a line sounds (needs a listener).
+
+## PDF, Word and scene scripts
+
+Tests added for the scene reader (headings, the where-line, stopping at END and at the notes, lengths that favour longer scenes and stay within the plan's limits, awkward and huge input, a timed table still winning). Checked live: a real 8-scene PDF script opened in the real desktop app through its file button (`scripts/check-script-import.cjs`), read by the bundled PDF.js with no page errors, made into 8 scenes of 120 seconds in total, and rendered. Bug found by a test: the new file button used inline styles, which the page's strict policy forbids. Not checked: a Word file (the reader is written and its zip handling is simple, but no real .docx has been opened yet), a scanned PDF (it is a picture, not text, so the app says so), and Fit scenes to the music with a real song.

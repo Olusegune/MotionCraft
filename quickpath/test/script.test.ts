@@ -45,7 +45,7 @@ test("script: awkward input gets plain sentences, never a crash", () => {
   assert.throws(() => parseScript("| 00:10–00:05 | x | y |"), /do not go forward/);
   assert.throws(() => parseScript("| 00:00–00:10 | x | y |\n| 00:05–00:20 | x | y |"), /start before/);
   assert.throws(() => parseScript(Array.from({ length: 13 }, (_, i) => `| 00:${String(i * 5).padStart(2, "0")}–00:${String(i * 5 + 4).padStart(2, "0")} | x | y |`).join("\n")), /up to 12 scenes/);
-  assert.throws(() => parseScript("| 00:00–05:00 | x | y |"), /under three minutes/);
+  assert.throws(() => parseScript("| 00:00–06:00 | x | y |"), /under five minutes/);
   const odd = parseScript("| 0:00-0:04 | plain row, no bold | no quotes at all |");
   assert.equal(odd.scenes[0].seconds, 4);
   assert.equal(odd.scenes[0].say, undefined);

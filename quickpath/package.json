@@ -18,7 +18,8 @@
     "axe-core": "^4.14.1",
     "electron": "^45.5.0",
     "electron-builder": "^26.18.0",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "pdfjs-dist": "^6.5.438"
   },
   "main": "desktop/main.cjs",
   "author": "MotionCraft",
@@ -43,7 +44,14 @@
       {
         "from": "docs",
         "to": "docs",
-        "filter": ["USER_GUIDE.md", "SETUP_KEYS.md", "ROADMAP.md", "QA.md", "SIGNING.md", "WALKTHROUGH.html"]
+        "filter": [
+          "USER_GUIDE.md",
+          "SETUP_KEYS.md",
+          "ROADMAP.md",
+          "QA.md",
+          "SIGNING.md",
+          "WALKTHROUGH.html"
+        ]
       }
     ],
     "asar": true,
