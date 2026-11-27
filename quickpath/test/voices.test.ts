@@ -15,7 +15,7 @@ process.env.VOICEKILLER_API_KEY = "user_42:vk_test_0123456789abcdef";
 const HOME = process.env.QUICKPATH_HOME as string;
 
 const seen: { path: string; headers: Record<string, any>; body: any }[] = [];
-let mode: "ok" | "badkey" | "noplan" | "toofast" | "junk" | "novoice" = "ok";
+let mode: "ok" | "badkey" | "noplan" | "toofast" | "junk" | "novoice" | "slow" | "fivehundred" = "ok";
 const mp3 = mp3Frames(120);
 const fake = createServer((req, res) => {
   const chunks: Buffer[] = [];
@@ -41,6 +41,8 @@ const fake = createServer((req, res) => {
       if (req.headers["api-key"] !== "vk_test_0123456789abcdef" || req.headers["userid"] !== "user_42" || mode === "badkey") return json({ error: "no" }, 401);
       if (mode === "noplan") return json({ error: "no credit" }, 402);
       if (mode === "junk") { res.writeHead(200, { "content-type": "application/json" }); return void res.end(JSON.stringify({ message: "voice not found" })); }
+      if (mode === "fivehundred") return json({ message: "Speech generation failed: Unknown error" }, 500);
+      if (mode === "slow") return void setTimeout(() => { res.writeHead(200, { "content-type": "audio/mpeg" }); res.end(mp3); }, 900);
       res.writeHead(200, { "content-type": "audio/mpeg" }); return void res.end(mp3);
     }
     res.writeHead(404); res.end();
@@ -198,4 +200,60 @@ test("a fal key (written id:secret) is accepted in Settings, and junk is still r
   assert.equal((await post("/api/settings/key", { provider: "fal", key: good })).status, 200);
   assert.ok(!JSON.stringify((await call("GET", "/api/settings")).json).includes("0123456789abcdef"), "the key is not echoed back");
   for (const bad of ["short", "has spaces in it 0123456789", "a:b", "id:secret with space", "<script>alert(1)</script>"]) assert.equal((await post("/api/settings/key", { provider: "fal", key: bad })).status, 400, bad);
+});
+
+test("a delivery note goes to Voicekiller as its instructions, a changed note makes a new line, and no note sends none", async () => {
+  const id = await newProject();
+  const plan = (tone?: string) => ({ ...PLAN(VK), scenes: [{ headline: "Warm mornings", sub: "", seconds: 3, ...(tone ? { tone } : {}) }] });
+  const n0 = seen.length;
+  const q1 = (await post("/api/voice/quote", { id, plan: plan("warm, slow, almost a whisper") })).json;
+  assert.equal((await post("/api/voice/make", { id, token: q1.token, plan: plan("warm, slow, almost a whisper") })).status, 200);
+  const first = seen.slice(n0).find((s) => s.path === "/api/generate-speech")!;
+  assert.equal(first.body.instructions, "warm, slow, almost a whisper");
+  assert.equal(first.body.script, "Warm mornings", "the note is not read out");
+  assert.equal((await post("/api/voice/quote", { id, plan: plan("warm, slow, almost a whisper") })).json.needed, false, "the same words and note are not made twice");
+  const q2 = (await post("/api/voice/quote", { id, plan: plan("fast and bright") })).json;
+  assert.equal(q2.needed, true, "a different note is a different line");
+  const n1 = seen.length;
+  assert.equal((await post("/api/voice/make", { id, token: q2.token, plan: plan("fast and bright") })).status, 200);
+  assert.equal(seen.slice(n1).find((s) => s.path === "/api/generate-speech")!.body.instructions, "fast and bright");
+  const q3 = (await post("/api/voice/quote", { id, plan: plan() })).json;
+  const n2 = seen.length;
+  assert.equal((await post("/api/voice/make", { id, token: q3.token, plan: plan() })).status, 200);
+  assert.ok(!("instructions" in seen.slice(n2).find((s) => s.path === "/api/generate-speech")!.body), "no note, no instructions");
+  assert.equal(readdirSync(join(HOME, "projects", id, "assets", "audio")).length, 3);
+  // a note on a scene with another provider's voice is ignored: nothing about it reaches the price or the request
+  const other = (await post("/api/voice/quote", { id, plan: { ...plan("only for Voicekiller"), voice: ELEVEN } })).json;
+  assert.equal(other.provider, "ElevenLabs");
+  assert.equal(other.estimateUsd, Math.round("Warm mornings".length * 0.00015 * 10000) / 10000, "priced on the words alone");
+});
+
+test("when Voicekiller refuses a voice, the message gives its reason and says what to do, and nothing is recorded", async () => {
+  mode = "fivehundred";
+  const id = await newProject();
+  const q = (await post("/api/voice/quote", { id, plan: PLAN("vk:William") })).json;
+  const before = await spent();
+  const r = await post("/api/voice/make", { id, token: q.token, plan: PLAN("vk:William") });
+  mode = "ok";
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /Speech generation failed: Unknown error/);
+  assert.match(r.json.error, /pick another Voicekiller voice/);
+  assert.equal(await spent(), before);
+});
+
+test("the server says what it is busy with while a long job runs, and nothing when it is idle", async () => {
+  assert.deepEqual((await call("GET", "/api/activity")).json.items, []);
+  mode = "slow";
+  const id = await newProject();
+  const q = (await post("/api/voice/quote", { id, plan: PLAN("vk:Aria") })).json;
+  const job = post("/api/voice/make", { id, token: q.token, plan: PLAN("vk:Aria") });
+  let seenBusy: any = null;
+  for (let i = 0; i < 30 && !seenBusy; i++) { await new Promise((r) => setTimeout(r, 100)); const items = (await call("GET", "/api/activity")).json.items; if (items.length) seenBusy = items[0]; }
+  assert.ok(seenBusy, "the job showed up");
+  assert.equal(seenBusy.what, "Making the voiceover");
+  assert.equal(seenBusy.project, id);
+  assert.equal(typeof seenBusy.title, "string");
+  assert.equal((await job).status, 200);
+  mode = "ok";
+  assert.deepEqual((await call("GET", "/api/activity")).json.items, [], "idle again when it is over");
 });

@@ -17,7 +17,7 @@ import { canSaveKeys, keyStatus, kieKey, PROVIDERS, providerKey, removeKey, save
 import { effectiveCap, saveCap } from "./settings.ts";
 import { MOODS } from "./music.ts";
 import { resolveSound, sceneVoice, SoundRefused, type Level } from "./sound.ts";
-import { ELEVEN_BASE, isPaidVoice, KIE_VOICES, knownVoice, makeElevenLines, makeKieLines, makeOpenAILines, makeVoicekillerLines, OPENAI_VOICES, parseVoicekillerReply, spokenText, splitVoicekillerKey, voiceKind, voiceMissing, VOICEKILLER_BASE, windowsVoices } from "./voice.ts";
+import { ELEVEN_BASE, isPaidVoice, KIE_VOICES, knownVoice, makeElevenLines, makeKieLines, makeOpenAILines, makeVoicekillerLines, OPENAI_VOICES, joinLine, parseVoicekillerReply, spokenText, splitVoicekillerKey, voiceKind, voiceMissing, VOICEKILLER_BASE, windowsVoices } from "./voice.ts";
 import { dollars, download, KieError, runTask, uploadPicture, type KieOpts } from "./kie.ts";
 import { isNarrator, parseScript } from "./script.ts";
 import { EFFECTS, effectById } from "./fx.ts";
@@ -101,7 +101,7 @@ function paidJobs(plan: Plan): { voice: string; texts: string[] }[] {
   for (const s of plan.scenes) {
     const v = sceneVoice(plan, s);
     if (!isPaidVoice(v)) continue;
-    (by.get(v) ?? by.set(v, new Set()).get(v)!).add(spokenText(s));
+    (by.get(v) ?? by.set(v, new Set()).get(v)!).add(joinLine(v, spokenText(s), s.tone));
   }
   return [...by].map(([voice, set]) => ({ voice, texts: [...set] }));
 }
@@ -216,7 +216,7 @@ const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSy
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}), ...(Array.isArray(s?.fx) && s.fx.some((x: unknown) => typeof x === "string" && effectById(x)) ? { fx: [...new Set(s.fx.filter((x: unknown) => typeof x === "string" && effectById(x)))].slice(0, 6) } : {}) }));
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.tone, 200) ? { tone: text(s.tone, 200) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}), ...(Array.isArray(s?.fx) && s.fx.some((x: unknown) => typeof x === "string" && effectById(x)) ? { fx: [...new Set(s.fx.filter((x: unknown) => typeof x === "string" && effectById(x)))].slice(0, 6) } : {}) }));
   if (scenes.some((s: { headline: string; card?: string; picture?: string; note?: string }) => !s.headline && !s.card && !s.picture && !s.note)) throw new Refused("Every scene needs some words (or a picture or clip).");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 180) throw new Refused("Keep it under three minutes.");
@@ -303,10 +303,23 @@ function openFolder(path: string) {
   try { spawn(cmd as string, args as string[], { shell: false, detached: true, stdio: "ignore" }).unref(); } catch { /* the person can still find it from the path shown */ }
 }
 
+/** What the server is busy with, so a page that was closed or reloaded can still say so: a render, a clip, a voice, a track. */
+type Activity = { project: string; what: string; since: number; step?: string };
+const activity = new Map<number, Activity>();
+let activitySeq = 0;
+
 export function start(port = Number(process.env.PORT ?? 4177)) {
   mkdirSync(join(HOME, "projects"), { recursive: true });
   const spend = new Spend(join(HOME, "spend.jsonl"), () => effectiveCap(HOME));
   const server = createServer(async (req, res) => {
+    const ends: (() => void)[] = [];
+    /** Notes that this request is a long job for a project; it is cleared when the request's work is over, even if the page has gone. */
+    const track = (project: unknown, what: string, step?: unknown) => {
+      const k = ++activitySeq, id = typeof project === "string" && /^[a-f0-9]{12}$/.test(project) ? project : "";
+      const s = typeof step === "string" && /^[\w .:/-]{1,40}$/.test(step) ? step : undefined;
+      activity.set(k, { project: id, what, since: Date.now(), ...(s ? { step: s } : {}) });
+      ends.push(() => activity.delete(k));
+    };
     try {
       const addr = server.address();
       const p = typeof addr === "object" && addr ? addr.port : port;
@@ -416,6 +429,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       if (req.method === "POST" && url.pathname === "/api/render") {
         const b = await readJson(req);
+        track(b.id, b.quality === "final" ? "Saving the full-size video" : "Making the video");
         const out = await serial(() => render(b.plan, b.shape, b.quality === "final" ? "final" : "draft", b.id));
         return send(res, 200, out);
       }
@@ -466,6 +480,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       if (req.method === "POST" && url.pathname === "/api/ai/picture") {
         const b = await readJson(req);
+        track(b.id, "Making a picture");
         const id = String(b.id ?? ""), prompt = String(b.prompt ?? "");
         if (!/^[a-f0-9]{12}$/.test(id) || !existsSync(join(HOME, "projects", id))) throw new Refused("Make your video first.");
         const held = spend.redeem(String(b.token ?? ""), id, prompt);          // one confirmation buys one picture
@@ -495,6 +510,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       if (req.method === "POST" && url.pathname === "/api/voice/make") {
         const b = await readJson(req);
+        track(b.id, "Making the voiceover");
         const dir = projectDir(String(b.id ?? ""));
         const plan = checkPlan(b.plan);
         const jobs = paidJobs(plan);
@@ -523,6 +539,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       if (req.method === "POST" && url.pathname === "/api/ai/music") {
         const b = await readJson(req);
+        track(b.id, "Making the music");
         const dir = projectDir(String(b.id ?? ""));
         const style = String(b.style ?? "");
         const held = spend.redeem(String(b.token ?? ""), String(b.id), style);
@@ -548,6 +565,10 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         if (!(await providerKey("kie"))) throw new Refused(NO_KIE);
         return send(res, 200, spend.quote(String(b.id), `batch|${clips}`, "16:9", { provider: "Kie.ai", model: "Wan 2.2 Turbo (picture to video, 720p)", usd: 0.4, note: `${clips} clips at about $0.40 each (measured: 9 real clips cost $0.40 each). Each is started from a picture, or from the last frame of the clip before it. This one confirmation covers all ${clips}; it stops if a clip fails, and the real cost of each is read back and counted.`, what: `${clips} short video clips` }, clips));
       }
+      if (req.method === "GET" && url.pathname === "/api/activity") {
+        const items = [...activity.values()].map((a) => ({ project: a.project, title: a.project ? (readProject(a.project)?.plan.title ?? "") : "", what: a.what, step: a.step ?? "", seconds: Math.round((Date.now() - a.since) / 1000) }));
+        return send(res, 200, { items });
+      }
       if (req.method === "GET" && url.pathname === "/api/film/cost") {
         const id = url.searchParams.get("id") ?? "";
         projectDir(id);
@@ -564,6 +585,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       }
       if (req.method === "POST" && url.pathname === "/api/ai/animate") {
         const b = await readJson(req);
+        track(b.id, "Making a clip", b.step);
         const dir = projectDir(String(b.id ?? ""));
         const picture = String(b.picture ?? "");
         if (!PICTURE_NAME.test(picture)) throw new Refused("That picture is not in this video.");
@@ -612,7 +634,7 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
       const msg = (e as Error).message ?? "";
       const known = e instanceof Refused || e instanceof EngineError || e instanceof SpendRefused || e instanceof SoundRefused || e instanceof KieError || /^(Kie\.ai|OpenAI|The picture|What came back|Your Kie|That Windows voice|The Windows voice)/.test(msg);
       send(res, known ? 400 : 500, { error: known ? (e as Error).message : "Something went wrong. Try again." });
-    }
+    } finally { for (const end of ends) end(); }
   });
   server.listen(port, "127.0.0.1");
   return server;

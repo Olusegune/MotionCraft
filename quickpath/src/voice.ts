@@ -18,6 +18,10 @@ export const MAX_SPOKEN_CHARS = 600;
 /** Which paid provider makes a voice choice, or null for the free Windows voices. */
 export type VoiceKind = "kie" | "openai" | "eleven" | "vk";
 export const voiceKind = (v: string): VoiceKind | null => (v.startsWith("kie:") ? "kie" : v.startsWith("openai:") ? "openai" : v.startsWith("eleven:") ? "eleven" : v.startsWith("vk:") ? "vk" : null);
+/** A line of speech as the makers receive it: the words, and for Voicekiller voices the delivery note after a separator (so changing the note makes a new line). */
+export const LINE_SEP = "\u0001";
+export const joinLine = (voice: string, text: string, tone?: string) => (voiceKind(voice) === "vk" && tone && tone.trim() ? `${text}${LINE_SEP}${tone.trim().slice(0, 200)}` : text);
+export const splitLine = (line: string): { text: string; tone: string } => { const i = line.indexOf(LINE_SEP); return i < 0 ? { text: line, tone: "" } : { text: line.slice(0, i), tone: line.slice(i + 1) }; };
 export const isPaidVoice = (v: string) => voiceKind(v) !== null;
 
 /** The words actually spoken for a scene: what the person wrote for the voice, else the scene's own words. */
@@ -109,9 +113,9 @@ export function voiceMissing(dir: string, voice: string, texts: string[]): { cha
   let chars = 0, usd = 0, lines = 0;
   for (const text of new Set(texts)) {
     if (existsSync(join(dir, "assets", "audio", voiceFileName(voice, text)))) continue;
-    chars += text.length; lines++;
+    chars += splitLine(text).text.length; lines++;
     const kind = voiceKind(voice);
-    usd += kind === "kie" ? Math.ceil(Math.max(1, text.length) / 1000) * KIE_USD_PER_LINE : kind === "eleven" ? text.length * ELEVEN_USD_PER_CHAR : kind === "vk" ? 0 : text.length * OPENAI_USD_PER_CHAR;
+    usd += kind === "kie" ? Math.ceil(Math.max(1, text.length) / 1000) * KIE_USD_PER_LINE : kind === "eleven" ? splitLine(text).text.length * ELEVEN_USD_PER_CHAR : kind === "vk" ? 0 : splitLine(text).text.length * OPENAI_USD_PER_CHAR;
   }
   return { chars, lines, usd: Math.round(usd * 10000) / 10000 };
 }
@@ -207,7 +211,7 @@ export async function speakVoicekiller(text: string, voiceName: string, key: str
   if (r.status === 401 || r.status === 403) throw new Error("Voicekiller did not accept the User ID and key. Copy them again from your Voicekiller API page.");
   if (r.status === 402) throw new Error("Voicekiller says your plan has no credit left for this.");
   if (r.status === 429) throw new Error("Voicekiller says you are asking too fast. Wait a minute and try again.");
-  if (!r.ok) { const why = (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160); throw new Error(`Voicekiller could not make the voice (${r.status})${why ? `: ${why}` : ""}.`); }
+  if (!r.ok) { const why = (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160); throw new Error(`Voicekiller could not make the voice (${r.status})${why ? `: ${why}` : ""}.${r.status >= 500 ? " That voice may not be working right now: pick another Voicekiller voice and try again. Lines already made are kept." : ""}`); }
   const bytes = Buffer.from(await r.arrayBuffer());
   if (audioKind(bytes) === null) throw new Error("What came back from Voicekiller was not a usable sound (it may have sent a message instead; check the voice name).");
   return bytes;
@@ -221,7 +225,8 @@ export async function makeVoicekillerLines(dir: string, voice: string, texts: st
   for (const text of new Set(texts)) {
     const path = join(dir, "assets", "audio", voiceFileName(voice, text));
     if (existsSync(path)) continue;
-    await saveMp3(path, await speakVoicekiller(text, voice.slice(3), key, opts), "Voicekiller");
+    const { text: words, tone } = splitLine(text);
+    await saveMp3(path, await speakVoicekiller(words, voice.slice(3), key, { ...opts, instructions: tone || undefined }), "Voicekiller");
     made++;
   }
   return { made, usd: 0 };

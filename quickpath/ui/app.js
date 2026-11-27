@@ -95,6 +95,11 @@ function drawScenes() {
       vs.addEventListener("change", () => { if (vs.value) s.voice = vs.value; else delete s.voice; touch(); });
       li.append(vs);
     }
+    if ((s.voice || state.plan.voice || "").startsWith("vk:")) {
+      const tone = document.createElement("input"); tone.className = "say"; tone.value = s.tone || ""; tone.maxLength = 200; tone.placeholder = "How to say it (Voicekiller), e.g. warm, slow, almost a whisper"; tone.setAttribute("aria-label", `Scene ${i + 1} delivery`);
+      tone.addEventListener("input", () => { if (tone.value) s.tone = tone.value; else delete s.tone; touch(); });
+      li.append(tone);
+    }
     if (s.note !== undefined) {
       const note = document.createElement("textarea"); note.className = "say"; note.rows = 3; note.maxLength = 900; note.value = s.note; note.placeholder = "Picture direction (also the starting words for an AI clip)"; note.setAttribute("aria-label", `Scene ${i + 1} picture direction`);
       note.addEventListener("input", () => { s.note = note.value; touch(); });
@@ -304,7 +309,7 @@ async function makeMissing(only) {
         let picture, prompt;
         if (have.length) { picture = await uploadPng(await frameOf(`/media/${state.id}/assets/${have[have.length - 1]}`, "end")); prompt = CONTINUE_WORDS; }
         else { picture = s.picture; prompt = motionWords(s); }
-        const out = await api("/api/ai/animate", { id: state.id, token: quote.token, picture, prompt, batch: true });
+        const out = await api("/api/ai/animate", { id: state.id, token: quote.token, picture, prompt, batch: true, step: `clip ${done + 1} of ${total}` });
         if (have.length) s.more = [...(s.more || []), out.name]; else s.picture = out.name;
         done++; touch();
       }
@@ -771,7 +776,37 @@ async function openSettings() {
   const d = $("settings"); if (!d.open) d.showModal();
 }
 
+
+// ---- Steady progress: the server knows what it is busy with, so a page that was reloaded (or opened later) can still say so, and pick the result up when it is done.
+let remoteWas = null;
+function showActivity(items) {
+  const el = $("activity");
+  if (!items.length) {
+    el.hidden = true;
+    if (remoteWas && !state.busy) {
+      const was = remoteWas; remoteWas = null;
+      if (state.id && state.id === was.project && !state.dirty) openProject(state.id);          // finished while this page was away: show the result
+      else if (!state.id) drawRecent();
+    }
+    remoteWas = null;
+    return;
+  }
+  const a = items[0], m = Math.floor(a.seconds / 60), s = String(a.seconds % 60).padStart(2, "0");
+  el.textContent = `${a.what}${a.step ? ` (${a.step})` : ""}${a.title ? ` for “${a.title}”` : ""}: ${m}:${s} so far. You can leave this open; it keeps going.`;
+  if (a.project && a.project !== state.id && !state.busy) {
+    const open = document.createElement("button"); open.type = "button"; open.className = "btn quiet small"; open.textContent = "Open it";
+    open.addEventListener("click", () => openProject(a.project));
+    el.append(open);
+  }
+  el.hidden = false;
+  if (!state.busy) remoteWas = { project: a.project };
+}
+async function pollActivity() {
+  try { showActivity((await (await fetch("/api/activity")).json()).items || []); } catch { /* the server is not answering: leave the banner as it is */ }
+}
+
 function init() {
+  pollActivity(); setInterval(pollActivity, 2500);
   segmented($("len"), LENGTHS.map((n) => [n, `${n} s`]), state.seconds, (v) => (state.seconds = v));
   shapePicker($("shape"), state.shape, (v) => { state.shape = v; });
   $("make").addEventListener("click", make);

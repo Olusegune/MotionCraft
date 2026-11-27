@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeMusic, MOODS } from "./music.ts";
 import type { Plan } from "./plan.ts";
-import { isPaidVoice, lineFor, spokenText, VOICE_CHOICE } from "./voice.ts";
+import { isPaidVoice, joinLine, lineFor, spokenText, VOICE_CHOICE } from "./voice.ts";
 import { effectById, fxFileName, fxTimes, makeEffect } from "./fx.ts";
 import { levelOf, voiceGain } from "./loudness.ts";
 import { AUDIO_NAME } from "./wav.ts";
@@ -34,7 +34,7 @@ export async function resolveSound(dir: string, planIn: Plan): Promise<{ plan: P
   const lines: (Awaited<ReturnType<typeof lineFor>>)[] = [];
   for (const s of plan.scenes) {
     const voice = sceneVoice(plan, s);                 // a scene's own voice (a character) wins over the video's voice (the narrator)
-    const line = voice ? await lineFor(dir, voice, spokenText(s)) : null;
+    const line = voice ? await lineFor(dir, voice, joinLine(voice, spokenText(s), s.tone)) : null;
     if (voice && !line && spokenText(s) && isPaidVoice(voice)) throw new SoundRefused("Make the voiceover first: that voice has not been made yet, and it needs your confirmation.");
     lines.push(line);
     if (line) s.seconds = Math.max(s.seconds, Math.ceil((VOICE_LEAD + line.info.seconds + VOICE_TAIL) * 10) / 10);

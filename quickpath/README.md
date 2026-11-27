@@ -184,3 +184,8 @@ from https addresses, and only accepted if the bytes really are a picture.
 ## Signing and Mac (status)
 
 Wired up and waiting for your identity: Mac hardened runtime and notarisation, Apple Silicon and Intel disk images, Windows signing from a certificate, and a smoke test in CI that starts the packaged app on Windows and macOS (it checks the page, the menu bar and the guides). What only you can do: join the Apple Developer Program, get a Windows certificate or Azure Artifact Signing, and add the secrets (see `docs/SIGNING.md`). Still unproven: the Mac app on a real Mac, and the Intel build is built but not started.
+
+## Delivery notes and steady progress (new)
+
+- **Delivery notes.** When a scene's voice is a Voicekiller voice, a box under it takes how to say the line (for example warm, slow, almost a whisper). It is sent to Voicekiller as its acting instructions, is never read out, and a changed note makes a new line. If Voicekiller refuses a voice, the message gives its reason and says to pick another voice; lines already made are kept.
+- **Steady progress.** The server says what it is busy with (a video, a clip, a voice, a track), how long it has taken, and for which video. A blue bar at the top shows it, even after the page is reloaded or reopened, with an **Open it** button. When a job finishes while the page was away, the video is reopened with its result. Batches say which clip they are on (clip 3 of 8).
