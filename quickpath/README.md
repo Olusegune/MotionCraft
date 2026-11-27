@@ -196,3 +196,9 @@ Wired up and waiting for your identity: Mac hardened runtime and notarisation, A
 - **Scene scripts without times**: a script written as `SCENE 1 - TITLE` blocks (a music video or screenplay) becomes one scene per heading, no words on screen, the action as the scene's direction, about 15 seconds each. Notes after `END.` or a "Direction notes" heading are not read. Up to 12 scenes; a film can now be up to 5 minutes.
 - **Fit scenes to the music**: after adding a song (or making an AI track), a button stretches the scene lengths to match it.
 - Checked on a real 8-scene PDF script through the real app: 8,574 characters read, 8 scenes, 120 seconds, a video rendered, no page errors.
+
+## Characters and places that stay the same (new)
+
+- On each scene, **Characters and places** lists the pictures on your References shelf. Pick who and where is in the scene (up to 4), then **Make a picture with these** (about $0.02). The picture is made from your reference pictures (Nano Banana through Kie.ai), so the same characters look the same in every scene. Use **Animate** on it afterwards.
+- QuickPath always tells the model to keep each person's face, hair, skin tone, clothes and build as in their reference and to draw no lettering; the confirmation says so, and says your references are uploaded to Kie.ai for 24 hours. The words sent are the scene's direction, which you can change.
+- Checked live with Tami and Bisi cropped from the character sheet: one picture, $0.02, 1344x768. Both are recognisable (Tami's two buns, yellow braided band and teal shirt; Bisi's braids, denim jacket and headset), in the kitchen, with a candle, drawing on paper.

@@ -225,3 +225,7 @@ Tests added: a note reaches Voicekiller as `instructions` and never as spoken wo
 ## PDF, Word and scene scripts
 
 Tests added for the scene reader (headings, the where-line, stopping at END and at the notes, lengths that favour longer scenes and stay within the plan's limits, awkward and huge input, a timed table still winning). Checked live: a real 8-scene PDF script opened in the real desktop app through its file button (`scripts/check-script-import.cjs`), read by the bundled PDF.js with no page errors, made into 8 scenes of 120 seconds in total, and rendered. Bug found by a test: the new file button used inline styles, which the page's strict policy forbids. Not checked: a Word file (the reader is written and its zip handling is simple, but no real .docx has been opened yet), a scanned PDF (it is a picture, not text, so the app says so), and Fit scenes to the music with a real song.
+
+## Characters from references (2026-11-27)
+
+Tests added with a fake Kie (only pictures in this video, 1 to 4 references, the token bound to the words, the references and the video, every reference uploaded, the documented settings, the real cost counted, an ordinary picture saved, and no-credit, refused, failed and not-a-picture replies recorded as nothing). Live: one picture from two references for $0.02 (3 credits). It kept the characters recognisable. Not checked: how well Wan keeps the likeness when this picture is animated (no budget left for a $0.40 clip), a scene with a place reference plus two characters, and whether the faces hold across several scenes.

@@ -50,6 +50,7 @@ const fake = createServer((req, res) => {
       if (!t) return json({ code: 404 });
       if (mode === "fail") return json({ code: 200, data: { state: "fail", failMsg: "model busy" } });
       if (t.model.startsWith("elevenlabs")) return json({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: [`${self}/files/voice.mp3`] }), creditsConsumed: 0.4 } });
+      if (t.model === "google/nano-banana-edit") return json({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: [`${self}/files/${mode === "junk" ? "junkpic" : "cast"}.png`] }), creditsConsumed: 3 } });
       if (t.model.startsWith("ai-music")) return json({ code: 200, data: { state: "success", response: { data: [{ audio_url: `${self}/files/music.mp3`, duration: 14 }, { audio_url: `${self}/files/music.mp3`, duration: 14 }] }, creditsConsumed: 12 } });
       return json({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: [`${self}/files/${mode === "junk" ? "junk" : "clip"}.mp4`] }), creditsConsumed: 40 } });
     }
@@ -59,6 +60,8 @@ const fake = createServer((req, res) => {
     if (path === "/files/voice.mp3") { res.writeHead(200, { "content-type": "audio/mpeg" }); return void res.end(readFileSync(join(media, "voice.mp3"))); }
     if (path === "/files/music.mp3") { res.writeHead(200, { "content-type": "audio/mpeg" }); return void res.end(readFileSync(join(media, "music.mp3"))); }
     if (path === "/files/clip.mp4") { res.writeHead(200, { "content-type": "video/mp4" }); return void res.end(readFileSync(join(media, "clip.mp4"))); }
+    if (path === "/files/cast.png") { res.writeHead(200, { "content-type": "image/png" }); return void res.end(solidPng(160, 90, [200, 120, 60])); }
+    if (path === "/files/junkpic.png") { res.writeHead(200, { "content-type": "image/png" }); return void res.end("this is not a picture"); }
     if (path === "/files/junk.mp4") { res.writeHead(200); return void res.end("this is not a video"); }
     res.writeHead(404); res.end();
   });
@@ -333,4 +336,63 @@ test("several clips on one confirmation: the whole price is shown first, it work
   assert.match(over.json.error, /spending limit/);
   assert.equal((await post("/api/ai/animate/batch/quote", { id, clips: 2 })).status, 200, "two clips ($0.80) fit under a $1.00 margin");
   await post("/api/settings/cap", { usd: capBefore });
+});
+
+test("a picture made from your reference pictures: only pictures in this video, all uploaded and sent with the documented settings, the real cost counted, and the result is an ordinary picture on the scene", async () => {
+  const id = await newProject(), other = await newProject();
+  const dir = join(HOME, "projects", id, "assets");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "0123456789ab.png"), solidPng(64, 36, [120, 80, 40]));
+  writeFileSync(join(dir, "ba9876543210.png"), solidPng(64, 36, [40, 80, 120]));
+  const base = { id, refs: ["0123456789ab.png", "ba9876543210.png"], prompt: "Tami and Bisi at the kitchen table at dawn", shape: "21:9" };
+  for (const bad of [[], ["ffffffffffff.png"], ["../../x.png"], ["0123456789ab.mp4"], ["0123456789ab.svg"], "0123456789ab.png", Array(5).fill("0123456789ab.png").map((_, i) => `0123456789a${i}.png`)]) assert.equal((await post("/api/ai/cast/quote", { ...base, refs: bad })).status, 400, JSON.stringify(bad));
+  assert.equal((await post("/api/ai/cast/quote", { ...base, prompt: " " })).status, 400);
+  assert.equal((await post("/api/ai/cast/quote", { ...base, id: "../../x" })).status, 400);
+  const q = (await post("/api/ai/cast/quote", base)).json;
+  assert.match(q.model, /Nano Banana/);
+  assert.match(q.note, /2 reference pictures are uploaded to Kie\.ai for 24 hours/);
+  assert.match(q.note, /face, hair, clothes and build/, "the confirmation says what is always asked of the model");
+  assert.equal(q.prompt, base.prompt);
+  assert.equal((await post("/api/ai/cast", { ...base, token: q.token, prompt: "something else" })).status, 400, "the token is for these words");
+  const q2 = (await post("/api/ai/cast/quote", base)).json;
+  assert.equal((await post("/api/ai/cast", { ...base, token: q2.token, refs: ["0123456789ab.png"] })).status, 400, "and for these references");
+  const q3 = (await post("/api/ai/cast/quote", base)).json;
+  assert.equal((await post("/api/ai/cast", { ...base, token: q3.token, id: other })).status, 400, "and for this video");
+  const q4 = (await post("/api/ai/cast/quote", base)).json;
+  const before = await spent(), uploads0 = seen.filter((s) => s.path === "/api/file-base64-upload").length;
+  const r = await post("/api/ai/cast", { ...base, token: q4.token });
+  assert.equal(r.status, 200, r.text);
+  assert.match(r.json.name, /^[a-f0-9]{12}\.png$/);
+  assert.equal(r.json.width, 160);
+  assert.equal(seen.filter((s) => s.path === "/api/file-base64-upload").length - uploads0, 2, "each reference is uploaded");
+  const sent = lastModel();
+  assert.equal(sent.model, "google/nano-banana-edit");
+  assert.deepEqual(sent.input.image_urls, [`${fakeBase}/files/up.png`, `${fakeBase}/files/up.png`]);
+  assert.equal(sent.input.aspect_ratio, "21:9");
+  assert.equal(sent.input.output_format, "png");
+  assert.match(sent.input.prompt, /keep each person's face, hair, skin tone, clothes and build exactly as in their reference/);
+  assert.match(sent.input.prompt, /no lettering/);
+  assert.ok(sent.input.prompt.endsWith(base.prompt), "the person's words come last");
+  assert.ok(Math.abs((await spent()) - before - 3 * 0.005) < 0.0001, "3 credits = $0.015, read back from Kie");
+  assert.ok(existsSync(join(dir, r.json.name)));
+  assert.equal((await post("/api/ai/cast", { ...base, token: q4.token })).status, 400, "the confirmation is used up");
+});
+
+test("picture-from-references trouble: Kie says no or sends something that is not a picture gives a plain message and records nothing", async () => {
+  const id = await newProject();
+  const dir = join(HOME, "projects", id, "assets");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "0123456789ab.png"), solidPng(64, 36, [120, 80, 40]));
+  const base = { id, refs: ["0123456789ab.png"], prompt: "A kitchen at dawn", shape: "16:9" };
+  for (const [m, pattern] of [["fail", /model busy/], ["junk", /not a usable picture/], ["refuse", /prompt not allowed|refused/i], ["nocredit", /credit/i]] as const) {
+    mode = m;
+    const quote = await post("/api/ai/cast/quote", base);
+    assert.equal(quote.status, 200);
+    const before = await spent();
+    const r = await post("/api/ai/cast", { ...base, token: quote.json.token });
+    mode = "ok";
+    assert.equal(r.status, 400, `${m}: ${r.text}`);
+    assert.match(r.json.error, pattern, m);
+    assert.equal(await spent(), before, `${m}: nothing recorded`);
+  }
 });

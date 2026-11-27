@@ -107,6 +107,7 @@ function drawScenes() {
     }
     li.append(mediaRow(s, i));
     const rv = reviewRow(s, i); if (rv) li.append(rv);
+    const cr = castRow(s, i); if (cr) li.append(cr);
     const fr = fxRow(s, i); if (fr) li.append(fr);
     ol.appendChild(li);
   });
@@ -375,6 +376,55 @@ async function measureAudio() {
       if (Number.isFinite(db)) await api("/api/audio/level", { id: state.id, file: f, db: Math.max(-80, Math.min(0, db)) });
     } catch { /* a sound the browser cannot read keeps its own level */ }
   }
+}
+
+
+// ---- Characters and places that stay the same: pick reference pictures for a scene, and make its picture from them (Nano Banana through Kie.ai).
+function castRow(s, i) {
+  const refs = state.plan.refs || [];
+  if (!refs.length) return null;
+  const d = document.createElement("details"); d.className = "review";
+  const sum = document.createElement("summary");
+  const label = () => { sum.textContent = `Characters and places${s.cast && s.cast.length ? ` (${s.cast.length})` : ""}`; };
+  label(); d.append(sum);
+  const row = document.createElement("div"); row.className = "pic";
+  const make = document.createElement("button"); make.type = "button"; make.className = "btn quiet small";
+  const syncMake = () => { make.textContent = "Make a picture with these (about $0.02)"; make.disabled = !(s.cast && s.cast.length); };
+  for (const r of refs) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "btn quiet small"; b.textContent = r.label;
+    const sync = () => b.setAttribute("aria-pressed", String(!!(s.cast && s.cast.includes(r.name))));
+    sync();
+    b.addEventListener("click", () => {
+      const on = !(s.cast && s.cast.includes(r.name));
+      if (on && (s.cast || []).length >= 4) { say("Up to 4 references per picture.", "error"); return; }
+      s.cast = on ? [...(s.cast || []), r.name] : (s.cast || []).filter((x) => x !== r.name);
+      if (!s.cast.length) delete s.cast;
+      sync(); label(); syncMake(); touch();
+    });
+    row.append(b);
+  }
+  syncMake();
+  make.addEventListener("click", () => askCast(s, i));
+  const note = document.createElement("p"); note.className = "note"; note.textContent = "Pick who and where is in this scene. The picture is made from your reference pictures, so the same characters look the same in every scene. Then use Animate on it.";
+  d.append(row, make, note);
+  return d;
+}
+async function askCast(s, i) {
+  say("");
+  if (!s.cast || !s.cast.length) return;
+  const first = (s.note ? s.note.replace(/ Sound:.*$/, "") : s.headline || "").replace(/\s+/g, " ").trim().slice(0, 400) || "A cinematic still of this scene.";
+  let quote;
+  try { quote = await api("/api/ai/cast/quote", { id: state.id, refs: s.cast, prompt: first, shape: state.shape }); } catch (e) { say(e.message, "error"); return; }
+  const ok = await confirmSpend(quote, { title: "Make a picture with your characters?", forWhat: `Scene ${i + 1}`, words: quote.prompt, editable: true, button: "Confirm and make the picture" });
+  if (!ok) return;
+  try {
+    let token = quote.token, prompt = quote.prompt;
+    if (ok.edited && ok.edited !== prompt) { const q2 = await api("/api/ai/cast/quote", { id: state.id, refs: s.cast, prompt: ok.edited, shape: state.shape }); token = q2.token; prompt = q2.prompt; }
+    setBusy(true, "Making the picture from your references. This usually takes under a minute…");
+    const out = await api("/api/ai/cast", { id: state.id, token, refs: s.cast, prompt, shape: state.shape });
+    s.picture = out.name; delete s.more; setBusy(false); drawScenes(); touch();
+    say(`Picture made. Used so far: $${out.spentUsd.toFixed(2)}. Check the faces, then Update video or Animate it.`, "ok");
+  } catch (e) { setBusy(false); $("empty").hidden = true; if ($("video").src) $("video").hidden = false; say(e.message, "error"); }
 }
 
 function fxRow(s, i) {

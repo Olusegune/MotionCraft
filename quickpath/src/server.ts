@@ -95,6 +95,18 @@ const VOICE_PROVIDER: Record<VoiceKind, { key: "kie" | "openai" | "elevenlabs" |
 const voiceLabel = (v: string) => (v.startsWith("kie:") || v.startsWith("eleven:") ? (KIE_VOICES.find((x) => x.id === v.slice(v.indexOf(":") + 1))?.name ?? elevenNames.get(v.slice(7)) ?? "") : v.startsWith("vk:") ? v.slice(3) : v.startsWith("openai:") ? v.slice(7) : "");
 const elevenNames = new Map<string, string>();
 
+
+/** The rules QuickPath always adds when a picture is made from references: keep the people the same, and draw no lettering. */
+const CAST_RULES = "Use the supplied reference pictures to decide who is in the picture and where it is: keep each person's face, hair, skin tone, clothes and build exactly as in their reference, and keep a place recognisable. A cinematic still with natural light and no lettering, words, numbers, logos or captions anywhere. ";
+const castRefs = (dir: string, raw: unknown): string[] => {
+  const refs = Array.isArray(raw) ? [...new Set(raw.filter((x): x is string => typeof x === "string" && PICTURE_NAME.test(x)))] : [];
+  if (!refs.length || refs.length > 4) throw new Refused("Choose between 1 and 4 reference pictures.");
+  for (const r of refs) if (!existsSync(join(dir, "assets", r))) throw new Refused("One of those reference pictures is not in this video.");
+  return refs;
+};
+const castPrompt = (raw: unknown) => { const p = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, 1200); if (p.length < 3) throw new Refused("Say what the picture should show."); return p; };
+const castKey = (refs: string[], prompt: string) => `cast|${refs.join(",")}|${prompt}`;
+
 /** The paid voices a plan uses (a scene's own voice, else the video's), each with the distinct words it must speak. */
 function paidJobs(plan: Plan): { voice: string; texts: string[] }[] {
   const by = new Map<string, Set<string>>();
@@ -216,7 +228,7 @@ const projectDir = (id: string) => { if (!/^[a-f0-9]{12}$/.test(id) || !existsSy
 export function checkPlan(raw: any): Plan {
   if (!raw || !Array.isArray(raw.scenes) || raw.scenes.length < 1 || raw.scenes.length > 12) throw new Refused("A video needs between 1 and 12 scenes.");
   const text = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.tone, 200) ? { tone: text(s.tone, 200) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}), ...(Array.isArray(s?.fx) && s.fx.some((x: unknown) => typeof x === "string" && effectById(x)) ? { fx: [...new Set(s.fx.filter((x: unknown) => typeof x === "string" && effectById(x)))].slice(0, 6) } : {}) }));
+  const scenes = raw.scenes.map((s: any) => ({ headline: text(s?.headline, 90), sub: text(s?.sub, 120), seconds: clamp(Number(s?.seconds) || 3, 1.5, 30), ...(typeof s?.picture === "string" && MEDIA_NAME.test(s.picture) ? { picture: s.picture } : {}), ...(Array.isArray(s?.more) && typeof s?.picture === "string" && s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).length ? { more: s.more.filter((m: unknown) => typeof m === "string" && /^[a-f0-9]{12}\.mp4$/.test(m)).slice(0, 6) } : {}), ...(typeof s?.say === "string" && s.say.trim() ? { say: text(s.say, 600) } : {}), ...(text(s?.card, 60) ? { card: text(s.card, 60) } : {}), ...(text(s?.tone, 200) ? { tone: text(s.tone, 200) } : {}), ...(Array.isArray(s?.cast) && s.cast.some((x: unknown) => typeof x === "string" && PICTURE_NAME.test(x)) ? { cast: [...new Set(s.cast.filter((x: unknown) => typeof x === "string" && PICTURE_NAME.test(x)))].slice(0, 4) } : {}), ...(text(s?.note, 900) ? { note: text(s.note, 900) } : {}), ...(typeof s?.voice === "string" && knownVoice(s.voice) ? { voice: s.voice } : {}), ...(Array.isArray(s?.fx) && s.fx.some((x: unknown) => typeof x === "string" && effectById(x)) ? { fx: [...new Set(s.fx.filter((x: unknown) => typeof x === "string" && effectById(x)))].slice(0, 6) } : {}) }));
   if (scenes.some((s: { headline: string; card?: string; picture?: string; note?: string }) => !s.headline && !s.card && !s.picture && !s.note)) throw new Refused("Every scene needs some words (or a picture or clip).");
   const total = scenes.reduce((n: number, s: { seconds: number }) => n + s.seconds, 0);
   if (total > 300) throw new Refused("Keep it under five minutes.");
@@ -556,6 +568,42 @@ export function start(port = Number(process.env.PORT ?? 4177)) {
         const usd = dollars(m.credits, held.offer.usd);
         spend.record(String(b.id), usd, "music track", held.offer);
         return send(res, 200, { name, seconds: Math.round(info.seconds * 10) / 10, usd, spentUsd: spend.spent() });
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/cast/quote") {          // a picture that keeps your characters and places: made from your reference pictures
+        const b = await readJson(req);
+        const dir = projectDir(String(b.id ?? ""));
+        const refs = castRefs(dir, b.refs);
+        const prompt = castPrompt(b.prompt);
+        const shape: Shape = SHAPES.includes(b.shape) ? b.shape : "16:9";
+        if (!(await providerKey("kie"))) throw new Refused(NO_KIE);
+        return send(res, 200, { ...spend.quote(String(b.id), castKey(refs, prompt), shape, { provider: "Kie.ai", model: "Nano Banana (a picture from your references)", usd: 0.02, note: `An estimate (Kie.ai charges about 3 credits). Your ${refs.length} reference picture${refs.length === 1 ? " is" : "s are"} uploaded to Kie.ai for 24 hours so the model can see ${refs.length === 1 ? "it" : "them"}. QuickPath also tells the model to keep each person's face, hair, clothes and build exactly as in their picture, and to draw no lettering.`, what: "one picture with your characters" }), prompt });
+      }
+      if (req.method === "POST" && url.pathname === "/api/ai/cast") {
+        const b = await readJson(req);
+        track(b.id, "Making a picture with your characters");
+        const dir = projectDir(String(b.id ?? ""));
+        const refs = castRefs(dir, b.refs);
+        const prompt = castPrompt(b.prompt);
+        const held = spend.redeem(String(b.token ?? ""), String(b.id), castKey(refs, prompt));
+        const key = await providerKey("kie");
+        if (!key) throw new Refused(NO_KIE);
+        const urls: string[] = [];
+        for (const r of refs) {
+          const bytes = readFileSync(join(dir, "assets", r)), info = imageInfo(bytes);
+          if (!info) throw new Refused("One of the reference pictures cannot be read.");
+          urls.push(await uploadPicture(bytes, info.ext === "png" ? "image/png" : info.ext === "jpg" ? "image/jpeg" : "image/webp", `${randomBytes(6).toString("hex")}.${info.ext}`, key, { ...kieOpts(), base: process.env.QUICKPATH_KIE_UPLOAD_BASE }));
+        }
+        const aspect = SHAPES.includes(b.shape) ? b.shape : "16:9";
+        const m = await runTask("google/nano-banana-edit", { prompt: CAST_RULES + prompt, image_urls: urls, output_format: "png", aspect_ratio: aspect }, key, { timeoutMs: 240_000, ...kieOpts() });
+        const bytes = await download(m.urls[0], MAX_PICTURE_BYTES, kieOpts());
+        const info = imageInfo(bytes);
+        if (!info) throw new KieError("What came back from Kie.ai was not a usable picture.");
+        const name = `${randomBytes(6).toString("hex")}.${info.ext}`;
+        mkdirSync(join(dir, "assets"), { recursive: true });
+        writeFileSync(join(dir, "assets", name), bytes, { flag: "wx" });
+        const usd = dollars(m.credits, held.offer.usd);
+        spend.record(String(b.id), usd, "picture from references", held.offer);
+        return send(res, 200, { name, width: info.width, height: info.height, usd, spentUsd: spend.spent() });
       }
       if (req.method === "POST" && url.pathname === "/api/ai/animate/batch/quote") {      // one price for several clips, confirmed once
         const b = await readJson(req);

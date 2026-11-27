@@ -56,6 +56,8 @@ Press **Update video** whenever you want to see your changes.
 
 **References** (below the scenes) is a shelf of pictures for the whole video: characters, places, props. Choose a sheet with several panels, say how many go **across** and **down**, trim any title or caption band, name the panels and press **Cut into pictures**. Then pick **Use a reference** on any scene.
 
+For characters that look the same in every scene, open **Characters and places** on a scene, pick the reference pictures of who and where is in it (Tami, the kitchen), and press **Make a picture with these** (about $0.02): the picture is made from your references. Then animate it.
+
 A scene with a picture can also get **Animate this picture**: an AI clip of about five seconds. The **Motion** panel shows what is still needed to fill each scene, what the film has cost so far, and makes the missing clips on one confirmation. **Continue this clip** starts the next clip from the last frame of the one before, so the shot carries on. Under each scene, **Check the clips** shows frames from every clip so you can discard one you do not like.
 
 ![The References shelf: pictures kept for the whole video, and a way to cut a sheet of panels into separate pictures.](img/05-references.png)
